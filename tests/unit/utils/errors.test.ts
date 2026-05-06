@@ -10,9 +10,9 @@ import {
   getErrorResponse,
   destructiveOperationGuard,
   mcpErrorResult,
+  mcpErrorFromCode,
   type ErrorResponse,
 } from '../../../src/utils/errors.js';
-import { VALID_API_KEY } from '../../helpers/mockEnv.js';
 
 describe('errors', () => {
   describe('createErrorResponse', () => {
@@ -202,6 +202,14 @@ describe('errors', () => {
       expect(a).toEqual(b);
       expect(a).not.toBe(b);
     });
+
+    it('should isolate mutations between returned copies', () => {
+      const a = getErrorResponse({});
+      a.code = 'MUTATED';
+      const b = getErrorResponse({});
+
+      expect(b.code).toBe('API_ERROR');
+    });
   });
 
   describe('mcpErrorResult', () => {
@@ -241,9 +249,37 @@ describe('errors', () => {
     });
   });
 
+  describe('mcpErrorFromCode', () => {
+    it('should return MCP error result with code and message', () => {
+      const result = mcpErrorFromCode('NOT_FOUND', 'Deal not found');
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].type).toBe('text');
+      expect(result.content[0].text).toBe('Error [NOT_FOUND]: Deal not found');
+    });
+
+    it('should include suggestion when provided', () => {
+      const result = mcpErrorFromCode(
+        'VALIDATION_ERROR',
+        'Invalid arguments',
+        'Check the inputSchema'
+      );
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toBe(
+        'Error [VALIDATION_ERROR]: Invalid arguments\nSuggestion: Check the inputSchema'
+      );
+    });
+
+    it('should omit suggestion line when not provided', () => {
+      const result = mcpErrorFromCode('API_ERROR', 'Server error');
+
+      expect(result.content[0].text).not.toContain('Suggestion:');
+    });
+  });
+
   describe('destructiveOperationGuard', () => {
     const originalEnv = process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
-    const originalApiKey = process.env.PIPEDRIVE_API_KEY;
 
     afterEach(() => {
       if (originalEnv === undefined) {
@@ -251,21 +287,14 @@ describe('errors', () => {
       } else {
         process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = originalEnv;
       }
-      if (originalApiKey === undefined) {
-        delete process.env.PIPEDRIVE_API_KEY;
-      } else {
-        process.env.PIPEDRIVE_API_KEY = originalApiKey;
-      }
     });
 
     it('should return null when PIPEDRIVE_ENABLE_DESTRUCTIVE is true', () => {
-      process.env.PIPEDRIVE_API_KEY = VALID_API_KEY;
       process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = 'true';
       expect(destructiveOperationGuard()).toBeNull();
     });
 
     it('should return MCP error response when env var is unset', () => {
-      process.env.PIPEDRIVE_API_KEY = VALID_API_KEY;
       delete process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
       const result = destructiveOperationGuard();
 
@@ -276,7 +305,6 @@ describe('errors', () => {
     });
 
     it('should return MCP error response when env var is false', () => {
-      process.env.PIPEDRIVE_API_KEY = VALID_API_KEY;
       process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = 'false';
       const result = destructiveOperationGuard();
 
@@ -285,7 +313,6 @@ describe('errors', () => {
     });
 
     it('should treat TRUE (uppercase) as disabled', () => {
-      process.env.PIPEDRIVE_API_KEY = VALID_API_KEY;
       process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = 'TRUE';
       const result = destructiveOperationGuard();
 
@@ -294,7 +321,6 @@ describe('errors', () => {
     });
 
     it('should treat 1 as disabled', () => {
-      process.env.PIPEDRIVE_API_KEY = VALID_API_KEY;
       process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = '1';
       const result = destructiveOperationGuard();
 
@@ -303,7 +329,6 @@ describe('errors', () => {
     });
 
     it('should treat yes as disabled', () => {
-      process.env.PIPEDRIVE_API_KEY = VALID_API_KEY;
       process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = 'yes';
       const result = destructiveOperationGuard();
 
@@ -312,11 +337,27 @@ describe('errors', () => {
     });
 
     it('should include suggestion in error response', () => {
-      process.env.PIPEDRIVE_API_KEY = VALID_API_KEY;
       delete process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
       const result = destructiveOperationGuard();
 
       expect(result!.content[0].text).toContain('PIPEDRIVE_ENABLE_DESTRUCTIVE=true');
+    });
+
+    it('should not throw when API key is absent', () => {
+      delete process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
+      expect(() => destructiveOperationGuard()).not.toThrow();
+      const result = destructiveOperationGuard();
+
+      expect(result).not.toBeNull();
+      expect(result!.isError).toBe(true);
+      expect(result!.content[0].text).toContain('DESTRUCTIVE_DISABLED');
+    });
+
+    it('should return null when destructive enabled regardless of API key state', () => {
+      process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = 'true';
+      delete process.env.PIPEDRIVE_API_KEY;
+      expect(() => destructiveOperationGuard()).not.toThrow();
+      expect(destructiveOperationGuard()).toBeNull();
     });
   });
 });

@@ -24,7 +24,7 @@ import {
 
 import { validateConfig } from "./config.js";
 import { toolDefinitions, getToolHandler, getToolSchema } from "./tools/index.js";
-import { createErrorResponse, formatErrorForMcp } from "./utils/errors.js";
+import { mcpErrorFromCode } from "./utils/errors.js";
 
 // Server metadata
 const SERVER_NAME = "pipedrive-mcp-server";
@@ -79,17 +79,11 @@ async function main() {
 
     if (!handler) {
       console.error(`[${SERVER_NAME}] Unknown tool: ${name}`);
-      return {
-        content: [{
-          type: "text",
-          text: formatErrorForMcp(createErrorResponse(
-            "VALIDATION_ERROR",
-            `Unknown tool: ${name}`,
-            `Available tools: ${toolDefinitions.map(t => t.name).join(", ")}`
-          )),
-        }],
-        isError: true,
-      };
+      return mcpErrorFromCode(
+        "VALIDATION_ERROR",
+        `Unknown tool: ${name}`,
+        `Available tools: ${toolDefinitions.map(t => t.name).join(", ")}`
+      );
     }
 
     try {
@@ -102,17 +96,11 @@ async function main() {
             .map(e => `${e.path.join(".")}: ${e.message}`)
             .join("; ");
           console.error(`[${SERVER_NAME}] Validation error: ${errors}`);
-          return {
-            content: [{
-              type: "text",
-              text: formatErrorForMcp(createErrorResponse(
-                "VALIDATION_ERROR",
-                `Invalid arguments: ${errors}`,
-                "Check the tool's inputSchema for required parameters"
-              )),
-            }],
-            isError: true,
-          };
+          return mcpErrorFromCode(
+            "VALIDATION_ERROR",
+            `Invalid arguments: ${errors}`,
+            "Check the tool's inputSchema for required parameters"
+          );
         }
         validatedArgs = parseResult.data;
       }
@@ -123,17 +111,11 @@ async function main() {
       return result;
     } catch (error) {
       console.error(`[${SERVER_NAME}] Error executing ${name}:`, error);
-      return {
-        content: [{
-          type: "text",
-          text: formatErrorForMcp(createErrorResponse(
-            "API_ERROR",
-            error instanceof Error ? error.message : "Unknown error occurred",
-            "Check your API key and network connection"
-          )),
-        }],
-        isError: true,
-      };
+      return mcpErrorFromCode(
+        "API_ERROR",
+        error instanceof Error ? error.message : "Unknown error occurred",
+        "Check your API key and network connection"
+      );
     }
   });
 

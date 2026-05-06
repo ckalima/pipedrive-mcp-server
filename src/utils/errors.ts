@@ -2,8 +2,6 @@
  * Error handling utilities for Pipedrive MCP Server
  */
 
-import { getConfig } from "../config.js";
-
 export interface ErrorResponse {
   code: string;
   message: string;
@@ -87,7 +85,7 @@ export function handleApiError(status: number, body: unknown): ErrorResponse {
  * Returns an MCP tool error response if destructive operations are disabled, null if allowed.
  */
 export function destructiveOperationGuard(): { content: { type: "text"; text: string }[]; isError: true } | null {
-  const enabled = getConfig().enableDestructive;
+  const enabled = process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE === "true";
   if (enabled) return null;
 
   return {
@@ -124,6 +122,23 @@ export function formatErrorForMcp(error: ErrorResponse): string {
     parts.push(`Suggestion: ${error.suggestion}`);
   }
   return parts.join("\n");
+}
+
+/**
+ * Builds an MCP tool error result from an error code, message, and optional suggestion.
+ */
+export function mcpErrorFromCode(
+  code: ErrorCode,
+  message: string,
+  suggestion?: string,
+): { content: { type: "text"; text: string }[]; isError: true } {
+  return {
+    content: [{
+      type: "text" as const,
+      text: formatErrorForMcp(createErrorResponse(code, message, suggestion)),
+    }],
+    isError: true,
+  };
 }
 
 /**
