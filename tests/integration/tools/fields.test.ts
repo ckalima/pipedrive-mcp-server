@@ -290,7 +290,8 @@ describe('fields tools', () => {
 
       const result = await getField({ entity_type: 'deal', key: 'some_key' });
 
-      expect(result.content[0].text).toContain('error');
+      expect(result.content[0].text).toContain('INVALID_API_KEY');
+      expect(result.isError).toBe(true);
     });
   });
 });
