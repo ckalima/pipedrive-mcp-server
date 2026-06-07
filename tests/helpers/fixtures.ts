@@ -143,3 +143,14 @@ export function createNotesFixture(count: number = 3) {
     content: `<p>Test note ${i + 1}</p>`,
   }));
 }
+
+/**
+ * Creates a list of leads for testing
+ */
+export function createLeadsFixture(count: number = 3) {
+  return Array.from({ length: count }, (_, i) => ({
+    ...mockFixtures.lead,
+    id: `550e8400-e29b-41d4-a716-4466554400${String(i).padStart(2, '0')}`,
+    title: `Test Lead ${i + 1}`,
+  }));
+}

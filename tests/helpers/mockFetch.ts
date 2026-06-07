@@ -204,6 +204,18 @@ export const fixtures = {
     add_time: '2024-01-01 00:00:00',
     update_time: '2024-01-01 00:00:00',
   },
+  lead: {
+    id: '550e8400-e29b-41d4-a716-446655440000',
+    title: 'Test Lead',
+    value: { amount: 5000, currency: 'USD' },
+    person_id: 1,
+    organization_id: null,
+    owner_id: 1,
+    expected_close_date: '2024-12-31',
+    is_archived: false,
+    add_time: '2024-01-01T00:00:00Z',
+    update_time: '2024-01-01T00:00:00Z',
+  },
 };
 
 /**

@@ -12,6 +12,7 @@ import { fieldTools } from "./fields.js";
 import { pipelineTools } from "./pipelines.js";
 import { userTools } from "./users.js";
 import { noteTools } from "./notes.js";
+import { leadsTools } from "./leads.js";
 
 /**
  * All available tools
@@ -22,6 +23,7 @@ export const allTools = [
   ...personTools,
   ...activityTools,
   ...noteTools,
+  ...leadsTools,
 
   // Tier 2: Email/Mail Tools
   ...mailTools,
