@@ -19,6 +19,8 @@ export type ErrorCode =
   | "NETWORK_ERROR"
   | "DESTRUCTIVE_DISABLED";
 
+export type McpToolErrorResult = { content: { type: "text"; text: string }[]; isError: true };
+
 /**
  * Creates a standardized error response
  */
@@ -84,7 +86,7 @@ export function handleApiError(status: number, body: unknown): ErrorResponse {
 /**
  * Returns an MCP tool error response if destructive operations are disabled, null if allowed.
  */
-export function destructiveOperationGuard(): { content: { type: "text"; text: string }[]; isError: true } | null {
+export function destructiveOperationGuard(): McpToolErrorResult | null {
   const enabled = process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE === "true";
   if (enabled) return null;
 
@@ -131,7 +133,7 @@ export function mcpErrorFromCode(
   code: ErrorCode,
   message: string,
   suggestion?: string,
-): { content: { type: "text"; text: string }[]; isError: true } {
+): McpToolErrorResult {
   return {
     content: [{
       type: "text" as const,
@@ -144,7 +146,7 @@ export function mcpErrorFromCode(
 /**
  * Wraps a failed API response as a complete MCP tool error result.
  */
-export function mcpErrorResult(response: { error?: ErrorResponse }): { content: { type: "text"; text: string }[]; isError: true } {
+export function mcpErrorResult(response: { error?: ErrorResponse }): McpToolErrorResult {
   return {
     content: [{
       type: "text" as const,
