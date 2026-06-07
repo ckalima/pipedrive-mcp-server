@@ -25,7 +25,7 @@ export function getConfig(): Config {
 
   if (apiKey.length !== 40) {
     throw new Error(
-      `Invalid PIPEDRIVE_API_KEY format: expected 40 characters, got ${apiKey.length}. ` +
+      "Invalid PIPEDRIVE_API_KEY format: expected a 40-character key. " +
       "Verify your API key at Pipedrive Settings > Personal preferences > API"
     );
   }

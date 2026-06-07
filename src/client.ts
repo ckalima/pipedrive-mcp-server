@@ -21,34 +21,31 @@ export interface ApiResponse<T> {
   };
 }
 
+/** Request timeout in milliseconds */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 /**
  * Pipedrive API client with support for both v1 and v2 endpoints
  */
 export class PipedriveClient {
-  private config: Config;
-  private initialized: boolean = false;
-
-  constructor() {
-    // Defer config loading to first use for better error handling
-    this.config = null as unknown as Config;
-  }
+  // Defer config loading to first use for better error handling
+  private config: Config | null = null;
 
   /**
-   * Ensures the client is properly configured
+   * Ensures the client is properly configured and returns the loaded config
    */
-  private ensureInitialized(): void {
-    if (!this.initialized) {
+  private ensureInitialized(): Config {
+    if (!this.config) {
       this.config = getConfig();
-      this.initialized = true;
     }
+    return this.config;
   }
 
   /**
    * Gets the base URL for the specified API version
    */
-  private getBaseUrl(version: ApiVersion): string {
-    this.ensureInitialized();
-    return version === "v1" ? this.config.baseUrlV1 : this.config.baseUrlV2;
+  private getBaseUrl(config: Config, version: ApiVersion): string {
+    return version === "v1" ? config.baseUrlV1 : config.baseUrlV2;
   }
 
   /**
@@ -115,9 +112,9 @@ export class PipedriveClient {
     body?: Record<string, unknown>,
     version: ApiVersion = "v2"
   ): Promise<ApiResponse<T>> {
-    this.ensureInitialized();
+    const config = this.ensureInitialized();
 
-    const baseUrl = this.getBaseUrl(version);
+    const baseUrl = this.getBaseUrl(config, version);
     const url = new URL(`${baseUrl}${endpoint}`);
 
     // Initialize headers early so auth header can be set before URL params
@@ -127,9 +124,9 @@ export class PipedriveClient {
 
     // v2 uses x-api-token header; v1 uses ?api_token= query param
     if (version === "v2") {
-      headers["x-api-token"] = this.config.apiKey;
+      headers["x-api-token"] = config.apiKey;
     } else {
-      url.searchParams.set("api_token", this.config.apiKey);
+      url.searchParams.set("api_token", config.apiKey);
     }
 
     // Add additional query parameters
@@ -151,6 +148,7 @@ export class PipedriveClient {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
 
       const responseData = await response.json() as Record<string, unknown>;

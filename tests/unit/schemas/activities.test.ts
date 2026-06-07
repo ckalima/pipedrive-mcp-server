@@ -17,7 +17,7 @@ describe('activities schemas', () => {
     it('should accept minimal params', () => {
       const result = ListActivitiesSchema.parse({});
       expect(result.limit).toBe(50);
-      expect(result.sort_direction).toBe('desc');
+      expect(result.sort_direction).toBeUndefined();
     });
 
     it('should accept all filter parameters', () => {

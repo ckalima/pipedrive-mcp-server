@@ -208,9 +208,9 @@ describe('common schemas', () => {
       expect(result).toBe('desc');
     });
 
-    it('should default to "desc"', () => {
+    it('should be undefined when omitted', () => {
       const result = SortDirectionSchema.parse(undefined);
-      expect(result).toBe('desc');
+      expect(result).toBeUndefined();
     });
 
     it('should reject invalid direction', () => {

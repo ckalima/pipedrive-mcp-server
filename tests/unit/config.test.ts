@@ -31,13 +31,19 @@ describe('config', () => {
     it('should throw error when API key is too short', () => {
       setupEnvWithApiKey(testApiKeys.tooShort);
 
-      expect(() => getConfig()).toThrow(/expected 40 characters, got 6/);
+      expect(() => getConfig()).toThrow(/expected a 40-character key/);
     });
 
     it('should throw error when API key is too long', () => {
       setupEnvWithApiKey(testApiKeys.tooLong);
 
-      expect(() => getConfig()).toThrow(/expected 40 characters, got 50/);
+      expect(() => getConfig()).toThrow(/expected a 40-character key/);
+    });
+
+    it('should not reveal the provided key length in the error', () => {
+      setupEnvWithApiKey(testApiKeys.tooShort);
+
+      expect(() => getConfig()).not.toThrow(/got \d/);
     });
 
     it('should throw error when API key is empty', () => {
@@ -106,7 +112,7 @@ describe('config', () => {
       const result = validateConfig();
 
       expect(result.valid).toBe(false);
-      expect(result.error).toContain('expected 40 characters');
+      expect(result.error).toContain('expected a 40-character key');
     });
 
     it('should not throw errors, only return validation result', () => {

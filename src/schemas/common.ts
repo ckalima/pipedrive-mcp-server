@@ -60,7 +60,7 @@ export const PhoneSchema = z.object({
 /**
  * Sort direction
  */
-export const SortDirectionSchema = z.enum(["asc", "desc"]).optional().default("desc");
+export const SortDirectionSchema = z.enum(["asc", "desc"]).optional();
 
 /**
  * Deal status

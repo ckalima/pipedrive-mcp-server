@@ -53,6 +53,16 @@ describe('PipedriveClient', () => {
       expect(options.headers.Accept).toBe('application/json');
     });
 
+    it('should set an abort signal with a timeout on requests', async () => {
+      const mockFn = mockApiSuccess([fixtures.deal]);
+      const client = new PipedriveClient();
+
+      await client.get('/deals');
+
+      const [, options] = mockFn.mock.calls[0];
+      expect(options.signal).toBeInstanceOf(AbortSignal);
+    });
+
     it('should include query parameters', async () => {
       const mockFn = mockApiSuccess([]);
       const client = new PipedriveClient();
