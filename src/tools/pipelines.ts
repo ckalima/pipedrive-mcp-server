@@ -12,32 +12,34 @@ import {
   type GetStageParams,
 } from "../schemas/pipelines.js";
 import { mcpErrorResult } from "../utils/errors.js";
+import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
+import { createListSummary } from "../utils/formatting.js";
 
 /**
  * List all pipelines
  */
-export async function listPipelines(_params: ListPipelinesParams) {
+export async function listPipelines(params: ListPipelinesParams) {
   const client = getClient();
 
-  // Uses v1 API for pipelines
-  const response = await client.get<unknown[]>(
-    "/pipelines",
-    undefined,
-    "v1"
-  );
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  // Uses v2 API for pipelines
+  const response = await client.get<unknown[]>("/pipelines", queryParams);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
 
   const pipelines = response.data;
+  const pagination = extractPaginationV2(response);
 
   return {
     content: [{
       type: "text" as const,
       text: JSON.stringify({
-        summary: `Found ${pipelines.length} pipeline${pipelines.length !== 1 ? "s" : ""}.`,
+        summary: createListSummary("pipeline", pipelines.length, pagination.has_more),
         data: pipelines,
+        pagination,
       }, null, 2),
     }],
   };
@@ -115,10 +117,13 @@ export async function getStage(params: GetStageParams) {
 export const pipelineTools = [
   {
     name: "pipedrive_list_pipelines",
-    description: "List all sales pipelines in Pipedrive. Pipelines contain stages that deals move through.",
+    description: "List sales pipelines in Pipedrive with cursor pagination. Pipelines contain stages that deals move through.",
     inputSchema: {
       type: "object" as const,
-      properties: {},
+      properties: {
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items to return (1-100, default 50)" },
+      },
     },
     handler: listPipelines,
     schema: ListPipelinesSchema,

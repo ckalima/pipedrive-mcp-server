@@ -3,12 +3,12 @@
  */
 
 import { z } from "zod";
-import { IdParamSchema } from "./common.js";
+import { IdParamSchema, PaginationParamsSchema } from "./common.js";
 
 /**
- * List pipelines parameters (no params needed, returns all)
+ * List pipelines parameters (v2 cursor-based pagination)
  */
-export const ListPipelinesSchema = z.object({});
+export const ListPipelinesSchema = PaginationParamsSchema;
 
 /**
  * List stages parameters

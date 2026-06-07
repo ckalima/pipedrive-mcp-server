@@ -11,15 +11,24 @@ import {
 
 describe('pipelines schemas', () => {
   describe('ListPipelinesSchema', () => {
-    it('should accept empty object', () => {
+    it('should apply default limit', () => {
       const result = ListPipelinesSchema.parse({});
-      expect(result).toEqual({});
+      expect(result.limit).toBe(50);
+      expect(result.cursor).toBeUndefined();
     });
 
-    it('should ignore unknown properties', () => {
-      // Zod strips unknown properties by default
-      const result = ListPipelinesSchema.parse({ unknown: 'value' });
-      expect(result).toEqual({});
+    it('should accept cursor and limit', () => {
+      const result = ListPipelinesSchema.parse({ cursor: 'abc', limit: 25 });
+      expect(result.cursor).toBe('abc');
+      expect(result.limit).toBe(25);
+    });
+
+    it('should reject limit above 100', () => {
+      expect(() => ListPipelinesSchema.parse({ limit: 101 })).toThrow();
+    });
+
+    it('should reject limit below 1', () => {
+      expect(() => ListPipelinesSchema.parse({ limit: 0 })).toThrow();
     });
   });
 

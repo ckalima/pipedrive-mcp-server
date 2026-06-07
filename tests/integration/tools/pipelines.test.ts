@@ -7,7 +7,9 @@ import { setupValidEnv } from '../../helpers/mockEnv.js';
 import {
   mockApiSuccess,
   mockApiError,
+  mockFetch,
   fixtures,
+  paginationFixtures,
 } from '../../helpers/mockFetch.js';
 
 async function getPipelinesTools() {
@@ -36,14 +38,46 @@ describe('pipelines tools', () => {
       expect(parsed.data).toHaveLength(2);
     });
 
-    it('should use v1 API', async () => {
+    it('should use v2 API', async () => {
       const mockFn = mockApiSuccess([]);
       const { listPipelines } = await getPipelinesTools();
 
       await listPipelines({});
 
       const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('/v1/pipelines');
+      expect(url).toContain('/api/v2/pipelines');
+      expect(url).not.toContain('/v1/');
+    });
+
+    it('should use cursor for pagination', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listPipelines } = await getPipelinesTools();
+
+      await listPipelines({ cursor: 'next_page_cursor' });
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('cursor=next_page_cursor');
+    });
+
+    it('should pass limit to API', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listPipelines } = await getPipelinesTools();
+
+      await listPipelines({ limit: 25 });
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('limit=25');
+    });
+
+    it('should include pagination info when more items available', async () => {
+      const { listPipelines } = await getPipelinesTools();
+      mockFetch({ data: [fixtures.pipeline], additional_data: paginationFixtures.v2WithMore });
+
+      const result = await listPipelines({});
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.has_more).toBe(true);
+      expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
     });
 
     it('should handle API error', async () => {
