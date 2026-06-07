@@ -1,6 +1,7 @@
 /**
- * Field metadata MCP tools for Pipedrive (v1 API)
- * These tools help discover custom field definitions and map hash keys to human-readable names.
+ * Field metadata MCP tools for Pipedrive
+ * List handlers (deal/person/organization) use v2 API with cursor pagination.
+ * getField uses v2 for deal/person/organization, v1 for product/activity/project.
  */
 
 import { getClient } from "../client.js";
@@ -14,9 +15,19 @@ import {
   type ListPersonFieldsParams,
   type GetFieldParams,
 } from "../schemas/fields.js";
-import { buildPaginationParamsV1, extractPaginationV1 } from "../utils/pagination.js";
+import {
+  buildPaginationParamsV1,
+  buildPaginationParamsV2,
+  extractPaginationV1,
+  extractPaginationV2,
+} from "../utils/pagination.js";
 import { mcpErrorResult } from "../utils/errors.js";
 import { createListSummary } from "../utils/formatting.js";
+
+/**
+ * Entity types that have v2 field endpoints
+ */
+const FIELDS_V2_ENTITY_TYPES = new Set(["organization", "deal", "person"]);
 
 /**
  * List organization fields
@@ -24,20 +35,16 @@ import { createListSummary } from "../utils/formatting.js";
 export async function listOrganizationFields(params: ListOrganizationFieldsParams) {
   const client = getClient();
 
-  const queryParams = buildPaginationParamsV1(params.start, params.limit);
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
 
-  const response = await client.get<unknown[]>(
-    "/organizationFields",
-    queryParams,
-    "v1"
-  );
+  const response = await client.get<unknown[]>("/organizationFields", queryParams);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
 
   const fields = response.data;
-  const pagination = extractPaginationV1(response);
+  const pagination = extractPaginationV2(response);
 
   return {
     content: [{
@@ -45,10 +52,7 @@ export async function listOrganizationFields(params: ListOrganizationFieldsParam
       text: JSON.stringify({
         summary: createListSummary("organization field", fields.length, pagination.has_more),
         data: fields,
-        pagination: {
-          next_start: pagination.next_cursor ? parseInt(pagination.next_cursor) : undefined,
-          has_more: pagination.has_more,
-        },
+        pagination,
       }, null, 2),
     }],
   };
@@ -60,20 +64,16 @@ export async function listOrganizationFields(params: ListOrganizationFieldsParam
 export async function listDealFields(params: ListDealFieldsParams) {
   const client = getClient();
 
-  const queryParams = buildPaginationParamsV1(params.start, params.limit);
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
 
-  const response = await client.get<unknown[]>(
-    "/dealFields",
-    queryParams,
-    "v1"
-  );
+  const response = await client.get<unknown[]>("/dealFields", queryParams);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
 
   const fields = response.data;
-  const pagination = extractPaginationV1(response);
+  const pagination = extractPaginationV2(response);
 
   return {
     content: [{
@@ -81,10 +81,7 @@ export async function listDealFields(params: ListDealFieldsParams) {
       text: JSON.stringify({
         summary: createListSummary("deal field", fields.length, pagination.has_more),
         data: fields,
-        pagination: {
-          next_start: pagination.next_cursor ? parseInt(pagination.next_cursor) : undefined,
-          has_more: pagination.has_more,
-        },
+        pagination,
       }, null, 2),
     }],
   };
@@ -96,20 +93,16 @@ export async function listDealFields(params: ListDealFieldsParams) {
 export async function listPersonFields(params: ListPersonFieldsParams) {
   const client = getClient();
 
-  const queryParams = buildPaginationParamsV1(params.start, params.limit);
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
 
-  const response = await client.get<unknown[]>(
-    "/personFields",
-    queryParams,
-    "v1"
-  );
+  const response = await client.get<unknown[]>("/personFields", queryParams);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
 
   const fields = response.data;
-  const pagination = extractPaginationV1(response);
+  const pagination = extractPaginationV2(response);
 
   return {
     content: [{
@@ -117,17 +110,15 @@ export async function listPersonFields(params: ListPersonFieldsParams) {
       text: JSON.stringify({
         summary: createListSummary("person field", fields.length, pagination.has_more),
         data: fields,
-        pagination: {
-          next_start: pagination.next_cursor ? parseInt(pagination.next_cursor) : undefined,
-          has_more: pagination.has_more,
-        },
+        pagination,
       }, null, 2),
     }],
   };
 }
 
 /**
- * Get a single field by key
+ * Get a single field by key - paginates through all pages to find the field.
+ * Uses v2 endpoints for deal/person/organization, v1 for product/activity/project.
  */
 export async function getField(params: GetFieldParams) {
   const client = getClient();
@@ -152,18 +143,37 @@ export async function getField(params: GetFieldParams) {
     };
   }
 
-  // Get all fields and find by key
-  const response = await client.get<Array<{ key: string; [k: string]: unknown }>>(
-    endpoint,
-    undefined,
-    "v1"
-  );
+  const useV2 = FIELDS_V2_ENTITY_TYPES.has(params.entity_type);
 
-  if (!response.success || !response.data) {
-    return mcpErrorResult(response);
-  }
+  // Paginate through all pages until the field is found or pages are exhausted.
+  // This fixes the page-1 bug where only the first 50 fields were searched.
+  let cursor: string | undefined;
+  let field: { key: string; [k: string]: unknown } | undefined;
 
-  const field = response.data.find(f => f.key === params.key);
+  do {
+    const queryParams = useV2
+      ? buildPaginationParamsV2(cursor)
+      : buildPaginationParamsV1(cursor ? parseInt(cursor, 10) : undefined);
+
+    const version = useV2 ? undefined : ("v1" as const);
+    const response = await client.get<Array<{ key: string; [k: string]: unknown }>>(
+      endpoint,
+      queryParams,
+      version,
+    );
+
+    if (!response.success || !response.data) {
+      return mcpErrorResult(response);
+    }
+
+    field = response.data.find(f => f.key === params.key);
+
+    const pagination = useV2
+      ? extractPaginationV2(response)
+      : extractPaginationV1(response);
+
+    cursor = pagination.has_more ? pagination.next_cursor : undefined;
+  } while (!field && cursor);
 
   if (!field) {
     return {
@@ -195,8 +205,8 @@ export const fieldTools = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        start: { type: "number", description: "Pagination offset" },
-        limit: { type: "number", description: "Number of items" },
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items (1-100)" },
       },
     },
     handler: listOrganizationFields,
@@ -208,8 +218,8 @@ export const fieldTools = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        start: { type: "number", description: "Pagination offset" },
-        limit: { type: "number", description: "Number of items" },
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items (1-100)" },
       },
     },
     handler: listDealFields,
@@ -221,8 +231,8 @@ export const fieldTools = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        start: { type: "number", description: "Pagination offset" },
-        limit: { type: "number", description: "Number of items" },
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items (1-100)" },
       },
     },
     handler: listPersonFields,

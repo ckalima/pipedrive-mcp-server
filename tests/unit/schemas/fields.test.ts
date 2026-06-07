@@ -33,18 +33,30 @@ describe('fields schemas', () => {
       expect(result.limit).toBe(50);
     });
 
-    it('should accept pagination params', () => {
-      const result = ListOrganizationFieldsSchema.parse({
-        start: 50,
-        limit: 100,
-      });
-      expect(result.start).toBe(50);
+    it('should default limit to 50', () => {
+      const result = ListOrganizationFieldsSchema.parse({});
+      expect(result.limit).toBe(50);
+    });
+
+    it('should accept cursor param', () => {
+      const result = ListOrganizationFieldsSchema.parse({ cursor: 'abc', limit: 50 });
+      expect(result.cursor).toBe('abc');
+      expect(result.limit).toBe(50);
+    });
+
+    it('should accept limit up to 100', () => {
+      const result = ListOrganizationFieldsSchema.parse({ limit: 100 });
       expect(result.limit).toBe(100);
     });
 
-    it('should accept limit up to 500 (v1 API)', () => {
-      const result = ListOrganizationFieldsSchema.parse({ limit: 500 });
-      expect(result.limit).toBe(500);
+    it('should reject limit above 100', () => {
+      expect(() => ListOrganizationFieldsSchema.parse({ limit: 101 })).toThrow();
+    });
+
+    it('should not treat unknown start param as valid (Zod strips it silently)', () => {
+      // Zod strips unknown keys by default; start is not in the v2 schema
+      const result = ListOrganizationFieldsSchema.parse({ start: 50 } as Record<string, unknown>);
+      expect((result as Record<string, unknown>).start).toBeUndefined();
     });
   });
 
@@ -54,13 +66,14 @@ describe('fields schemas', () => {
       expect(result.limit).toBe(50);
     });
 
-    it('should accept pagination params', () => {
-      const result = ListDealFieldsSchema.parse({
-        start: 0,
-        limit: 250,
-      });
-      expect(result.start).toBe(0);
-      expect(result.limit).toBe(250);
+    it('should accept cursor param', () => {
+      const result = ListDealFieldsSchema.parse({ cursor: 'abc', limit: 100 });
+      expect(result.cursor).toBe('abc');
+      expect(result.limit).toBe(100);
+    });
+
+    it('should reject limit above 100', () => {
+      expect(() => ListDealFieldsSchema.parse({ limit: 250 })).toThrow();
     });
   });
 
@@ -70,12 +83,14 @@ describe('fields schemas', () => {
       expect(result.limit).toBe(50);
     });
 
-    it('should accept pagination params', () => {
-      const result = ListPersonFieldsSchema.parse({
-        start: 100,
-        limit: 50,
-      });
-      expect(result.start).toBe(100);
+    it('should accept cursor param', () => {
+      const result = ListPersonFieldsSchema.parse({ cursor: 'xyz', limit: 25 });
+      expect(result.cursor).toBe('xyz');
+      expect(result.limit).toBe(25);
+    });
+
+    it('should reject limit above 100', () => {
+      expect(() => ListPersonFieldsSchema.parse({ limit: 500 })).toThrow();
     });
   });
 

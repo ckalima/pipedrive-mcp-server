@@ -1,9 +1,9 @@
 /**
- * Zod schemas for Field metadata operations (v1 API)
+ * Zod schemas for Field metadata operations (v2 API for deal/person/organization)
  */
 
 import { z } from "zod";
-import { PaginationParamsV1Schema } from "./common.js";
+import { PaginationParamsSchema } from "./common.js";
 
 /**
  * Field entity types
@@ -14,17 +14,17 @@ export const FieldEntityTypeSchema = z.enum(["organization", "deal", "person", "
 /**
  * List organization fields parameters
  */
-export const ListOrganizationFieldsSchema = PaginationParamsV1Schema;
+export const ListOrganizationFieldsSchema = PaginationParamsSchema;
 
 /**
  * List deal fields parameters
  */
-export const ListDealFieldsSchema = PaginationParamsV1Schema;
+export const ListDealFieldsSchema = PaginationParamsSchema;
 
 /**
  * List person fields parameters
  */
-export const ListPersonFieldsSchema = PaginationParamsV1Schema;
+export const ListPersonFieldsSchema = PaginationParamsSchema;
 
 /**
  * Get field by key parameters
