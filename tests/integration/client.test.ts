@@ -47,7 +47,8 @@ describe('PipedriveClient', () => {
       expect(mockFn).toHaveBeenCalledTimes(1);
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/deals');
-      expect(url).toContain(`api_token=${VALID_API_KEY}`);
+      expect(url).not.toContain('api_token');
+      expect(options.headers['x-api-token']).toBe(VALID_API_KEY);
       expect(options.method).toBe('GET');
       expect(options.headers.Accept).toBe('application/json');
     });
@@ -108,6 +109,74 @@ describe('PipedriveClient', () => {
 
       expect(response.success).toBe(true);
       expect(response.additional_data?.next_cursor).toBe('cursor_abc123');
+    });
+  });
+
+  describe('authentication', () => {
+    it('v2 calls: sets x-api-token header, not query param', async () => {
+      const mockFn = mockApiSuccess([fixtures.deal]);
+      const client = new PipedriveClient();
+
+      await client.get('/deals'); // default version = "v2"
+
+      const [url, options] = mockFn.mock.calls[0];
+      expect(url).not.toContain('api_token');
+      expect(options.headers['x-api-token']).toBe(VALID_API_KEY);
+    });
+
+    it('v1 calls: sets api_token query param, not header', async () => {
+      const mockFn = mockApiSuccess([]);
+      const client = new PipedriveClient();
+
+      await client.get('/users', undefined, 'v1');
+
+      const [url, options] = mockFn.mock.calls[0];
+      expect(url).toContain(`api_token=${VALID_API_KEY}`);
+      expect(options.headers['x-api-token']).toBeUndefined();
+    });
+
+    it('v2 POST calls: sets x-api-token header', async () => {
+      const mockFn = mockApiSuccess(fixtures.deal);
+      const client = new PipedriveClient();
+
+      await client.post('/deals', { title: 'New' }); // default version = "v2"
+
+      const [url, options] = mockFn.mock.calls[0];
+      expect(url).not.toContain('api_token');
+      expect(options.headers['x-api-token']).toBe(VALID_API_KEY);
+    });
+
+    it('v2 PATCH calls: sets x-api-token header', async () => {
+      const mockFn = mockApiSuccess(fixtures.deal);
+      const client = new PipedriveClient();
+
+      await client.patch('/deals/1', { title: 'Updated' }); // default version = "v2"
+
+      const [url, options] = mockFn.mock.calls[0];
+      expect(url).not.toContain('api_token');
+      expect(options.headers['x-api-token']).toBe(VALID_API_KEY);
+    });
+
+    it('v2 DELETE calls: sets x-api-token header', async () => {
+      const mockFn = mockApiSuccess({ id: 1 });
+      const client = new PipedriveClient();
+
+      await client.delete('/deals/1'); // default version = "v2"
+
+      const [url, options] = mockFn.mock.calls[0];
+      expect(url).not.toContain('api_token');
+      expect(options.headers['x-api-token']).toBe(VALID_API_KEY);
+    });
+
+    it('testConnection (v1): uses query param auth', async () => {
+      const mockFn = mockApiSuccess({ id: 1, name: 'Test User' });
+      const client = new PipedriveClient();
+
+      await client.testConnection();
+
+      const [url, options] = mockFn.mock.calls[0];
+      expect(url).toContain(`api_token=${VALID_API_KEY}`);
+      expect(options.headers['x-api-token']).toBeUndefined();
     });
   });
 

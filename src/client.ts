@@ -120,8 +120,17 @@ export class PipedriveClient {
     const baseUrl = this.getBaseUrl(version);
     const url = new URL(`${baseUrl}${endpoint}`);
 
-    // Add API key as query parameter (Pipedrive's auth method)
-    url.searchParams.set("api_token", this.config.apiKey);
+    // Initialize headers early so auth header can be set before URL params
+    const headers: Record<string, string> = {
+      "Accept": "application/json",
+    };
+
+    // v2 uses x-api-token header; v1 uses ?api_token= query param
+    if (version === "v2") {
+      headers["x-api-token"] = this.config.apiKey;
+    } else {
+      url.searchParams.set("api_token", this.config.apiKey);
+    }
 
     // Add additional query parameters
     if (params) {
@@ -129,10 +138,6 @@ export class PipedriveClient {
         url.searchParams.set(key, value);
       });
     }
-
-    const headers: Record<string, string> = {
-      "Accept": "application/json",
-    };
 
     if (body) {
       headers["Content-Type"] = "application/json";
