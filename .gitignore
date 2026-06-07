@@ -24,3 +24,8 @@ npm-debug.log*
 
 # Test coverage
 coverage/
+
+# Claude Code / Menehune local state (machine-specific, not shared)
+.claude/settings.local.json
+.claude/prioritize-cache.md
+.claude/menehune/
