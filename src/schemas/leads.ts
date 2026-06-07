@@ -5,7 +5,6 @@
 import { z } from "zod";
 import {
   PaginationParamsV1Schema,
-  PaginationParamsSchema,
   SearchTermSchema,
   VisibilitySchema,
   DateStringSchema,
