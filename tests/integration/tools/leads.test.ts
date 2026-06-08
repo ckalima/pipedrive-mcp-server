@@ -402,8 +402,141 @@ describe('leads tools', () => {
     });
   });
 
+  describe('convertLeadToDeal', () => {
+    const noSleep = async () => {};
+
+    it('should return the created deal id on completed (first status poll)', async () => {
+      // POST -> conversion_id, then first status GET -> completed with deal id
+      mockFetch([
+        { status: 200, data: { conversion_id: 'conv-123' } },
+        { status: 200, data: { status: 'completed', deal_id: 999 } },
+      ]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      const result = await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.data.deal_id).toBe(999);
+      expect(parsed.data.conversion_id).toBe('conv-123');
+      expect(parsed.data.status).toBe('completed');
+      expect(parsed.summary).toContain('999');
+    });
+
+    it('should POST to the v2 convert endpoint with an empty body', async () => {
+      const mockFn = mockFetch([
+        { status: 200, data: { conversion_id: 'conv-1' } },
+        { status: 200, data: { status: 'completed', deal_id: 1 } },
+      ]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      const [postUrl, postOptions] = mockFn.mock.calls[0];
+      expect(String(postUrl)).toContain(`/leads/${VALID_UUID}/convert/deal`);
+      expect(String(postUrl)).toContain('/api/v2/');
+      expect(postOptions.method).toBe('POST');
+      expect(JSON.parse(postOptions.body)).toEqual({});
+    });
+
+    it('should poll the v2 status endpoint with the conversion id', async () => {
+      const mockFn = mockFetch([
+        { status: 200, data: { conversion_id: 'conv-xyz' } },
+        { status: 200, data: { status: 'completed', deal_id: 7 } },
+      ]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      const [statusUrl, statusOptions] = mockFn.mock.calls[1];
+      expect(String(statusUrl)).toContain(
+        `/leads/${VALID_UUID}/convert/status/conv-xyz`,
+      );
+      expect(statusOptions.method).toBe('GET');
+    });
+
+    it('should keep polling through pending/running until completed', async () => {
+      // POST, then not_started -> running -> completed
+      mockFetch([
+        { status: 200, data: { conversion_id: 'conv-2' } },
+        { status: 200, data: { status: 'not_started' } },
+        { status: 200, data: { status: 'running' } },
+        { status: 200, data: { status: 'completed', deal_id: 55 } },
+      ]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      const result = await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.data.deal_id).toBe(55);
+    });
+
+    it('should return an error result when status is failed', async () => {
+      mockFetch([
+        { status: 200, data: { conversion_id: 'conv-3' } },
+        { status: 200, data: { status: 'failed' } },
+      ]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      const result = await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('failed');
+    });
+
+    it('should return conversion_id + status (non-error) on timeout', async () => {
+      // POST returns conversion_id; every status poll stays "running".
+      // The mock clamps to the last array entry, so all polls see "running".
+      mockFetch([
+        { status: 200, data: { conversion_id: 'conv-timeout' } },
+        { status: 200, data: { status: 'running' } },
+      ]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      const result = await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      // No real wait occurred (noSleep), and no error is returned.
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.data.conversion_id).toBe('conv-timeout');
+      expect(parsed.data.status).toBe('running');
+      expect(parsed.summary).toContain('still in progress');
+    });
+
+    it('should return an error result if the POST fails', async () => {
+      mockApiError(400, 'Cannot convert');
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      const result = await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      expect(result.isError).toBe(true);
+    });
+
+    it('should return an error result if a status poll fails', async () => {
+      mockFetch([
+        { status: 200, data: { conversion_id: 'conv-4' } },
+        { status: 500, ok: false, error: 'boom' },
+      ]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      const result = await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      expect(result.isError).toBe(true);
+    });
+
+    it('should error when POST returns no conversion_id', async () => {
+      mockFetch([{ status: 200, data: {} }]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      const result = await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('conversion_id');
+    });
+  });
+
   describe('tool registration smoke check', () => {
-    it('should have all 7 leads tools registered in allTools', async () => {
+    it('should have all 8 leads tools registered in allTools', async () => {
       const { allTools } = await import('../../../src/tools/index.js');
       const leadToolNames = [
         'pipedrive_list_leads',
@@ -413,6 +546,7 @@ describe('leads tools', () => {
         'pipedrive_update_lead',
         'pipedrive_search_leads',
         'pipedrive_delete_lead',
+        'pipedrive_convert_lead_to_deal',
       ];
       for (const name of leadToolNames) {
         expect(allTools.some(t => t.name === name)).toBe(true);

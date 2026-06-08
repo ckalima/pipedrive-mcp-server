@@ -11,6 +11,7 @@ import {
   UpdateLeadSchema,
   DeleteLeadSchema,
   SearchLeadsSchema,
+  ConvertLeadToDealSchema,
   type ListLeadsParams,
   type ListArchivedLeadsParams,
   type GetLeadParams,
@@ -18,10 +19,22 @@ import {
   type UpdateLeadParams,
   type DeleteLeadParams,
   type SearchLeadsParams,
+  type ConvertLeadToDealParams,
 } from "../schemas/leads.js";
 import { buildPaginationParamsV1, extractPaginationV1 } from "../utils/pagination.js";
-import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
+import { mcpErrorResult, mcpErrorFromCode, destructiveOperationGuard } from "../utils/errors.js";
 import { createListSummary } from "../utils/formatting.js";
+
+/**
+ * Exponential backoff schedule for polling the async lead-to-deal conversion.
+ * One sleep is performed BEFORE each status poll. The sum (~31.5s) enforces the
+ * ~30 second cap from issue #13: once these delays are exhausted we stop polling.
+ */
+export const BACKOFF_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 16000];
+
+/** Sleep helper, injectable so tests can supply a no-op (zero real delay). */
+export type SleepFn = (ms: number) => Promise<void>;
+const realSleep: SleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * List active (non-archived) leads with optional filtering
@@ -246,6 +259,108 @@ export async function searchLeads(params: SearchLeadsParams) {
 }
 
 /**
+ * Convert a lead to a deal (v2). The conversion is asynchronous:
+ *  1. POST /leads/{id}/convert/deal returns a { conversion_id }
+ *  2. Poll GET /leads/{id}/convert/status/{conversion_id} with exponential
+ *     backoff until status is "completed" or "failed".
+ * On success returns the created deal id. On failure returns an error result.
+ * If still running after the ~30s backoff cap is exhausted, returns the
+ * conversion_id + last status (non-error) so the caller can check later.
+ *
+ * The `sleep` parameter is injectable purely for testing (defaults to a real timer).
+ */
+export async function convertLeadToDeal(
+  params: ConvertLeadToDealParams,
+  sleep: SleepFn = realSleep,
+) {
+  const client = getClient();
+
+  // 1. Kick off the async conversion.
+  const startResponse = await client.post<{ conversion_id?: string }>(
+    `/leads/${params.id}/convert/deal`,
+    {},
+    "v2",
+  );
+
+  if (!startResponse.success || !startResponse.data) {
+    return mcpErrorResult(startResponse);
+  }
+
+  const conversionId = startResponse.data.conversion_id;
+  if (!conversionId) {
+    return mcpErrorFromCode(
+      "API_ERROR",
+      "Conversion did not return a conversion_id",
+      "Retry the conversion or check the lead in Pipedrive",
+    );
+  }
+
+  // 2. Poll for completion with exponential backoff.
+  let lastStatus = "not_started";
+  let lastData: Record<string, unknown> | undefined;
+
+  for (const delay of BACKOFF_DELAYS_MS) {
+    await sleep(delay);
+
+    const statusResponse = await client.get<Record<string, unknown>>(
+      `/leads/${params.id}/convert/status/${conversionId}`,
+      undefined,
+      "v2",
+    );
+
+    if (!statusResponse.success || !statusResponse.data) {
+      return mcpErrorResult(statusResponse);
+    }
+
+    lastData = statusResponse.data;
+    lastStatus = String(statusResponse.data.status ?? lastStatus);
+
+    if (lastStatus === "completed") {
+      const dealId = lastData.deal_id;
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            summary: `Lead ${params.id} converted to deal ${dealId}`,
+            data: {
+              lead_id: params.id,
+              deal_id: dealId,
+              conversion_id: conversionId,
+              status: lastStatus,
+            },
+          }, null, 2),
+        }],
+      };
+    }
+
+    if (lastStatus === "failed" || lastStatus === "rejected") {
+      return mcpErrorFromCode(
+        "API_ERROR",
+        `Lead conversion ${conversionId} ${lastStatus}`,
+        "Check the lead's data in Pipedrive and retry the conversion",
+      );
+    }
+    // Otherwise status is pending/running/not_started: loop and back off again.
+  }
+
+  // 3. Timeout: still running after the backoff cap was exhausted.
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Lead ${params.id} conversion still in progress after timeout`,
+        data: {
+          lead_id: params.id,
+          conversion_id: conversionId,
+          status: lastStatus,
+          note: "Conversion did not complete within the polling window. Use the conversion_id to check status later.",
+        },
+      }, null, 2),
+    }],
+  };
+}
+
+/**
  * Tool definitions for MCP registration
  */
 export const leadsTools = [
@@ -385,5 +500,18 @@ export const leadsTools = [
     },
     handler: deleteLead,
     schema: DeleteLeadSchema,
+  },
+  {
+    name: "pipedrive_convert_lead_to_deal",
+    description: "Convert a lead into a deal (Pipedrive v2). The conversion runs asynchronously; this tool polls until it completes (typically under 5s) and returns the new deal ID. If it is still running after ~30s, it returns the conversion_id and status for manual follow-up.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string", description: "Lead UUID to convert" },
+      },
+      required: ["id"],
+    },
+    handler: convertLeadToDeal,
+    schema: ConvertLeadToDealSchema,
   },
 ];

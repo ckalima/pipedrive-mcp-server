@@ -13,6 +13,7 @@ import {
   UpdateLeadSchema,
   DeleteLeadSchema,
   SearchLeadsSchema,
+  ConvertLeadToDealSchema,
 } from '../../../src/schemas/leads.js';
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
@@ -312,6 +313,25 @@ describe('leads schemas', () => {
 
     it('should reject non-UUID string', () => {
       expect(() => DeleteLeadSchema.parse({ id: 'not-a-uuid' })).toThrow();
+    });
+  });
+
+  describe('ConvertLeadToDealSchema', () => {
+    it('should accept valid UUID', () => {
+      const result = ConvertLeadToDealSchema.parse({ id: VALID_UUID });
+      expect(result.id).toBe(VALID_UUID);
+    });
+
+    it('should require id', () => {
+      expect(() => ConvertLeadToDealSchema.parse({})).toThrow();
+    });
+
+    it('should reject integer id', () => {
+      expect(() => ConvertLeadToDealSchema.parse({ id: 1 })).toThrow();
+    });
+
+    it('should reject non-UUID string', () => {
+      expect(() => ConvertLeadToDealSchema.parse({ id: 'not-a-uuid' })).toThrow();
     });
   });
 

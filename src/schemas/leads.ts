@@ -102,6 +102,13 @@ export const UpdateLeadSchema = LeadIdSchema.extend({
 export const DeleteLeadSchema = LeadIdSchema;
 
 /**
+ * Convert lead to deal parameters - lead UUID only.
+ * The v2 convert endpoint copies the lead's existing data into the new deal;
+ * no optional deal-field overrides are accepted (minimal conversion).
+ */
+export const ConvertLeadToDealSchema = LeadIdSchema;
+
+/**
  * Search leads parameters (v2 endpoint)
  */
 export const SearchLeadsSchema = z.object({
@@ -127,4 +134,5 @@ export type GetLeadParams = z.infer<typeof GetLeadSchema>;
 export type CreateLeadParams = z.infer<typeof CreateLeadSchema>;
 export type UpdateLeadParams = z.infer<typeof UpdateLeadSchema>;
 export type DeleteLeadParams = z.infer<typeof DeleteLeadSchema>;
+export type ConvertLeadToDealParams = z.infer<typeof ConvertLeadToDealSchema>;
 export type SearchLeadsParams = z.infer<typeof SearchLeadsSchema>;
