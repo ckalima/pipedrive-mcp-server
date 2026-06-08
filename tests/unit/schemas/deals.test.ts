@@ -288,6 +288,12 @@ describe('deals schemas', () => {
       expect(result.limit).toBe(25);
     });
 
+    it('should accept fields and cursor (v2 search)', () => {
+      const result = SearchDealsSchema.parse({ term: 'x', fields: 'title,notes', cursor: 'abc' });
+      expect(result.fields).toBe('title,notes');
+      expect(result.cursor).toBe('abc');
+    });
+
     it('should reject empty term', () => {
       expect(() => SearchDealsSchema.parse({ term: '' })).toThrow();
     });

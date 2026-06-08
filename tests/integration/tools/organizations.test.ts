@@ -151,14 +151,40 @@ describe('organizations tools', () => {
       expect(parsed.summary).toContain('test');
     });
 
-    it('should use v1 API for search', async () => {
+    it('should call the v2 /organizations/search endpoint (not v1 itemSearch)', async () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchOrganizations } = await getOrganizationsTools();
 
       await searchOrganizations({ term: 'acme' });
 
       const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('/v1/itemSearch');
+      expect(url).toContain('/api/v2/organizations/search');
+      expect(url).not.toContain('/itemSearch');
+      expect(url).not.toContain('/v1/');
+    });
+
+    it('should pass term, fields, and cursor', async () => {
+      const mockFn = mockApiSuccess({ items: [] });
+      const { searchOrganizations } = await getOrganizationsTools();
+
+      await searchOrganizations({ term: 'acme corp', fields: 'name,address', cursor: 'cur1', exact_match: true });
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('term=acme+corp');
+      expect(url).toContain('fields=name%2Caddress');
+      expect(url).toContain('cursor=cur1');
+      expect(url).toContain('exact_match=true');
+      expect(url).not.toContain('item_types');
+    });
+
+    it('should parse next_cursor from v2 search response', async () => {
+      mockFetch({ data: { items: [] }, additional_data: { next_cursor: 'NEXT' } });
+      const { searchOrganizations } = await getOrganizationsTools();
+
+      const result = await searchOrganizations({ term: 'x' });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.has_more).toBe(true);
     });
   });
 

@@ -154,3 +154,14 @@ export function createLeadsFixture(count: number = 3) {
     title: `Test Lead ${i + 1}`,
   }));
 }
+
+/**
+ * Creates a v2 search response body: { items: [...] } plus optional next_cursor.
+ * v2 /{entity}/search returns data.items[] and additional_data.next_cursor.
+ */
+export function createV2SearchResponse(items: unknown[], nextCursor?: string) {
+  return {
+    data: { items: items.map((item, i) => ({ result_score: 1 - i * 0.1, item })) },
+    additional_data: nextCursor ? { next_cursor: nextCursor } : undefined,
+  };
+}

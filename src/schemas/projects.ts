@@ -5,7 +5,6 @@
 import { z } from "zod";
 import {
   PaginationParamsSchema,
-  PaginationParamsV1Schema,
   IdParamSchema,
   SearchTermSchema,
   DateStringSchema,
@@ -119,9 +118,9 @@ export const SearchProjectsSchema = z.object({
 });
 
 /**
- * List project tasks parameters (v1 endpoint)
+ * List project tasks parameters (v2 GET /tasks?project_id=)
  */
-export const ListProjectTasksSchema = PaginationParamsV1Schema.extend({
+export const ListProjectTasksSchema = PaginationParamsSchema.extend({
   id: z.number().int().positive().describe("Project ID"),
 });
 

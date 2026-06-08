@@ -347,16 +347,19 @@ describe('projects tools', () => {
       expect(parsed.summary).toContain('1');
     });
 
-    it('should send PATCH request to v2 projects endpoint with status archived', async () => {
+    it('should POST to the v2 /projects/{id}/archive endpoint with an empty body', async () => {
       const mockFn = mockApiSuccess(projectFixture);
       const { archiveProject } = await getProjectsTools();
 
       await archiveProject({ id: 1 });
 
       const [url, options] = mockFn.mock.calls[0];
-      expect(url).toContain('/projects/1');
-      expect(options.method).toBe('PATCH');
-      expect(JSON.parse(options.body)).toEqual({ status: 'archived' });
+      expect(url).toContain('/api/v2/projects/1/archive');
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body)).toEqual({});
+      // revert-proof: must NOT be the old PATCH-with-status call
+      expect(options.method).not.toBe('PATCH');
+      expect(JSON.parse(options.body)).not.toHaveProperty('status');
     });
   });
 
@@ -428,7 +431,7 @@ describe('projects tools', () => {
         { id: 1, title: 'Task 1', project_id: 1 },
         { id: 2, title: 'Task 2', project_id: 1 },
       ];
-      mockFetch({ data: tasks, additional_data: paginationFixtures.v1NoMore });
+      mockFetch({ data: tasks, additional_data: paginationFixtures.v2NoMore });
       const { listProjectTasks } = await getProjectsTools();
 
       const result = await listProjectTasks({ id: 1 });
@@ -438,25 +441,38 @@ describe('projects tools', () => {
       expect(parsed.data).toHaveLength(2);
     });
 
-    it('should call v1 API endpoint (not v2)', async () => {
+    it('should call the v2 /tasks endpoint with project_id filter (not v1 /projects/{id}/tasks)', async () => {
       const mockFn = mockApiSuccess([]);
       const { listProjectTasks } = await getProjectsTools();
 
       await listProjectTasks({ id: 1 });
 
       const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('/v1/projects/1/tasks');
-      expect(url).not.toContain('/api/v2/');
+      expect(url).toContain('/api/v2/tasks');
+      expect(url).toContain('project_id=1');
+      expect(url).not.toContain('/v1/');
+      expect(url).not.toContain('/projects/1/tasks');
     });
 
-    it('should handle v1 pagination with has_more=true', async () => {
-      mockFetch({ data: [{ id: 1 }], additional_data: paginationFixtures.v1WithMore });
+    it('should handle v2 cursor pagination (has_more=true)', async () => {
+      mockFetch({ data: [{ id: 1, project_id: 1 }], additional_data: { next_cursor: 'NEXT' } });
       const { listProjectTasks } = await getProjectsTools();
 
-      const result = await listProjectTasks({ id: 1, start: 0 });
+      const result = await listProjectTasks({ id: 1, cursor: 'c0' });
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
+      expect(parsed.pagination.next_cursor).toBe('NEXT');
+    });
+
+    it('should send the cursor on the wire', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listProjectTasks } = await getProjectsTools();
+
+      await listProjectTasks({ id: 1, cursor: 'abc' });
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('cursor=abc');
     });
 
     it('should return isError on API error (simulates missing add-on)', async () => {

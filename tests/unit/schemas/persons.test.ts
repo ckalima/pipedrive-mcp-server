@@ -250,29 +250,26 @@ describe('persons schemas', () => {
       expect(() => SearchPersonsSchema.parse({})).toThrow();
     });
 
-    it('should accept minimal params with just term', () => {
+    it('should accept minimal params with just term and apply defaults', () => {
       const result = SearchPersonsSchema.parse({ term: 'john' });
       expect(result.term).toBe('john');
-      expect(result.search_by_email).toBe(true);
-      expect(result.search_by_phone).toBe(true);
       expect(result.exact_match).toBe(false);
       expect(result.limit).toBe(50);
     });
 
-    it('should accept all optional filters', () => {
-      const params = {
-        term: 'jane',
-        org_id: 5,
-        search_by_email: false,
-        search_by_phone: false,
-        exact_match: true,
-        limit: 25,
-      };
-
-      const result = SearchPersonsSchema.parse(params);
-      expect(result.search_by_email).toBe(false);
-      expect(result.search_by_phone).toBe(false);
+    it('should accept the new fields param and cursor', () => {
+      const result = SearchPersonsSchema.parse({ term: 'jane', fields: 'email,phone', org_id: 5, cursor: 'c1', exact_match: true, limit: 25 });
+      expect(result.fields).toBe('email,phone');
+      expect(result.org_id).toBe(5);
+      expect(result.cursor).toBe('c1');
       expect(result.exact_match).toBe(true);
+    });
+
+    // REGRESSION GUARD (revert-proof): the old boolean params must no longer exist on the parsed output.
+    it('should NOT carry search_by_email / search_by_phone (removed in v2 migration)', () => {
+      const result = SearchPersonsSchema.parse({ term: 'x', search_by_email: true, search_by_phone: false } as Record<string, unknown>);
+      expect((result as Record<string, unknown>).search_by_email).toBeUndefined();
+      expect((result as Record<string, unknown>).search_by_phone).toBeUndefined();
     });
 
     it('should reject empty term', () => {

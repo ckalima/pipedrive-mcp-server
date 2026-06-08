@@ -117,16 +117,16 @@ export const UpdatePersonSchema = IdParamSchema.extend({
 export const SearchPersonsSchema = z.object({
   term: SearchTermSchema
     .describe("Search term for name, email, phone, or notes"),
+  fields: z.string().optional()
+    .describe("Comma-separated fields to search (allowed: name, email, phone, notes, custom_fields). Defaults to all."),
   org_id: z.number().int().positive().optional()
     .describe("Filter by organization"),
-  search_by_email: z.boolean().optional().default(true)
-    .describe("Include email in search"),
-  search_by_phone: z.boolean().optional().default(true)
-    .describe("Include phone in search"),
   exact_match: z.boolean().optional().default(false)
     .describe("Use exact match instead of fuzzy search"),
   limit: z.number().min(1).max(100).optional().default(50)
     .describe("Number of results to return"),
+  cursor: z.string().optional()
+    .describe("Cursor for pagination (from previous response)"),
 });
 
 /**

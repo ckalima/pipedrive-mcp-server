@@ -223,25 +223,25 @@ describe('fields tools', () => {
       expect(mockFn.mock.calls[0][0]).toContain('/api/v2/organizationFields');
     });
 
-    it('should use v1 API endpoint for product/activity/project entity types', async () => {
+    it('should use v2 API endpoint for product/activity/project entity types', async () => {
       const { getField } = await getFieldsTools();
 
-      // Test product fields endpoint
       let mockFn = mockApiSuccess([{ key: 'mykey', name: 'Name', field_type: 'varchar' }]);
       await getField({ entity_type: 'product', key: 'mykey' });
-      expect(mockFn.mock.calls[0][0]).toContain('/v1/productFields');
+      expect(mockFn.mock.calls[0][0]).toContain('/api/v2/productFields');
+      expect(mockFn.mock.calls[0][0]).not.toContain('/v1/');
 
-      // Test activity fields endpoint
       vi.unstubAllGlobals();
       mockFn = mockApiSuccess([{ key: 'mykey', name: 'Name', field_type: 'varchar' }]);
       await getField({ entity_type: 'activity', key: 'mykey' });
-      expect(mockFn.mock.calls[0][0]).toContain('/v1/activityFields');
+      expect(mockFn.mock.calls[0][0]).toContain('/api/v2/activityFields');
+      expect(mockFn.mock.calls[0][0]).not.toContain('/v1/');
 
-      // Test project fields endpoint
       vi.unstubAllGlobals();
       mockFn = mockApiSuccess([{ key: 'mykey', name: 'Name', field_type: 'varchar' }]);
       await getField({ entity_type: 'project', key: 'mykey' });
-      expect(mockFn.mock.calls[0][0]).toContain('/v1/projectFields');
+      expect(mockFn.mock.calls[0][0]).toContain('/api/v2/projectFields');
+      expect(mockFn.mock.calls[0][0]).not.toContain('/v1/');
     });
 
     it('should handle field not found in list', async () => {
@@ -282,6 +282,31 @@ describe('fields tools', () => {
       // Verify two fetch calls were made (field was on page 2)
       const fetchMock = vi.mocked(global.fetch);
       expect(fetchMock.mock.calls.length).toBe(2);
+    });
+
+    it('should paginate product fields via v2 cursor across pages', async () => {
+      const page1 = Array.from({ length: 50 }, (_, i) => ({
+        ...createFieldFixture(`p_${i}`, `P ${i}`, 'varchar'), key: `p_${i}`,
+      }));
+      const page2 = [{ ...createFieldFixture('target', 'Target Field', 'varchar'), key: 'target' }];
+
+      mockFetch([
+        { data: page1, additional_data: { next_cursor: 'page2cursor' } },
+        { data: page2, additional_data: undefined },
+      ]);
+      const { getField } = await getFieldsTools();
+
+      const result = await getField({ entity_type: 'product', key: 'target' });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.data.name).toBe('Target Field');
+
+      const fetchMock = vi.mocked(global.fetch);
+      expect(fetchMock.mock.calls.length).toBe(2);
+      // both calls must be v2 and carry a v2 cursor on page 2 (not a v1 ?start=)
+      expect(fetchMock.mock.calls[0][0]).toContain('/api/v2/productFields');
+      expect(fetchMock.mock.calls[1][0]).toContain('cursor=page2cursor');
+      expect(fetchMock.mock.calls[1][0]).not.toContain('start=');
     });
 
     it('should handle API error during getField', async () => {

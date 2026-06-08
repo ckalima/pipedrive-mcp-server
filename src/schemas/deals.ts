@@ -134,7 +134,9 @@ export const UpdateDealSchema = IdParamSchema.extend({
  */
 export const SearchDealsSchema = z.object({
   term: SearchTermSchema
-    .describe("Search term to find in deal title"),
+    .describe("Search term to find in deal title, notes, and custom fields"),
+  fields: z.string().optional()
+    .describe("Comma-separated fields to search (allowed: title, notes, custom_fields). Defaults to all."),
   person_id: z.number().int().positive().optional()
     .describe("Filter by linked person"),
   org_id: z.number().int().positive().optional()
@@ -144,6 +146,8 @@ export const SearchDealsSchema = z.object({
     .describe("Use exact match instead of fuzzy search"),
   limit: z.number().min(1).max(100).optional().default(50)
     .describe("Number of results to return"),
+  cursor: z.string().optional()
+    .describe("Cursor for pagination (from previous response)"),
 });
 
 /**

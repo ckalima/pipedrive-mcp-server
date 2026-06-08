@@ -24,8 +24,6 @@ import {
 import {
   buildPaginationParamsV2,
   extractPaginationV2,
-  buildPaginationParamsV1,
-  extractPaginationV1,
 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
 import { createListSummary } from "../utils/formatting.js";
@@ -193,13 +191,12 @@ export async function deleteProject(params: DeleteProjectParams) {
 }
 
 /**
- * Archive a project by setting status to 'archived' via PATCH.
- * (Archive endpoint semantics assumed; see issue #14.)
+ * Archive a project via the dedicated v2 POST /projects/{id}/archive endpoint (no body).
  */
 export async function archiveProject(params: ArchiveProjectParams) {
   const client = getClient();
 
-  const response = await client.patch<unknown>(`/projects/${params.id}`, { status: "archived" });
+  const response = await client.post<unknown>(`/projects/${params.id}/archive`, {});
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -247,21 +244,22 @@ export async function searchProjects(params: SearchProjectsParams) {
 }
 
 /**
- * List tasks belonging to a project (v1 endpoint)
+ * List tasks belonging to a project via v2 GET /tasks?project_id={id} (cursor pagination).
  */
 export async function listProjectTasks(params: ListProjectTasksParams) {
   const client = getClient();
 
-  const queryParams = buildPaginationParamsV1(params.start, params.limit);
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+  queryParams.set("project_id", String(params.id));
 
-  const response = await client.get<unknown[]>(`/projects/${params.id}/tasks`, queryParams, "v1");
+  const response = await client.get<unknown[]>("/tasks", queryParams);
 
   if (!response.success) {
     return mcpErrorResult(response);
   }
 
   const tasks = response.data || [];
-  const pagination = extractPaginationV1(response);
+  const pagination = extractPaginationV2(response);
 
   return {
     content: [{
@@ -409,8 +407,8 @@ export const projectTools = [
       type: "object" as const,
       properties: {
         id: { type: "number", description: "Project ID" },
-        start: { type: "number", description: "Pagination offset (0-based)" },
-        limit: { type: "number", description: "Number of items (1-500, default 50)" },
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items (1-100, default 50)" },
       },
       required: ["id"],
     },

@@ -1,7 +1,6 @@
 /**
  * Field metadata MCP tools for Pipedrive
- * List handlers (deal/person/organization) use v2 API with cursor pagination.
- * getField uses v2 for deal/person/organization, v1 for product/activity/project.
+ * All entity types (deal/person/organization/product/activity/project) use v2 API with cursor pagination.
  */
 
 import { getClient } from "../client.js";
@@ -16,18 +15,11 @@ import {
   type GetFieldParams,
 } from "../schemas/fields.js";
 import {
-  buildPaginationParamsV1,
   buildPaginationParamsV2,
-  extractPaginationV1,
   extractPaginationV2,
 } from "../utils/pagination.js";
 import { mcpErrorResult } from "../utils/errors.js";
 import { createListSummary } from "../utils/formatting.js";
-
-/**
- * Entity types that have v2 field endpoints
- */
-const FIELDS_V2_ENTITY_TYPES = new Set(["organization", "deal", "person"]);
 
 /**
  * List organization fields
@@ -117,8 +109,8 @@ export async function listPersonFields(params: ListPersonFieldsParams) {
 }
 
 /**
- * Get a single field by key - paginates through all pages to find the field.
- * Uses v2 endpoints for deal/person/organization, v1 for product/activity/project.
+ * Get a single field by key — paginates v2 field pages to find the field.
+ * All entity types use the v2 endpoint.
  */
 export async function getField(params: GetFieldParams) {
   const client = getClient();
@@ -143,23 +135,16 @@ export async function getField(params: GetFieldParams) {
     };
   }
 
-  const useV2 = FIELDS_V2_ENTITY_TYPES.has(params.entity_type);
-
-  // Paginate through all pages until the field is found or pages are exhausted.
-  // This fixes the page-1 bug where only the first 50 fields were searched.
+  // Paginate through all pages (v2 cursor) until the field is found or pages are exhausted.
   let cursor: string | undefined;
   let field: { key: string; [k: string]: unknown } | undefined;
 
   do {
-    const queryParams = useV2
-      ? buildPaginationParamsV2(cursor)
-      : buildPaginationParamsV1(cursor ? parseInt(cursor, 10) : undefined);
+    const queryParams = buildPaginationParamsV2(cursor);
 
-    const version = useV2 ? undefined : ("v1" as const);
     const response = await client.get<Array<{ key: string; [k: string]: unknown }>>(
       endpoint,
       queryParams,
-      version,
     );
 
     if (!response.success || !response.data) {
@@ -168,10 +153,7 @@ export async function getField(params: GetFieldParams) {
 
     field = response.data.find(f => f.key === params.key);
 
-    const pagination = useV2
-      ? extractPaginationV2(response)
-      : extractPaginationV1(response);
-
+    const pagination = extractPaginationV2(response);
     cursor = pagination.has_more ? pagination.next_cursor : undefined;
   } while (!field && cursor);
 

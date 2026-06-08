@@ -173,23 +173,19 @@ export async function searchPersons(params: SearchPersonsParams) {
 
   const queryParams = new URLSearchParams();
   queryParams.set("term", params.term);
-  queryParams.set("item_types", "person");
+  if (params.fields) queryParams.set("fields", params.fields);
   if (params.org_id) queryParams.set("organization_id", String(params.org_id));
-  if (params.search_by_email !== undefined) queryParams.set("search_by_email", params.search_by_email ? "1" : "0");
-  if (params.search_by_phone !== undefined) queryParams.set("search_by_phone", params.search_by_phone ? "1" : "0");
   if (params.exact_match) queryParams.set("exact_match", "true");
   if (params.limit) queryParams.set("limit", String(params.limit));
+  if (params.cursor) queryParams.set("cursor", params.cursor);
 
-  // Search uses v1 API
-  const response = await client.get<unknown>(
-    "/itemSearch",
-    queryParams,
-    "v1"
-  );
+  const response = await client.get<{ items?: unknown[] }>("/persons/search", queryParams);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
+
+  const pagination = extractPaginationV2(response);
 
   return {
     content: [{
@@ -197,6 +193,7 @@ export async function searchPersons(params: SearchPersonsParams) {
       text: JSON.stringify({
         summary: `Search results for "${params.term}"`,
         data: response.data,
+        pagination,
       }, null, 2),
     }],
   };
@@ -370,11 +367,11 @@ export const personTools = [
       type: "object" as const,
       properties: {
         term: { type: "string", description: "Search term" },
+        fields: { type: "string", description: "Comma-separated fields to search (name, email, phone, notes, custom_fields). Defaults to all." },
         org_id: { type: "number", description: "Filter by organization" },
-        search_by_email: { type: "boolean", description: "Include email in search" },
-        search_by_phone: { type: "boolean", description: "Include phone in search" },
         exact_match: { type: "boolean", description: "Use exact match" },
         limit: { type: "number", description: "Number of results (1-100)" },
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
       },
       required: ["term"],
     },

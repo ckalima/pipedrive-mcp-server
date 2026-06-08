@@ -310,10 +310,10 @@ describe('projects schemas', () => {
       expect(result.limit).toBe(50);
     });
 
-    it('should accept id, start, and limit', () => {
-      const result = ListProjectTasksSchema.parse({ id: 1, start: 50, limit: 25 });
+    it('should accept id, cursor, and limit (v2)', () => {
+      const result = ListProjectTasksSchema.parse({ id: 1, cursor: 'c1', limit: 25 });
       expect(result.id).toBe(1);
-      expect(result.start).toBe(50);
+      expect(result.cursor).toBe('c1');
       expect(result.limit).toBe(25);
     });
 
@@ -321,12 +321,15 @@ describe('projects schemas', () => {
       expect(() => ListProjectTasksSchema.parse({ id: '1' })).toThrow();
     });
 
-    it('should reject limit over 500', () => {
-      expect(() => ListProjectTasksSchema.parse({ id: 1, limit: 501 })).toThrow();
+    // revert-proof: v2 limit cap is 100 (v1 schema allowed up to 500)
+    it('should reject limit over 100 (v2 cap)', () => {
+      expect(() => ListProjectTasksSchema.parse({ id: 1, limit: 101 })).toThrow();
     });
 
-    it('should reject negative start', () => {
-      expect(() => ListProjectTasksSchema.parse({ id: 1, start: -1 })).toThrow();
+    // revert-proof: v1 offset param `start` is gone — Zod strips it (assert acceptance of cursor instead)
+    it('should strip the removed v1 start param', () => {
+      const result = ListProjectTasksSchema.parse({ id: 1, start: 50 } as Record<string, unknown>);
+      expect((result as Record<string, unknown>).start).toBeUndefined();
     });
   });
 });

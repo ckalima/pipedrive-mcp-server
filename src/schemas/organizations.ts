@@ -119,10 +119,14 @@ export const UpdateOrganizationSchema = IdParamSchema.extend({
 export const SearchOrganizationsSchema = z.object({
   term: SearchTermSchema
     .describe("Search term for organization name or address"),
+  fields: z.string().optional()
+    .describe("Comma-separated fields to search (allowed: name, address, notes, custom_fields). Defaults to all."),
   exact_match: z.boolean().optional().default(false)
     .describe("Use exact match instead of fuzzy search"),
   limit: z.number().min(1).max(100).optional().default(50)
     .describe("Number of results to return"),
+  cursor: z.string().optional()
+    .describe("Cursor for pagination (from previous response)"),
 });
 
 /**

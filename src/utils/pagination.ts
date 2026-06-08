@@ -14,7 +14,7 @@ export function extractPaginationV2(response: {
   additional_data?: {
     next_cursor?: string;
   };
-  data?: unknown[];
+  data?: unknown; // extractor only uses additional_data; data shape varies (array for list, object for search)
 }): PaginationInfo {
   return {
     next_cursor: response.additional_data?.next_cursor,

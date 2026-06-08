@@ -166,20 +166,18 @@ export async function searchOrganizations(params: SearchOrganizationsParams) {
 
   const queryParams = new URLSearchParams();
   queryParams.set("term", params.term);
-  queryParams.set("item_types", "organization");
+  if (params.fields) queryParams.set("fields", params.fields);
   if (params.exact_match) queryParams.set("exact_match", "true");
   if (params.limit) queryParams.set("limit", String(params.limit));
+  if (params.cursor) queryParams.set("cursor", params.cursor);
 
-  // Search uses v1 API
-  const response = await client.get<unknown>(
-    "/itemSearch",
-    queryParams,
-    "v1"
-  );
+  const response = await client.get<{ items?: unknown[] }>("/organizations/search", queryParams);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
+
+  const pagination = extractPaginationV2(response);
 
   return {
     content: [{
@@ -187,6 +185,7 @@ export async function searchOrganizations(params: SearchOrganizationsParams) {
       text: JSON.stringify({
         summary: `Search results for "${params.term}"`,
         data: response.data,
+        pagination,
       }, null, 2),
     }],
   };
@@ -335,8 +334,10 @@ export const organizationTools = [
       type: "object" as const,
       properties: {
         term: { type: "string", description: "Search term" },
+        fields: { type: "string", description: "Comma-separated fields to search (name, address, notes, custom_fields). Defaults to all." },
         exact_match: { type: "boolean", description: "Use exact match" },
         limit: { type: "number", description: "Number of results (1-100)" },
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
       },
       required: ["term"],
     },

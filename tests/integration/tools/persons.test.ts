@@ -176,33 +176,50 @@ describe('persons tools', () => {
       expect(parsed.summary).toContain('john');
     });
 
-    it('should use v1 API for search', async () => {
+    it('should call the v2 /persons/search endpoint (not v1 itemSearch)', async () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchPersons } = await getPersonsTools();
 
       await searchPersons({ term: 'test' });
 
       const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('/v1/itemSearch');
+      expect(url).toContain('/api/v2/persons/search');
+      expect(url).not.toContain('/itemSearch');
+      expect(url).not.toContain('/v1/');
     });
 
-    it('should pass search parameters', async () => {
+    it('should pass v2 search parameters (fields, organization_id, cursor)', async () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchPersons } = await getPersonsTools();
 
       await searchPersons({
         term: 'jane',
+        fields: 'email,phone',
         org_id: 5,
-        search_by_email: true,
-        search_by_phone: false,
         exact_match: true,
+        cursor: 'cur1',
       });
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('term=jane');
+      expect(url).toContain('fields=email%2Cphone');
       expect(url).toContain('organization_id=5');
-      expect(url).toContain('search_by_email=1');
-      expect(url).toContain('search_by_phone=0');
+      expect(url).toContain('exact_match=true');
+      expect(url).toContain('cursor=cur1');
+      // revert-proof: old boolean params must NOT appear on the wire
+      expect(url).not.toContain('search_by_email');
+      expect(url).not.toContain('search_by_phone');
+      expect(url).not.toContain('item_types');
+    });
+
+    it('should parse next_cursor from v2 search response', async () => {
+      mockFetch({ data: { items: [] }, additional_data: { next_cursor: 'NEXT' } });
+      const { searchPersons } = await getPersonsTools();
+
+      const result = await searchPersons({ term: 'x' });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.has_more).toBe(true);
     });
   });
 

@@ -193,6 +193,12 @@ describe('organizations schemas', () => {
       expect(result.limit).toBe(25);
     });
 
+    it('should accept fields and cursor (v2 search)', () => {
+      const result = SearchOrganizationsSchema.parse({ term: 'x', fields: 'name,address', cursor: 'abc' });
+      expect(result.fields).toBe('name,address');
+      expect(result.cursor).toBe('abc');
+    });
+
     it('should reject empty term', () => {
       expect(() => SearchOrganizationsSchema.parse({ term: '' })).toThrow();
     });

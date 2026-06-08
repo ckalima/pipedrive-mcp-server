@@ -215,34 +215,51 @@ describe('deals tools', () => {
       expect(parsed.summary).toContain('test');
     });
 
-    it('should use v1 API for search', async () => {
+    it('should call the v2 /deals/search endpoint (not v1 itemSearch)', async () => {
       const mockFn = mockApiSuccess({ items: [] });
 
       await searchDeals({ term: 'enterprise' });
 
       const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('/v1/itemSearch');
+      expect(url).toContain('/api/v2/deals/search');
+      expect(url).not.toContain('/itemSearch');
+      expect(url).not.toContain('/v1/');
     });
 
-    it('should pass search parameters', async () => {
+    it('should pass v2 search parameters', async () => {
       const mockFn = mockApiSuccess({ items: [] });
 
       await searchDeals({
         term: 'test',
+        fields: 'title,notes',
         person_id: 1,
         org_id: 2,
         status: 'open',
         exact_match: true,
         limit: 25,
+        cursor: 'cur1',
       });
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('term=test');
+      expect(url).toContain('fields=title%2Cnotes');
       expect(url).toContain('person_id=1');
       expect(url).toContain('organization_id=2');
       expect(url).toContain('status=open');
       expect(url).toContain('exact_match=true');
       expect(url).toContain('limit=25');
+      expect(url).toContain('cursor=cur1');
+      expect(url).not.toContain('item_types');
+    });
+
+    it('should parse next_cursor from v2 search response', async () => {
+      mockFetch({ data: { items: [] }, additional_data: { next_cursor: 'NEXT' } });
+
+      const result = await searchDeals({ term: 'x' });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.next_cursor).toBe('NEXT');
+      expect(parsed.pagination.has_more).toBe(true);
     });
   });
 

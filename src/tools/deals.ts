@@ -188,23 +188,21 @@ export async function searchDeals(params: SearchDealsParams) {
 
   const queryParams = new URLSearchParams();
   queryParams.set("term", params.term);
-  queryParams.set("item_types", "deal");
+  if (params.fields) queryParams.set("fields", params.fields);
   if (params.person_id) queryParams.set("person_id", String(params.person_id));
   if (params.org_id) queryParams.set("organization_id", String(params.org_id));
   if (params.status) queryParams.set("status", params.status);
   if (params.exact_match) queryParams.set("exact_match", "true");
   if (params.limit) queryParams.set("limit", String(params.limit));
+  if (params.cursor) queryParams.set("cursor", params.cursor);
 
-  // Search uses v1 API
-  const response = await client.get<unknown>(
-    "/itemSearch",
-    queryParams,
-    "v1"
-  );
+  const response = await client.get<{ items?: unknown[] }>("/deals/search", queryParams);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
+
+  const pagination = extractPaginationV2(response);
 
   return {
     content: [{
@@ -212,6 +210,7 @@ export async function searchDeals(params: SearchDealsParams) {
       text: JSON.stringify({
         summary: `Search results for "${params.term}"`,
         data: response.data,
+        pagination,
       }, null, 2),
     }],
   };
@@ -352,11 +351,13 @@ export const dealTools = [
       type: "object" as const,
       properties: {
         term: { type: "string", description: "Search term" },
+        fields: { type: "string", description: "Comma-separated fields to search (title, notes, custom_fields). Defaults to all." },
         person_id: { type: "number", description: "Filter by linked person" },
         org_id: { type: "number", description: "Filter by linked organization" },
         status: { type: "string", enum: ["open", "won", "lost", "deleted"], description: "Filter by status (omit to return all non-deleted deals)" },
         exact_match: { type: "boolean", description: "Use exact match instead of fuzzy" },
         limit: { type: "number", description: "Number of results (1-100)" },
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
       },
       required: ["term"],
     },
