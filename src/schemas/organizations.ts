@@ -51,8 +51,6 @@ export const ListOrganizationsSchema = PaginationParamsSchema.extend({
     .describe("Comma-separated organization IDs to fetch (max 100)"),
   owner_id: z.number().int().positive().optional()
     .describe("Filter by owner user ID"),
-  first_char: z.string().length(1).optional()
-    .describe("Filter by first character of name"),
   updated_since: z.string().optional()
     .describe("Filter organizations updated after this time (RFC3339 format)"),
   updated_until: z.string().optional()

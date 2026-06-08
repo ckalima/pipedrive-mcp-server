@@ -34,11 +34,7 @@ export async function listActivities(params: ListActivitiesParams) {
   if (params.lead_id) queryParams.set("lead_id", params.lead_id);
   if (params.person_id) queryParams.set("person_id", String(params.person_id));
   if (params.org_id) queryParams.set("org_id", String(params.org_id));
-  if (params.project_id) queryParams.set("project_id", String(params.project_id));
-  if (params.type) queryParams.set("type", params.type);
   if (params.done !== undefined) queryParams.set("done", String(params.done));
-  if (params.start_date) queryParams.set("start_date", params.start_date);
-  if (params.end_date) queryParams.set("end_date", params.end_date);
   if (params.updated_since) queryParams.set("updated_since", params.updated_since);
   if (params.updated_until) queryParams.set("updated_until", params.updated_until);
   if (params.sort_by) queryParams.set("sort_by", params.sort_by);
@@ -231,11 +227,7 @@ export const activityTools = [
         lead_id: { type: "string", description: "Filter by lead ID (UUID format)" },
         person_id: { type: "number", description: "Filter by person ID" },
         org_id: { type: "number", description: "Filter by organization ID" },
-        project_id: { type: "number", description: "Filter by project ID" },
-        type: { type: "string", description: "Filter by type (call, meeting, task, etc.)" },
         done: { type: "boolean", description: "Filter by completion (true=done, false=pending)" },
-        start_date: { type: "string", description: "Filter from date (YYYY-MM-DD)" },
-        end_date: { type: "string", description: "Filter to date (YYYY-MM-DD)" },
         updated_since: { type: "string", description: "Filter activities updated after this time (RFC3339 format)" },
         updated_until: { type: "string", description: "Filter activities updated before this time (RFC3339 format)" },
         sort_by: { type: "string", enum: ["id", "update_time", "add_time", "due_date"], description: "Field to sort by" },

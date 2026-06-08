@@ -31,11 +31,7 @@ describe('activities schemas', () => {
         lead_id: 'abc-123-def',
         person_id: 15,
         org_id: 20,
-        project_id: 25,
-        type: 'call',
         done: false,
-        start_date: '2024-01-01',
-        end_date: '2024-12-31',
         updated_since: '2024-01-01T00:00:00Z',
         updated_until: '2024-12-31T23:59:59Z',
         sort_by: 'due_date',
@@ -46,9 +42,16 @@ describe('activities schemas', () => {
       const result = ListActivitiesSchema.parse(params);
       expect(result.deal_id).toBe(10);
       expect(result.lead_id).toBe('abc-123-def');
-      expect(result.type).toBe('call');
       expect(result.done).toBe(false);
       expect(result.sort_by).toBe('due_date');
+    });
+
+    it('should strip removed v2 list filters', () => {
+      const r = ListActivitiesSchema.parse({ type: 'call', start_date: '2024-01-01', project_id: 1 } as Record<string, unknown>);
+      const o = r as Record<string, unknown>;
+      expect(o.type).toBeUndefined();
+      expect(o.start_date).toBeUndefined();
+      expect(o.project_id).toBeUndefined();
     });
 
     it('should accept all valid sort_by values', () => {
@@ -61,19 +64,6 @@ describe('activities schemas', () => {
 
     it('should reject invalid sort_by value', () => {
       expect(() => ListActivitiesSchema.parse({ sort_by: 'invalid' })).toThrow();
-    });
-
-    it('should validate date format for start_date and end_date', () => {
-      const result = ListActivitiesSchema.parse({
-        start_date: '2024-01-01',
-        end_date: '2024-12-31',
-      });
-      expect(result.start_date).toBe('2024-01-01');
-      expect(result.end_date).toBe('2024-12-31');
-    });
-
-    it('should reject invalid date format', () => {
-      expect(() => ListActivitiesSchema.parse({ start_date: '01-01-2024' })).toThrow();
     });
   });
 

@@ -47,10 +47,7 @@ export async function getPersonEmails(params: GetPersonEmailsParams) {
       text: JSON.stringify({
         summary: createListSummary("email", messages.length, pagination.has_more, `for person ${params.id}`),
         data: messages,
-        pagination: {
-          next_start: pagination.next_cursor ? parseInt(pagination.next_cursor) : undefined,
-          has_more: pagination.has_more,
-        },
+        pagination,
       }, null, 2),
     }],
   };
@@ -83,10 +80,7 @@ export async function getDealEmails(params: GetDealEmailsParams) {
       text: JSON.stringify({
         summary: createListSummary("email", messages.length, pagination.has_more, `for deal ${params.id}`),
         data: messages,
-        pagination: {
-          next_start: pagination.next_cursor ? parseInt(pagination.next_cursor) : undefined,
-          has_more: pagination.has_more,
-        },
+        pagination,
       }, null, 2),
     }],
   };
@@ -120,10 +114,7 @@ export async function listMailThreads(params: ListMailThreadsParams) {
       text: JSON.stringify({
         summary: createListSummary("mail thread", threads.length, pagination.has_more, `in ${params.folder || "inbox"}`),
         data: threads,
-        pagination: {
-          next_start: pagination.next_cursor ? parseInt(pagination.next_cursor) : undefined,
-          has_more: pagination.has_more,
-        },
+        pagination,
       }, null, 2),
     }],
   };

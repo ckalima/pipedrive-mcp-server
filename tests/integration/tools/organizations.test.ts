@@ -42,14 +42,13 @@ describe('organizations tools', () => {
 
       await listOrganizations({
         owner_id: 1,
-        first_char: 'A',
         sort_by: 'update_time',
         sort_direction: 'asc',
       });
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('owner_id=1');
-      expect(url).toContain('first_char=A');
+      expect(url).not.toContain('first_char');
     });
 
     it('should handle pagination', async () => {

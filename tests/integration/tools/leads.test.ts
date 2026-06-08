@@ -386,10 +386,33 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchLeads } = await getLeadsTools();
 
-      await searchLeads({ term: 'test', include_fields: 'person,organization' });
+      await searchLeads({ term: 'test', include_fields: 'lead.was_seen' });
 
       const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('include_fields=person%2Corganization');
+      expect(url).toContain('include_fields=lead.was_seen');
+    });
+
+    it('should pass fields, person_id, organization_id on the wire', async () => {
+      const mockFn = mockApiSuccess({ items: [] });
+      const { searchLeads } = await getLeadsTools();
+
+      await searchLeads({ term: 't', fields: 'title,notes', person_id: 1, organization_id: 2 });
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('fields=title%2Cnotes');
+      expect(url).toContain('person_id=1');
+      expect(url).toContain('organization_id=2');
+    });
+
+    it('should parse next_cursor from v2 leads search response', async () => {
+      mockFetch({ data: { items: [] }, additional_data: { next_cursor: 'NEXT' } });
+      const { searchLeads } = await getLeadsTools();
+
+      const result = await searchLeads({ term: 'x' });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.next_cursor).toBe('NEXT');
+      expect(parsed.pagination.has_more).toBe(true);
     });
 
     it('should return isError on API error', async () => {
@@ -437,6 +460,19 @@ describe('leads tools', () => {
       expect(String(postUrl)).toContain('/api/v2/');
       expect(postOptions.method).toBe('POST');
       expect(JSON.parse(postOptions.body)).toEqual({});
+    });
+
+    it('should forward stage_id/pipeline_id in the convert body', async () => {
+      const mockFn = mockFetch([
+        { status: 200, data: { conversion_id: 'c1' } },
+        { status: 200, data: { status: 'completed', deal_id: 7 } },
+      ]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      await convertLeadToDeal({ id: VALID_UUID, stage_id: 3, pipeline_id: 4 }, noSleep);
+
+      const [, postOptions] = mockFn.mock.calls[0];
+      expect(JSON.parse(postOptions.body)).toEqual({ stage_id: 3, pipeline_id: 4 });
     });
 
     it('should poll the v2 status endpoint with the conversion id', async () => {
@@ -535,8 +571,44 @@ describe('leads tools', () => {
     });
   });
 
+  describe('getLeadConversionStatus', () => {
+    const CONVERSION_UUID = '660e8400-e29b-41d4-a716-446655440001';
+
+    it('should GET the v2 status endpoint with lead id and conversion id', async () => {
+      const mockFn = mockApiSuccess({ status: 'completed', deal_id: 42 });
+      const { getLeadConversionStatus } = await getLeadsTools();
+
+      await getLeadConversionStatus({ id: VALID_UUID, conversion_id: CONVERSION_UUID });
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain(`/leads/${VALID_UUID}/convert/status/${CONVERSION_UUID}`);
+      expect(url).toContain('/api/v2/');
+    });
+
+    it('should return the status from data in the summary', async () => {
+      mockApiSuccess({ status: 'completed', deal_id: 42 });
+      const { getLeadConversionStatus } = await getLeadsTools();
+
+      const result = await getLeadConversionStatus({ id: VALID_UUID, conversion_id: CONVERSION_UUID });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.summary).toContain('completed');
+      expect(parsed.summary).toContain(CONVERSION_UUID);
+      expect(parsed.data.status).toBe('completed');
+    });
+
+    it('should return isError on API error', async () => {
+      mockApiError(404, 'Conversion not found');
+      const { getLeadConversionStatus } = await getLeadsTools();
+
+      const result = await getLeadConversionStatus({ id: VALID_UUID, conversion_id: CONVERSION_UUID });
+
+      expect(result.isError).toBe(true);
+    });
+  });
+
   describe('tool registration smoke check', () => {
-    it('should have all 8 leads tools registered in allTools', async () => {
+    it('should have all 9 leads tools registered in allTools', async () => {
       const { allTools } = await import('../../../src/tools/index.js');
       const leadToolNames = [
         'pipedrive_list_leads',
@@ -547,6 +619,7 @@ describe('leads tools', () => {
         'pipedrive_search_leads',
         'pipedrive_delete_lead',
         'pipedrive_convert_lead_to_deal',
+        'pipedrive_get_lead_conversion_status',
       ];
       for (const name of leadToolNames) {
         expect(allTools.some(t => t.name === name)).toBe(true);

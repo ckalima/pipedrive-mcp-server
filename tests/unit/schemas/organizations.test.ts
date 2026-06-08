@@ -28,7 +28,6 @@ describe('organizations schemas', () => {
         filter_id: 1,
         ids: '1,2,3',
         owner_id: 5,
-        first_char: 'A',
         updated_since: '2024-01-01T00:00:00Z',
         updated_until: '2024-12-31T23:59:59Z',
         sort_by: 'update_time',
@@ -38,12 +37,12 @@ describe('organizations schemas', () => {
       };
 
       const result = ListOrganizationsSchema.parse(params);
-      expect(result.first_char).toBe('A');
       expect(result.owner_id).toBe(5);
     });
 
-    it('should validate first_char is single character', () => {
-      expect(() => ListOrganizationsSchema.parse({ first_char: 'AB' })).toThrow();
+    it('should strip first_char (invalid in v2)', () => {
+      const r = ListOrganizationsSchema.parse({ first_char: 'A' } as Record<string, unknown>);
+      expect((r as Record<string, unknown>).first_char).toBeUndefined();
     });
 
     it('should accept all valid sort_by values', () => {

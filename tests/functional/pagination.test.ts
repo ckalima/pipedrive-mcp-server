@@ -94,7 +94,9 @@ describe('Pagination', () => {
       const parsed = JSON.parse(result.content[0].text);
 
       expect(parsed.pagination.has_more).toBe(true);
-      expect(parsed.pagination.next_start).toBe(50);
+      // #48 Lane C: mail now returns extractPaginationV1 directly (next_cursor string),
+      // standardized with notes.ts — was the remapped { next_start: 50 } before.
+      expect(parsed.pagination.next_cursor).toBe('50');
     });
 
     it('should pass start parameter for offset pagination', async () => {

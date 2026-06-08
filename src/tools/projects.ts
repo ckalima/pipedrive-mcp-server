@@ -39,8 +39,6 @@ export async function listProjects(params: ListProjectsParams) {
   if (params.filter_id) queryParams.set("filter_id", String(params.filter_id));
   if (params.phase_id) queryParams.set("phase_id", String(params.phase_id));
   if (params.status) queryParams.set("status", params.status);
-  if (params.board_id) queryParams.set("board_id", String(params.board_id));
-  if (params.include_fields) queryParams.set("include_fields", params.include_fields);
 
   const response = await client.get<unknown[]>("/projects", queryParams);
 
@@ -224,7 +222,6 @@ export async function searchProjects(params: SearchProjectsParams) {
   if (params.exact_match) queryParams.set("exact_match", "true");
   if (params.limit) queryParams.set("limit", String(params.limit));
   if (params.cursor) queryParams.set("cursor", params.cursor);
-  if (params.include_fields) queryParams.set("include_fields", params.include_fields);
 
   const response = await client.get<unknown>("/projects/search", queryParams, "v2");
 
@@ -288,8 +285,6 @@ export const projectTools = [
         filter_id: { type: "number", description: "Filter by saved filter ID" },
         phase_id: { type: "number", description: "Filter by phase ID" },
         status: { type: "string", description: "Filter by project status (e.g. open, completed, canceled, deleted)" },
-        board_id: { type: "number", description: "Filter by board ID" },
-        include_fields: { type: "string", description: "Comma-separated additional fields to include" },
       },
     },
     handler: listProjects,
@@ -377,7 +372,6 @@ export const projectTools = [
       type: "object" as const,
       properties: {
         term: { type: "string", description: "Search term (required)" },
-        include_fields: { type: "string", description: "Comma-separated additional fields to include" },
         exact_match: { type: "boolean", description: "Use exact match instead of fuzzy search" },
         limit: { type: "number", description: "Number of results (1-100, default 50)" },
         cursor: { type: "string", description: "Cursor for pagination" },

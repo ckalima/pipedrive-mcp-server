@@ -43,7 +43,7 @@ export const ListDealsSchema = PaginationParamsSchema.extend({
     .describe("Field to sort by (id, update_time, add_time)"),
   sort_direction: SortDirectionSchema,
   include_fields: z.string().optional()
-    .describe("Include additional data: deal_participants, products, followers, notes"),
+    .describe("Comma-separated extra fields (v2 enum, e.g. next_activity_id, last_activity_id, products_count, files_count, notes_count, followers_count)"),
   custom_fields: z.string().optional()
     .describe("Include custom fields in response (comma-separated field keys or 'all')"),
 });
@@ -53,7 +53,7 @@ export const ListDealsSchema = PaginationParamsSchema.extend({
  */
 export const GetDealSchema = IdParamSchema.extend({
   include_fields: z.string().optional()
-    .describe("Include additional data: deal_participants, products, followers, notes"),
+    .describe("Comma-separated extra fields (v2 enum, e.g. next_activity_id, last_activity_id, products_count, files_count, notes_count, followers_count)"),
   custom_fields: z.string().optional()
     .describe("Include custom fields in response (comma-separated field keys or 'all')"),
 });
@@ -86,8 +86,6 @@ export const CreateDealSchema = z.object({
   visible_to: VisibilitySchema,
   label_ids: z.array(z.number()).optional()
     .describe("Label IDs to attach to deal"),
-  add_time: z.string().optional()
-    .describe("Creation time (RFC3339 format) - backdate the deal"),
   custom_fields: z.record(z.string(), z.unknown()).optional()
     .describe("Custom field values as object with field keys"),
 });

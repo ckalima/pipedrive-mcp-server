@@ -30,8 +30,6 @@ describe('projects schemas', () => {
         filter_id: 1,
         phase_id: 2,
         status: 'open',
-        board_id: 3,
-        include_fields: 'tasks,activities',
       };
       const result = ListProjectsSchema.parse(params);
       expect(result.cursor).toBe('cursor_abc123');
@@ -39,8 +37,12 @@ describe('projects schemas', () => {
       expect(result.filter_id).toBe(1);
       expect(result.phase_id).toBe(2);
       expect(result.status).toBe('open');
-      expect(result.board_id).toBe(3);
-      expect(result.include_fields).toBe('tasks,activities');
+    });
+
+    it('should strip board_id and include_fields (invalid in v2 list)', () => {
+      const r = ListProjectsSchema.parse({ board_id: 3, include_fields: 'tasks,activities' } as Record<string, unknown>);
+      expect((r as Record<string, unknown>).board_id).toBeUndefined();
+      expect((r as Record<string, unknown>).include_fields).toBeUndefined();
     });
 
     it('should reject limit of 0', () => {
@@ -277,7 +279,6 @@ describe('projects schemas', () => {
     it('should accept all optional fields', () => {
       const params = {
         term: 'acme',
-        include_fields: 'tasks',
         exact_match: true,
         limit: 25,
         cursor: 'cursor_abc123',
@@ -287,7 +288,11 @@ describe('projects schemas', () => {
       expect(result.exact_match).toBe(true);
       expect(result.limit).toBe(25);
       expect(result.cursor).toBe('cursor_abc123');
-      expect(result.include_fields).toBe('tasks');
+    });
+
+    it('should strip include_fields (invalid in v2 search)', () => {
+      const r = SearchProjectsSchema.parse({ term: 'test', include_fields: 'tasks' } as Record<string, unknown>);
+      expect((r as Record<string, unknown>).include_fields).toBeUndefined();
     });
 
     it('should reject limit of 0', () => {

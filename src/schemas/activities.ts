@@ -56,16 +56,8 @@ export const ListActivitiesSchema = PaginationParamsSchema.extend({
     .describe("Filter by linked person ID"),
   org_id: z.number().int().positive().optional()
     .describe("Filter by linked organization ID"),
-  project_id: z.number().int().positive().optional()
-    .describe("Filter by linked project ID"),
-  type: z.string().optional()
-    .describe("Filter by activity type (call, meeting, task, etc.)"),
   done: z.boolean().optional()
     .describe("Filter by completion status (true=done, false=pending)"),
-  start_date: OptionalDateSchema
-    .describe("Filter activities due on or after this date (YYYY-MM-DD)"),
-  end_date: OptionalDateSchema
-    .describe("Filter activities due on or before this date (YYYY-MM-DD)"),
   updated_since: z.string().optional()
     .describe("Filter activities updated after this time (RFC3339 format)"),
   updated_until: z.string().optional()

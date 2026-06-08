@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setupValidEnv } from '../../helpers/mockEnv.js';
 import {
+  mockFetch,
   mockApiSuccess,
   mockApiError,
   paginationFixtures,
@@ -63,6 +64,16 @@ describe('mail tools', () => {
 
       expect(result.content[0].text).toContain('NOT_FOUND');
     });
+
+    it('getPersonEmails returns extractPaginationV1 shape (next_cursor, not next_start)', async () => {
+      mockFetch({ data: [{ id: 1 }], additional_data: paginationFixtures.v1WithMore });
+      const { getPersonEmails } = await getMailTools();
+      const result = await getPersonEmails({ id: 1 });
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.has_more).toBe(true);
+      expect(parsed.pagination.next_cursor).toBe('50');
+      expect(parsed.pagination).not.toHaveProperty('next_start');
+    });
   });
 
   describe('getDealEmails', () => {
@@ -85,6 +96,16 @@ describe('mail tools', () => {
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/deals/1/mailMessages');
+    });
+
+    it('getDealEmails returns extractPaginationV1 shape (next_cursor, not next_start)', async () => {
+      mockFetch({ data: [{ id: 1 }], additional_data: paginationFixtures.v1WithMore });
+      const { getDealEmails } = await getMailTools();
+      const result = await getDealEmails({ id: 1 });
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.has_more).toBe(true);
+      expect(parsed.pagination.next_cursor).toBe('50');
+      expect(parsed.pagination).not.toHaveProperty('next_start');
     });
   });
 
@@ -129,6 +150,16 @@ describe('mail tools', () => {
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('start=100');
       expect(url).toContain('limit=25');
+    });
+
+    it('listMailThreads returns extractPaginationV1 shape (next_cursor, not next_start)', async () => {
+      mockFetch({ data: [{ id: 1 }], additional_data: paginationFixtures.v1WithMore });
+      const { listMailThreads } = await getMailTools();
+      const result = await listMailThreads({ folder: 'inbox' });
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.has_more).toBe(true);
+      expect(parsed.pagination.next_cursor).toBe('50');
+      expect(parsed.pagination).not.toHaveProperty('next_start');
     });
   });
 

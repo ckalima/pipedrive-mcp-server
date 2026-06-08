@@ -102,24 +102,43 @@ export const UpdateLeadSchema = LeadIdSchema.extend({
 export const DeleteLeadSchema = LeadIdSchema;
 
 /**
- * Convert lead to deal parameters - lead UUID only.
- * The v2 convert endpoint copies the lead's existing data into the new deal;
- * no optional deal-field overrides are accepted (minimal conversion).
+ * Convert lead to deal parameters (v2 POST /leads/{id}/convert/deal).
+ * stage_id/pipeline_id are the only body fields the v2 convert endpoint accepts
+ * (openapi-v2.yaml:16556-16568, additionalProperties:false). Per spec, if both are
+ * sent pipeline_id is ignored in favor of stage_id; we forward whatever is provided.
  */
-export const ConvertLeadToDealSchema = LeadIdSchema;
+export const ConvertLeadToDealSchema = LeadIdSchema.extend({
+  stage_id: z.number().int().positive().optional()
+    .describe("Stage ID for the created deal (a pipeline is inferred from the stage)"),
+  pipeline_id: z.number().int().positive().optional()
+    .describe("Pipeline ID for the created deal (ignored if stage_id is also given)"),
+});
+
+/**
+ * Get lead conversion status (v2 GET /leads/{id}/convert/status/{conversion_id}).
+ */
+export const GetLeadConversionStatusSchema = LeadIdSchema.extend({
+  conversion_id: z.uuid().describe("Conversion job UUID returned by the convert call"),
+});
 
 /**
  * Search leads parameters (v2 endpoint)
  */
 export const SearchLeadsSchema = z.object({
   term: SearchTermSchema
-    .describe("Search term for lead title or associated contacts"),
-  include_fields: z.string().optional()
-    .describe("Comma-separated additional fields to include in response"),
+    .describe("Search term for lead title, notes, or custom fields"),
+  fields: z.string().optional()
+    .describe("Comma-separated fields to search (allowed: title, notes, custom_fields). Defaults to all."),
+  person_id: z.number().int().positive().optional()
+    .describe("Filter leads by linked person ID"),
+  organization_id: z.number().int().positive().optional()
+    .describe("Filter leads by linked organization ID"),
+  include_fields: z.enum(["lead.was_seen"]).optional()
+    .describe("Optional extra fields to include (v2: only 'lead.was_seen')"),
   exact_match: z.boolean().optional().default(false)
     .describe("Use exact match instead of fuzzy search"),
-  limit: z.number().min(1).max(100).optional().default(50)
-    .describe("Number of results to return (1-100, default 50)"),
+  limit: z.number().min(1).max(500).optional().default(50)
+    .describe("Number of results to return (1-500, default 50)"),
   cursor: z.string().optional()
     .describe("Cursor for pagination (from previous response)"),
 });
@@ -135,4 +154,5 @@ export type CreateLeadParams = z.infer<typeof CreateLeadSchema>;
 export type UpdateLeadParams = z.infer<typeof UpdateLeadSchema>;
 export type DeleteLeadParams = z.infer<typeof DeleteLeadSchema>;
 export type ConvertLeadToDealParams = z.infer<typeof ConvertLeadToDealSchema>;
+export type GetLeadConversionStatusParams = z.infer<typeof GetLeadConversionStatusSchema>;
 export type SearchLeadsParams = z.infer<typeof SearchLeadsSchema>;

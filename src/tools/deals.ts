@@ -117,7 +117,6 @@ export async function createDeal(params: CreateDealParams) {
   if (params.probability !== undefined) body.probability = params.probability;
   if (params.visible_to) body.visible_to = params.visible_to;
   if (params.label_ids) body.label_ids = params.label_ids;
-  if (params.add_time) body.add_time = params.add_time;
   if (params.custom_fields) body.custom_fields = params.custom_fields;
 
   const response = await client.post<unknown>("/deals", body);
@@ -266,7 +265,7 @@ export const dealTools = [
         updated_until: { type: "string", description: "Filter deals updated before this time (RFC3339 format)" },
         sort_by: { type: "string", enum: ["id", "update_time", "add_time"], description: "Field to sort by" },
         sort_direction: { type: "string", enum: ["asc", "desc"], description: "Sort direction (default: desc)" },
-        include_fields: { type: "string", description: "Include additional data: deal_participants, products, followers, notes" },
+        include_fields: { type: "string", description: "Comma-separated extra fields (v2 enum, e.g. next_activity_id, last_activity_id, products_count, files_count, notes_count, followers_count)" },
         custom_fields: { type: "string", description: "Include custom fields in response (comma-separated field keys or 'all')" },
       },
     },
@@ -280,7 +279,7 @@ export const dealTools = [
       type: "object" as const,
       properties: {
         id: { type: "number", description: "The deal ID" },
-        include_fields: { type: "string", description: "Include additional data: deal_participants, products, followers, notes" },
+        include_fields: { type: "string", description: "Comma-separated extra fields (v2 enum, e.g. next_activity_id, last_activity_id, products_count, files_count, notes_count, followers_count)" },
         custom_fields: { type: "string", description: "Include custom fields in response (comma-separated field keys or 'all')" },
       },
       required: ["id"],
@@ -307,7 +306,6 @@ export const dealTools = [
         probability: { type: "number", description: "Success probability (0-100)" },
         visible_to: { type: "number", enum: [1, 3, 5, 7], description: "Visibility: 1=Owner, 3=Group, 5=Subgroups, 7=Company" },
         label_ids: { type: "array", items: { type: "number" }, description: "Label IDs to attach to deal" },
-        add_time: { type: "string", description: "Creation time (RFC3339 format) - backdate the deal" },
         custom_fields: { type: "object", description: "Custom field values as object with field keys" },
       },
       required: ["title"],

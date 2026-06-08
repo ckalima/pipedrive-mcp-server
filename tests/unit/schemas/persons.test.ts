@@ -79,7 +79,6 @@ describe('persons schemas', () => {
         ids: '1,2,3',
         owner_id: 5,
         org_id: 10,
-        first_char: 'A',
         updated_since: '2024-01-01T00:00:00Z',
         updated_until: '2024-12-31T23:59:59Z',
         sort_by: 'update_time',
@@ -89,14 +88,12 @@ describe('persons schemas', () => {
       };
 
       const result = ListPersonsSchema.parse(params);
-      expect(result.first_char).toBe('A');
       expect(result.org_id).toBe(10);
     });
 
-    it('should validate first_char is single character', () => {
-      expect(ListPersonsSchema.parse({ first_char: 'A' }).first_char).toBe('A');
-      expect(() => ListPersonsSchema.parse({ first_char: 'AB' })).toThrow();
-      expect(() => ListPersonsSchema.parse({ first_char: '' })).toThrow();
+    it('should strip first_char (invalid in v2)', () => {
+      const r = ListPersonsSchema.parse({ first_char: 'A' } as Record<string, unknown>);
+      expect((r as Record<string, unknown>).first_char).toBeUndefined();
     });
 
     it('should accept all valid sort_by values', () => {

@@ -12,6 +12,7 @@ import {
   DeleteLeadSchema,
   SearchLeadsSchema,
   ConvertLeadToDealSchema,
+  GetLeadConversionStatusSchema,
   type ListLeadsParams,
   type ListArchivedLeadsParams,
   type GetLeadParams,
@@ -20,8 +21,9 @@ import {
   type DeleteLeadParams,
   type SearchLeadsParams,
   type ConvertLeadToDealParams,
+  type GetLeadConversionStatusParams,
 } from "../schemas/leads.js";
-import { buildPaginationParamsV1, extractPaginationV1 } from "../utils/pagination.js";
+import { buildPaginationParamsV1, extractPaginationV1, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, mcpErrorFromCode, destructiveOperationGuard } from "../utils/errors.js";
 import { createListSummary } from "../utils/formatting.js";
 
@@ -236,16 +238,21 @@ export async function searchLeads(params: SearchLeadsParams) {
 
   const queryParams = new URLSearchParams();
   queryParams.set("term", params.term);
+  if (params.fields) queryParams.set("fields", params.fields);
+  if (params.person_id) queryParams.set("person_id", String(params.person_id));
+  if (params.organization_id) queryParams.set("organization_id", String(params.organization_id));
+  if (params.include_fields) queryParams.set("include_fields", params.include_fields);
   if (params.exact_match) queryParams.set("exact_match", "true");
   if (params.limit) queryParams.set("limit", String(params.limit));
   if (params.cursor) queryParams.set("cursor", params.cursor);
-  if (params.include_fields) queryParams.set("include_fields", params.include_fields);
 
-  const response = await client.get<unknown>("/leads/search", queryParams, "v2");
+  const response = await client.get<{ items?: unknown[] }>("/leads/search", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
+
+  const pagination = extractPaginationV2(response);
 
   return {
     content: [{
@@ -253,6 +260,7 @@ export async function searchLeads(params: SearchLeadsParams) {
       text: JSON.stringify({
         summary: `Search results for "${params.term}"`,
         data: response.data,
+        pagination,
       }, null, 2),
     }],
   };
@@ -275,10 +283,14 @@ export async function convertLeadToDeal(
 ) {
   const client = getClient();
 
+  const convertBody: Record<string, unknown> = {};
+  if (params.stage_id) convertBody.stage_id = params.stage_id;
+  if (params.pipeline_id) convertBody.pipeline_id = params.pipeline_id;
+
   // 1. Kick off the async conversion.
   const startResponse = await client.post<{ conversion_id?: string }>(
     `/leads/${params.id}/convert/deal`,
-    {},
+    convertBody,
     "v2",
   );
 
@@ -355,6 +367,30 @@ export async function convertLeadToDeal(
           status: lastStatus,
           note: "Conversion did not complete within the polling window. Use the conversion_id to check status later.",
         },
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Get the status of an async lead-to-deal conversion (v2).
+ */
+export async function getLeadConversionStatus(params: GetLeadConversionStatusParams) {
+  const client = getClient();
+  const response = await client.get<Record<string, unknown>>(
+    `/leads/${params.id}/convert/status/${params.conversion_id}`,
+    undefined,
+    "v2",
+  );
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Conversion ${params.conversion_id} status: ${String(response.data.status ?? "unknown")}`,
+        data: response.data,
       }, null, 2),
     }],
   };
@@ -478,9 +514,12 @@ export const leadsTools = [
       type: "object" as const,
       properties: {
         term: { type: "string", description: "Search term (required)" },
-        include_fields: { type: "string", description: "Comma-separated additional fields to include" },
+        fields: { type: "string", description: "Comma-separated fields to search (title, notes, custom_fields). Defaults to all." },
+        person_id: { type: "number", description: "Filter by linked person ID" },
+        organization_id: { type: "number", description: "Filter by linked organization ID" },
+        include_fields: { type: "string", enum: ["lead.was_seen"], description: "Optional extra field: only 'lead.was_seen'" },
         exact_match: { type: "boolean", description: "Use exact match instead of fuzzy search" },
-        limit: { type: "number", description: "Number of results (1-100, default 50)" },
+        limit: { type: "number", description: "Number of results (1-500, default 50)" },
         cursor: { type: "string", description: "Cursor for pagination" },
       },
       required: ["term"],
@@ -508,10 +547,26 @@ export const leadsTools = [
       type: "object" as const,
       properties: {
         id: { type: "string", description: "Lead UUID to convert" },
+        stage_id: { type: "number", description: "Stage ID for the created deal (pipeline inferred from stage)" },
+        pipeline_id: { type: "number", description: "Pipeline ID for the created deal (ignored if stage_id is given)" },
       },
       required: ["id"],
     },
     handler: convertLeadToDeal,
     schema: ConvertLeadToDealSchema,
+  },
+  {
+    name: "pipedrive_get_lead_conversion_status",
+    description: "Get the status of an async lead-to-deal conversion by conversion ID (Pipedrive v2 GET /leads/{id}/convert/status/{conversion_id}).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string", description: "Lead UUID" },
+        conversion_id: { type: "string", description: "Conversion job UUID returned by the convert call" },
+      },
+      required: ["id", "conversion_id"],
+    },
+    handler: getLeadConversionStatus,
+    schema: GetLeadConversionStatusSchema,
   },
 ];

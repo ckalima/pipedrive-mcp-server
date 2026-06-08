@@ -128,7 +128,6 @@ describe('deals schemas', () => {
         probability: 75,
         visible_to: 7,
         label_ids: [1, 2, 3],
-        add_time: '2024-01-01T00:00:00Z',
         custom_fields: { field_abc: 'value' },
       };
 
@@ -138,6 +137,11 @@ describe('deals schemas', () => {
       expect(result.currency).toBe('USD');
       expect(result.probability).toBe(75);
       expect(result.visible_to).toBe(7);
+    });
+
+    it('should strip add_time (not a v2 create field)', () => {
+      const r = CreateDealSchema.parse({ title: 'x', add_time: '2024-01-01T00:00:00Z' } as Record<string, unknown>);
+      expect((r as Record<string, unknown>).add_time).toBeUndefined();
     });
 
     it('should reject empty title', () => {

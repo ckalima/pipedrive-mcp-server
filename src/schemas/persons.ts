@@ -41,8 +41,6 @@ export const ListPersonsSchema = PaginationParamsSchema.extend({
     .describe("Filter by owner user ID"),
   org_id: z.number().int().positive().optional()
     .describe("Filter by organization ID"),
-  first_char: z.string().length(1).optional()
-    .describe("Filter by first character of name"),
   updated_since: z.string().optional()
     .describe("Filter persons updated after this time (RFC3339 format)"),
   updated_until: z.string().optional()
@@ -52,7 +50,7 @@ export const ListPersonsSchema = PaginationParamsSchema.extend({
     .describe("Field to sort by (id, update_time, add_time)"),
   sort_direction: SortDirectionSchema,
   include_fields: z.string().optional()
-    .describe("Include additional data in response"),
+    .describe("Comma-separated extra fields (v2 enum, e.g. next_activity_id, open_deals_count, won_deals_count, notes_count, followers_count)"),
   custom_fields: z.string().optional()
     .describe("Include custom fields in response (comma-separated field keys or 'all')"),
 });
@@ -62,7 +60,7 @@ export const ListPersonsSchema = PaginationParamsSchema.extend({
  */
 export const GetPersonSchema = IdParamSchema.extend({
   include_fields: z.string().optional()
-    .describe("Include additional data in response"),
+    .describe("Comma-separated extra fields (v2 enum, e.g. next_activity_id, open_deals_count, won_deals_count, notes_count, followers_count)"),
   custom_fields: z.string().optional()
     .describe("Include custom fields in response (comma-separated field keys or 'all')"),
 });

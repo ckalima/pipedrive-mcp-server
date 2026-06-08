@@ -14,6 +14,7 @@ import {
   DeleteLeadSchema,
   SearchLeadsSchema,
   ConvertLeadToDealSchema,
+  GetLeadConversionStatusSchema,
 } from '../../../src/schemas/leads.js';
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
@@ -333,6 +334,12 @@ describe('leads schemas', () => {
     it('should reject non-UUID string', () => {
       expect(() => ConvertLeadToDealSchema.parse({ id: 'not-a-uuid' })).toThrow();
     });
+
+    it('should accept optional stage_id and pipeline_id', () => {
+      const r = ConvertLeadToDealSchema.parse({ id: VALID_UUID, stage_id: 3, pipeline_id: 4 });
+      expect(r.stage_id).toBe(3);
+      expect(r.pipeline_id).toBe(4);
+    });
   });
 
   describe('SearchLeadsSchema', () => {
@@ -358,7 +365,7 @@ describe('leads schemas', () => {
     it('should accept all optional fields', () => {
       const params = {
         term: 'acme',
-        include_fields: 'person,organization',
+        include_fields: 'lead.was_seen',
         exact_match: true,
         limit: 25,
         cursor: 'cursor_abc123',
@@ -368,15 +375,49 @@ describe('leads schemas', () => {
       expect(result.exact_match).toBe(true);
       expect(result.limit).toBe(25);
       expect(result.cursor).toBe('cursor_abc123');
-      expect(result.include_fields).toBe('person,organization');
+      expect(result.include_fields).toBe('lead.was_seen');
     });
 
     it('should reject limit of 0', () => {
       expect(() => SearchLeadsSchema.parse({ term: 'test', limit: 0 })).toThrow();
     });
 
-    it('should reject limit over 100', () => {
-      expect(() => SearchLeadsSchema.parse({ term: 'test', limit: 101 })).toThrow();
+    it('should accept limit up to 500', () => {
+      expect(SearchLeadsSchema.parse({ term: 't', limit: 500 }).limit).toBe(500);
+      expect(SearchLeadsSchema.parse({ term: 't', limit: 101 }).limit).toBe(101);
+    });
+
+    it('should reject limit over 500', () => {
+      expect(() => SearchLeadsSchema.parse({ term: 'test', limit: 501 })).toThrow();
+    });
+
+    it('should accept fields, person_id, organization_id (v2 search filters)', () => {
+      const r = SearchLeadsSchema.parse({ term: 'x', fields: 'title,notes', person_id: 1, organization_id: 2 });
+      expect(r.fields).toBe('title,notes');
+      expect(r.person_id).toBe(1);
+      expect(r.organization_id).toBe(2);
+    });
+
+    it('should reject an include_fields value other than lead.was_seen', () => {
+      expect(() => SearchLeadsSchema.parse({ term: 'x', include_fields: 'person' })).toThrow();
+    });
+  });
+
+  describe('GetLeadConversionStatusSchema', () => {
+    it('should accept valid id and conversion_id UUIDs', () => {
+      const r = GetLeadConversionStatusSchema.parse({ id: VALID_UUID, conversion_id: VALID_UUID });
+      expect(r.id).toBe(VALID_UUID);
+      expect(r.conversion_id).toBe(VALID_UUID);
+    });
+
+    it('should require both id and conversion_id', () => {
+      expect(() => GetLeadConversionStatusSchema.parse({ id: VALID_UUID })).toThrow();
+      expect(() => GetLeadConversionStatusSchema.parse({ conversion_id: VALID_UUID })).toThrow();
+      expect(() => GetLeadConversionStatusSchema.parse({})).toThrow();
+    });
+
+    it('should reject a non-UUID conversion_id', () => {
+      expect(() => GetLeadConversionStatusSchema.parse({ id: VALID_UUID, conversion_id: 'not-a-uuid' })).toThrow();
     });
   });
 });

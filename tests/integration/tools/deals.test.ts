@@ -164,6 +164,15 @@ describe('deals tools', () => {
 
       expect(result.content[0].text).toContain('VALIDATION_ERROR');
     });
+
+    it('should not send add_time in the create body (invalid in v2)', async () => {
+      const mockFn = mockApiSuccess(fixtures.deal);
+
+      await createDeal({ title: 'X', add_time: '2024-01-01T00:00:00Z' } as Record<string, unknown>);
+
+      const [, options] = mockFn.mock.calls[0];
+      expect(JSON.parse(options.body)).not.toHaveProperty('add_time');
+    });
   });
 
   describe('updateDeal', () => {

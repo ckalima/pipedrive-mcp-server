@@ -32,7 +32,6 @@ export async function listOrganizations(params: ListOrganizationsParams) {
   if (params.filter_id) queryParams.set("filter_id", String(params.filter_id));
   if (params.ids) queryParams.set("ids", params.ids);
   if (params.owner_id) queryParams.set("owner_id", String(params.owner_id));
-  if (params.first_char) queryParams.set("first_char", params.first_char);
   if (params.updated_since) queryParams.set("updated_since", params.updated_since);
   if (params.updated_until) queryParams.set("updated_until", params.updated_until);
   if (params.sort_by) queryParams.set("sort_by", params.sort_by);
@@ -232,7 +231,6 @@ export const organizationTools = [
         filter_id: { type: "number", description: "Filter by saved filter ID" },
         ids: { type: "string", description: "Comma-separated organization IDs to fetch (max 100)" },
         owner_id: { type: "number", description: "Filter by owner user ID" },
-        first_char: { type: "string", description: "Filter by first character of name" },
         updated_since: { type: "string", description: "Filter organizations updated after this time (RFC3339 format)" },
         updated_until: { type: "string", description: "Filter organizations updated before this time (RFC3339 format)" },
         sort_by: { type: "string", enum: ["id", "update_time", "add_time"], description: "Field to sort by" },

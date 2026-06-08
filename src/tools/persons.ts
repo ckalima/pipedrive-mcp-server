@@ -33,7 +33,6 @@ export async function listPersons(params: ListPersonsParams) {
   if (params.ids) queryParams.set("ids", params.ids);
   if (params.owner_id) queryParams.set("owner_id", String(params.owner_id));
   if (params.org_id) queryParams.set("org_id", String(params.org_id));
-  if (params.first_char) queryParams.set("first_char", params.first_char);
   if (params.updated_since) queryParams.set("updated_since", params.updated_since);
   if (params.updated_until) queryParams.set("updated_until", params.updated_until);
   if (params.sort_by) queryParams.set("sort_by", params.sort_by);
@@ -241,12 +240,11 @@ export const personTools = [
         ids: { type: "string", description: "Comma-separated person IDs to fetch (max 100)" },
         owner_id: { type: "number", description: "Filter by owner user ID" },
         org_id: { type: "number", description: "Filter by organization ID" },
-        first_char: { type: "string", description: "Filter by first character of name" },
         updated_since: { type: "string", description: "Filter persons updated after this time (RFC3339 format)" },
         updated_until: { type: "string", description: "Filter persons updated before this time (RFC3339 format)" },
         sort_by: { type: "string", enum: ["id", "update_time", "add_time"], description: "Field to sort by" },
         sort_direction: { type: "string", enum: ["asc", "desc"], description: "Sort direction" },
-        include_fields: { type: "string", description: "Include additional data in response" },
+        include_fields: { type: "string", description: "Comma-separated extra fields (v2 enum, e.g. next_activity_id, open_deals_count, won_deals_count, notes_count, followers_count)" },
         custom_fields: { type: "string", description: "Include custom fields in response (comma-separated field keys or 'all')" },
       },
     },
@@ -260,7 +258,7 @@ export const personTools = [
       type: "object" as const,
       properties: {
         id: { type: "number", description: "The person ID" },
-        include_fields: { type: "string", description: "Include additional data in response" },
+        include_fields: { type: "string", description: "Comma-separated extra fields (v2 enum, e.g. next_activity_id, open_deals_count, won_deals_count, notes_count, followers_count)" },
         custom_fields: { type: "string", description: "Include custom fields in response (comma-separated field keys or 'all')" },
       },
       required: ["id"],

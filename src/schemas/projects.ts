@@ -20,10 +20,6 @@ export const ListProjectsSchema = PaginationParamsSchema.extend({
     .describe("Filter by phase ID"),
   status: z.string().optional()
     .describe("Filter by project status (e.g. open, completed, canceled, deleted)"),
-  board_id: z.number().int().positive().optional()
-    .describe("Filter by board ID"),
-  include_fields: z.string().optional()
-    .describe("Comma-separated additional fields to include"),
 });
 
 /**
@@ -107,8 +103,6 @@ export const ArchiveProjectSchema = IdParamSchema;
 export const SearchProjectsSchema = z.object({
   term: SearchTermSchema
     .describe("Search term for project title"),
-  include_fields: z.string().optional()
-    .describe("Comma-separated additional fields to include in response"),
   exact_match: z.boolean().optional().default(false)
     .describe("Use exact match instead of fuzzy search"),
   limit: z.number().min(1).max(100).optional().default(50)
