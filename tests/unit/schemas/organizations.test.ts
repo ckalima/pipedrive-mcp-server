@@ -10,6 +10,7 @@ import {
   UpdateOrganizationSchema,
   SearchOrganizationsSchema,
   DeleteOrganizationSchema,
+  AddressSchema,
 } from '../../../src/schemas/organizations.js';
 
 describe('organizations schemas', () => {
@@ -88,7 +89,7 @@ describe('organizations schemas', () => {
         name: 'Enterprise Inc',
         owner_id: 1,
         visible_to: 7,
-        address: '123 Business Ave, Suite 500',
+        address: { value: '123 Business Ave, Suite 500' },
         label_ids: [1, 2, 3],
         add_time: '2024-01-01T00:00:00Z',
         custom_fields: { industry: 'Tech' },
@@ -96,7 +97,7 @@ describe('organizations schemas', () => {
 
       const result = CreateOrganizationSchema.parse(params);
       expect(result.name).toBe('Enterprise Inc');
-      expect(result.address).toBe('123 Business Ave, Suite 500');
+      expect(result.address).toEqual({ value: '123 Business Ave, Suite 500' });
       expect(result.visible_to).toBe(7);
     });
 
@@ -138,7 +139,7 @@ describe('organizations schemas', () => {
         name: 'Updated Corp',
         owner_id: 2,
         visible_to: 5,
-        address: 'New Address',
+        address: { value: 'New Address' },
         label_ids: [4, 5],
         custom_fields: { key: 'new_value' },
       };
@@ -146,6 +147,7 @@ describe('organizations schemas', () => {
       const result = UpdateOrganizationSchema.parse(params);
       expect(result.name).toBe('Updated Corp');
       expect(result.visible_to).toBe(5);
+      expect(result.address).toEqual({ value: 'New Address' });
     });
 
     it('should accept valid visible_to numbers', () => {
@@ -204,6 +206,43 @@ describe('organizations schemas', () => {
     it('should accept valid id', () => {
       const result = DeleteOrganizationSchema.parse({ id: 789 });
       expect(result.id).toBe(789);
+    });
+  });
+
+  describe('AddressSchema', () => {
+    it('should accept an object with all 10 subfields', () => {
+      const input = {
+        value: '123 Business Ave, Suite 500',
+        country: 'US',
+        admin_area_level_1: 'California',
+        admin_area_level_2: 'Santa Clara County',
+        locality: 'Sunnyvale',
+        sublocality: 'Downtown',
+        route: 'Business Ave',
+        street_number: '123',
+        subpremise: 'Suite 500',
+        postal_code: '94085',
+      };
+      const result = AddressSchema.parse(input);
+      expect(result).toEqual(input);
+    });
+
+    it('should accept an object with only value', () => {
+      const result = AddressSchema.parse({ value: '123 Business Ave' });
+      expect(result).toEqual({ value: '123 Business Ave' });
+    });
+
+    it('should accept an empty object (all subfields optional)', () => {
+      const result = AddressSchema.parse({});
+      expect(result).toEqual({});
+    });
+
+    it('should reject a bare string — regression guard for issue #44', () => {
+      expect(() => CreateOrganizationSchema.parse({ name: 'X', address: '123 Main St' as any })).toThrow();
+    });
+
+    it('should reject a non-string subfield', () => {
+      expect(() => AddressSchema.parse({ postal_code: 94085 as any })).toThrow();
     });
   });
 });

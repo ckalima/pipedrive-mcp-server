@@ -104,14 +104,14 @@ describe('organizations tools', () => {
         name: 'Enterprise Corp',
         owner_id: 1,
         visible_to: 7,
-        address: '123 Business Ave',
+        address: { value: '123 Business Ave' },
         label_ids: [1, 2],
       });
 
       const [, options] = mockFn.mock.calls[0];
       const body = JSON.parse(options.body);
       expect(body.name).toBe('Enterprise Corp');
-      expect(body.address).toBe('123 Business Ave');
+      expect(body.address).toEqual({ value: '123 Business Ave' });
       expect(body.visible_to).toBe(7);
     });
   });
@@ -131,7 +131,7 @@ describe('organizations tools', () => {
       const mockFn = mockApiSuccess(fixtures.organization);
       const { updateOrganization } = await getOrganizationsTools();
 
-      await updateOrganization({ id: 1, address: 'New Address' });
+      await updateOrganization({ id: 1, address: { value: 'New Address' } });
 
       const [, options] = mockFn.mock.calls[0];
       expect(options.method).toBe('PATCH');

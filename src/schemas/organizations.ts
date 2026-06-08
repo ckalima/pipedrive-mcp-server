@@ -12,6 +12,36 @@ import {
 } from "./common.js";
 
 /**
+ * Organization address object (v2 OrganizationItemAddress).
+ * All subfields are optional strings. The whole object is optional.
+ * Defined locally per issue #44 disjointness — do NOT move to common.ts.
+ */
+export const AddressSchema = z
+  .object({
+    value: z.string().optional()
+      .describe("The full address of the organization"),
+    country: z.string().optional()
+      .describe("Country of the organization"),
+    admin_area_level_1: z.string().optional()
+      .describe("Admin area level 1 (e.g. state) of the organization"),
+    admin_area_level_2: z.string().optional()
+      .describe("Admin area level 2 (e.g. county) of the organization"),
+    locality: z.string().optional()
+      .describe("Locality (e.g. city) of the organization"),
+    sublocality: z.string().optional()
+      .describe("Sublocality (e.g. neighborhood) of the organization"),
+    route: z.string().optional()
+      .describe("Route (e.g. street) of the organization"),
+    street_number: z.string().optional()
+      .describe("Street number of the organization"),
+    subpremise: z.string().optional()
+      .describe("Subpremise (e.g. apartment/suite number) of the organization"),
+    postal_code: z.string().optional()
+      .describe("Postal code of the organization"),
+  })
+  .describe("Organization address as a structured object (v2). Provide at least 'value' for the full address.");
+
+/**
  * List organizations parameters
  */
 export const ListOrganizationsSchema = PaginationParamsSchema.extend({
@@ -56,8 +86,8 @@ export const CreateOrganizationSchema = z.object({
   owner_id: z.number().int().positive().optional()
     .describe("Owner user ID (defaults to API key owner)"),
   visible_to: VisibilitySchema,
-  address: z.string().optional()
-    .describe("Full address"),
+  address: AddressSchema.optional()
+    .describe("Full address as a structured object (v2). Provide 'value' for the full address."),
   label_ids: z.array(z.number()).optional()
     .describe("Label IDs to attach to organization"),
   add_time: z.string().optional()
@@ -75,8 +105,8 @@ export const UpdateOrganizationSchema = IdParamSchema.extend({
   owner_id: z.number().int().positive().optional()
     .describe("New owner user ID"),
   visible_to: VisibilitySchema,
-  address: z.string().optional()
-    .describe("New address"),
+  address: AddressSchema.optional()
+    .describe("New address as a structured object (v2). Provide 'value' for the full address."),
   label_ids: z.array(z.number()).optional()
     .describe("Label IDs to set on organization"),
   custom_fields: z.record(z.string(), z.unknown()).optional()
