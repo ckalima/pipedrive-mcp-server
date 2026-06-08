@@ -115,16 +115,18 @@ describe('projects schemas', () => {
         start_date: '2024-01-01',
         end_date: '2024-12-31',
         deal_ids: [1, 2, 3],
-        org_id: 4,
-        person_id: 5,
-        labels: [10, 20],
+        org_ids: [4],
+        person_ids: [5],
+        label_ids: [10, 20],
       };
       const result = CreateProjectSchema.parse(params);
       expect(result.title).toBe('Full Project');
       expect(result.description).toBe('A description');
       expect(result.start_date).toBe('2024-01-01');
       expect(result.deal_ids).toEqual([1, 2, 3]);
-      expect(result.labels).toEqual([10, 20]);
+      expect(result.label_ids).toEqual([10, 20]);
+      expect(result.person_ids).toEqual([5]);
+      expect(result.org_ids).toEqual([4]);
     });
 
     it('should reject empty title', () => {
@@ -139,18 +141,26 @@ describe('projects schemas', () => {
       expect(() => CreateProjectSchema.parse({ title: 'P', board_id: 1, phase_id: 1, start_date: '12/31/2024' })).toThrow();
     });
 
-    it('should accept positive-integer deal_ids and labels', () => {
-      const result = CreateProjectSchema.parse({ title: 'P', board_id: 1, phase_id: 1, deal_ids: [1, 2], labels: [3] });
+    it('should accept positive-integer deal_ids and label_ids', () => {
+      const result = CreateProjectSchema.parse({ title: 'P', board_id: 1, phase_id: 1, deal_ids: [1, 2], label_ids: [3] });
       expect(result.deal_ids).toEqual([1, 2]);
-      expect(result.labels).toEqual([3]);
+      expect(result.label_ids).toEqual([3]);
     });
 
     it('should reject negative deal_ids', () => {
       expect(() => CreateProjectSchema.parse({ title: 'P', board_id: 1, phase_id: 1, deal_ids: [-1] })).toThrow();
     });
 
-    it('should reject negative labels', () => {
-      expect(() => CreateProjectSchema.parse({ title: 'P', board_id: 1, phase_id: 1, labels: [-1] })).toThrow();
+    it('should reject negative label_ids', () => {
+      expect(() => CreateProjectSchema.parse({ title: 'P', board_id: 1, phase_id: 1, label_ids: [-1] })).toThrow();
+    });
+
+    it('should reject negative org_ids', () => {
+      expect(() => CreateProjectSchema.parse({ title: 'P', board_id: 1, phase_id: 1, org_ids: [-1] })).toThrow();
+    });
+
+    it('should reject negative person_ids', () => {
+      expect(() => CreateProjectSchema.parse({ title: 'P', board_id: 1, phase_id: 1, person_ids: [-1] })).toThrow();
     });
   });
 
@@ -180,14 +190,17 @@ describe('projects schemas', () => {
         start_date: '2025-01-01',
         end_date: '2025-06-30',
         deal_ids: [1],
-        org_id: 5,
-        person_id: 6,
-        labels: [7],
+        org_ids: [5],
+        person_ids: [6],
+        label_ids: [7],
       };
       const result = UpdateProjectSchema.parse(params);
       expect(result.id).toBe(1);
       expect(result.title).toBe('Updated Project');
       expect(result.status).toBe('completed');
+      expect(result.org_ids).toEqual([5]);
+      expect(result.person_ids).toEqual([6]);
+      expect(result.label_ids).toEqual([7]);
     });
 
     it('should reject invalid end_date format', () => {

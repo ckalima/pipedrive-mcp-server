@@ -106,9 +106,9 @@ export async function createProject(params: CreateProjectParams) {
   if (params.start_date) body.start_date = params.start_date;
   if (params.end_date) body.end_date = params.end_date;
   if (params.deal_ids) body.deal_ids = params.deal_ids;
-  if (params.org_id) body.org_id = params.org_id;
-  if (params.person_id) body.person_id = params.person_id;
-  if (params.labels) body.labels = params.labels;
+  if (params.person_ids) body.person_ids = params.person_ids;
+  if (params.org_ids) body.org_ids = params.org_ids;
+  if (params.label_ids) body.label_ids = params.label_ids;
 
   const response = await client.post<unknown>("/projects", body);
 
@@ -145,9 +145,9 @@ export async function updateProject(params: UpdateProjectParams) {
   if (updateFields.start_date) body.start_date = updateFields.start_date;
   if (updateFields.end_date) body.end_date = updateFields.end_date;
   if (updateFields.deal_ids) body.deal_ids = updateFields.deal_ids;
-  if (updateFields.org_id) body.org_id = updateFields.org_id;
-  if (updateFields.person_id) body.person_id = updateFields.person_id;
-  if (updateFields.labels) body.labels = updateFields.labels;
+  if (updateFields.person_ids) body.person_ids = updateFields.person_ids;
+  if (updateFields.org_ids) body.org_ids = updateFields.org_ids;
+  if (updateFields.label_ids) body.label_ids = updateFields.label_ids;
 
   const response = await client.patch<unknown>(`/projects/${id}`, body);
 
@@ -325,9 +325,9 @@ export const projectTools = [
         start_date: { type: "string", description: "Project start date (YYYY-MM-DD)" },
         end_date: { type: "string", description: "Project end date (YYYY-MM-DD)" },
         deal_ids: { type: "array", items: { type: "number" }, description: "Deal IDs linked to the project" },
-        org_id: { type: "number", description: "Linked organization ID" },
-        person_id: { type: "number", description: "Linked person ID" },
-        labels: { type: "array", items: { type: "number" }, description: "Label IDs to attach to the project" },
+        person_ids: { type: "array", items: { type: "number" }, description: "Person IDs linked to the project" },
+        org_ids: { type: "array", items: { type: "number" }, description: "Organization IDs linked to the project" },
+        label_ids: { type: "array", items: { type: "number" }, description: "Label IDs to attach to the project" },
       },
       required: ["title", "board_id", "phase_id"],
     },
@@ -350,9 +350,9 @@ export const projectTools = [
         start_date: { type: "string", description: "New project start date (YYYY-MM-DD)" },
         end_date: { type: "string", description: "New project end date (YYYY-MM-DD)" },
         deal_ids: { type: "array", items: { type: "number" }, description: "New deal IDs linked to the project" },
-        org_id: { type: "number", description: "New linked organization ID" },
-        person_id: { type: "number", description: "New linked person ID" },
-        labels: { type: "array", items: { type: "number" }, description: "New label IDs to attach to the project" },
+        person_ids: { type: "array", items: { type: "number" }, description: "New person IDs linked to the project" },
+        org_ids: { type: "array", items: { type: "number" }, description: "New organization IDs linked to the project" },
+        label_ids: { type: "array", items: { type: "number" }, description: "New label IDs to attach to the project" },
       },
       required: ["id"],
     },

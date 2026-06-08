@@ -195,12 +195,23 @@ describe('projects tools', () => {
         phase_id: 1,
         description: 'A description',
         deal_ids: [1, 2],
+        org_ids: [4],
+        person_ids: [5],
+        label_ids: [10, 20],
       });
 
       const [, options] = mockFn.mock.calls[0];
       const body = JSON.parse(options.body);
       expect(body.description).toBe('A description');
       expect(body.deal_ids).toEqual([1, 2]);
+      expect(body.org_ids).toEqual([4]);
+      expect(body.person_ids).toEqual([5]);
+      expect(body.label_ids).toEqual([10, 20]);
+      expect(Array.isArray(body.org_ids)).toBe(true);
+      // assert the OLD/WRONG keys are NOT sent (regression guard for #43)
+      expect(body).not.toHaveProperty('org_id');
+      expect(body).not.toHaveProperty('person_id');
+      expect(body).not.toHaveProperty('labels');
     });
 
     it('should not include undefined fields in body', async () => {
@@ -268,6 +279,23 @@ describe('projects tools', () => {
       expect(body.title).toBe('Updated Title');
       expect(body).not.toHaveProperty('board_id');
       expect(body).not.toHaveProperty('phase_id');
+    });
+
+    it('should send v2 plural association arrays in body', async () => {
+      const mockFn = mockApiSuccess(projectFixture);
+      const { updateProject } = await getProjectsTools();
+
+      await updateProject({ id: 1, org_ids: [5], person_ids: [6], label_ids: [7], deal_ids: [1] });
+
+      const [, options] = mockFn.mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect(body.org_ids).toEqual([5]);
+      expect(body.person_ids).toEqual([6]);
+      expect(body.label_ids).toEqual([7]);
+      expect(body.deal_ids).toEqual([1]);
+      expect(body).not.toHaveProperty('org_id');
+      expect(body).not.toHaveProperty('person_id');
+      expect(body).not.toHaveProperty('labels');
     });
   });
 

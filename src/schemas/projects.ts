@@ -52,13 +52,13 @@ export const CreateProjectSchema = z.object({
     .describe("Project start date (YYYY-MM-DD format)"),
   end_date: DateStringSchema.optional() // guess
     .describe("Project end date (YYYY-MM-DD format)"),
-  deal_ids: z.array(z.number().int().positive()).optional() // guess
+  deal_ids: z.array(z.number().int().positive()).optional()
     .describe("Deal IDs linked to the project"),
-  org_id: z.number().int().positive().optional() // guess
-    .describe("Linked organization ID"),
-  person_id: z.number().int().positive().optional() // guess
-    .describe("Linked person ID"),
-  labels: z.array(z.number().int().positive()).optional() // guess
+  person_ids: z.array(z.number().int().positive()).optional()
+    .describe("Person IDs linked to the project"),
+  org_ids: z.array(z.number().int().positive()).optional()
+    .describe("Organization IDs linked to the project"),
+  label_ids: z.array(z.number().int().positive()).optional()
     .describe("Label IDs to attach to the project"),
 });
 
@@ -82,13 +82,13 @@ export const UpdateProjectSchema = IdParamSchema.extend({
     .describe("New project start date (YYYY-MM-DD format)"),
   end_date: DateStringSchema.optional() // guess
     .describe("New project end date (YYYY-MM-DD format)"),
-  deal_ids: z.array(z.number().int().positive()).optional() // guess
+  deal_ids: z.array(z.number().int().positive()).optional()
     .describe("New deal IDs linked to the project"),
-  org_id: z.number().int().positive().optional() // guess
-    .describe("New linked organization ID"),
-  person_id: z.number().int().positive().optional() // guess
-    .describe("New linked person ID"),
-  labels: z.array(z.number().int().positive()).optional() // guess
+  person_ids: z.array(z.number().int().positive()).optional()
+    .describe("New person IDs linked to the project"),
+  org_ids: z.array(z.number().int().positive()).optional()
+    .describe("New organization IDs linked to the project"),
+  label_ids: z.array(z.number().int().positive()).optional()
     .describe("New label IDs to attach to the project"),
 });
 
