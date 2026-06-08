@@ -73,8 +73,8 @@ export const GetPersonSchema = IdParamSchema.extend({
 export const CreatePersonSchema = z.object({
   name: z.string().min(1).max(255)
     .describe("Person name (required)"),
-  email: EmailInputSchema,
-  phone: PhoneInputSchema,
+  emails: EmailInputSchema,
+  phones: PhoneInputSchema,
   owner_id: z.number().int().positive().optional()
     .describe("Owner user ID (defaults to API key owner)"),
   org_id: z.number().int().positive().optional()
@@ -96,8 +96,8 @@ export const CreatePersonSchema = z.object({
 export const UpdatePersonSchema = IdParamSchema.extend({
   name: z.string().min(1).max(255).optional()
     .describe("New person name"),
-  email: EmailInputSchema,
-  phone: PhoneInputSchema,
+  emails: EmailInputSchema,
+  phones: PhoneInputSchema,
   owner_id: z.number().int().positive().optional()
     .describe("New owner user ID"),
   org_id: z.number().int().positive().optional()

@@ -102,8 +102,8 @@ export async function createPerson(params: CreatePersonParams) {
     name: params.name,
   };
 
-  if (params.email) body.email = params.email;
-  if (params.phone) body.phone = params.phone;
+  if (params.emails) body.emails = params.emails;
+  if (params.phones) body.phones = params.phones;
   if (params.owner_id) body.owner_id = params.owner_id;
   if (params.org_id) body.org_id = params.org_id;
   if (params.visible_to) body.visible_to = params.visible_to;
@@ -139,8 +139,8 @@ export async function updatePerson(params: UpdatePersonParams) {
   const body: Record<string, unknown> = {};
 
   if (updateFields.name) body.name = updateFields.name;
-  if (updateFields.email) body.email = updateFields.email;
-  if (updateFields.phone) body.phone = updateFields.phone;
+  if (updateFields.emails) body.emails = updateFields.emails;
+  if (updateFields.phones) body.phones = updateFields.phones;
   if (updateFields.owner_id) body.owner_id = updateFields.owner_id;
   if (updateFields.org_id) body.org_id = updateFields.org_id;
   if (updateFields.visible_to) body.visible_to = updateFields.visible_to;
@@ -278,7 +278,7 @@ export const personTools = [
       type: "object" as const,
       properties: {
         name: { type: "string", description: "Person name (required)" },
-        email: {
+        emails: {
           type: "array",
           items: {
             type: "object",
@@ -289,9 +289,9 @@ export const personTools = [
             },
             required: ["value"],
           },
-          description: "Email addresses",
+          description: "Email addresses (array of objects, e.g. [{ value, primary, label }])",
         },
-        phone: {
+        phones: {
           type: "array",
           items: {
             type: "object",
@@ -302,7 +302,7 @@ export const personTools = [
             },
             required: ["value"],
           },
-          description: "Phone numbers",
+          description: "Phone numbers (array of objects, e.g. [{ value, primary, label }])",
         },
         owner_id: { type: "number", description: "Owner user ID" },
         org_id: { type: "number", description: "Organization ID to link to" },
@@ -325,7 +325,7 @@ export const personTools = [
       properties: {
         id: { type: "number", description: "Person ID to update" },
         name: { type: "string", description: "New name" },
-        email: {
+        emails: {
           type: "array",
           items: {
             type: "object",
@@ -336,9 +336,9 @@ export const personTools = [
             },
             required: ["value"],
           },
-          description: "New email addresses",
+          description: "New email addresses (array of objects)",
         },
-        phone: {
+        phones: {
           type: "array",
           items: {
             type: "object",
@@ -349,7 +349,7 @@ export const personTools = [
             },
             required: ["value"],
           },
-          description: "New phone numbers",
+          description: "New phone numbers (array of objects)",
         },
         owner_id: { type: "number", description: "New owner user ID" },
         org_id: { type: "number", description: "New organization ID" },

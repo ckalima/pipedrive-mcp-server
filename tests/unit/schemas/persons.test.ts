@@ -135,8 +135,8 @@ describe('persons schemas', () => {
     it('should accept all optional fields', () => {
       const params = {
         name: 'Jane Smith',
-        email: [{ value: 'jane@example.com', primary: true }],
-        phone: [{ value: '+1234567890', primary: true, label: 'mobile' }],
+        emails: [{ value: 'jane@example.com', primary: true }],
+        phones: [{ value: '+1234567890', primary: true, label: 'mobile' }],
         owner_id: 1,
         org_id: 5,
         visible_to: 7,
@@ -148,8 +148,8 @@ describe('persons schemas', () => {
 
       const result = CreatePersonSchema.parse(params);
       expect(result.name).toBe('Jane Smith');
-      expect(result.email).toHaveLength(1);
-      expect(result.phone).toHaveLength(1);
+      expect(result.emails).toHaveLength(1);
+      expect(result.phones).toHaveLength(1);
       expect(result.visible_to).toBe(7);
       expect(result.marketing_status).toBe('subscribed');
     });
@@ -205,8 +205,8 @@ describe('persons schemas', () => {
       const params = {
         id: 123,
         name: 'Updated Name',
-        email: [{ value: 'new@example.com', primary: true }],
-        phone: [{ value: '+9876543210', primary: true }],
+        emails: [{ value: 'new@example.com', primary: true }],
+        phones: [{ value: '+9876543210', primary: true }],
         owner_id: 2,
         org_id: 10,
         visible_to: 5,

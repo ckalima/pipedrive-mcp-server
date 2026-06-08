@@ -104,8 +104,8 @@ describe('persons tools', () => {
 
       await createPerson({
         name: 'Jane Doe',
-        email: [{ value: 'jane@example.com', primary: true }],
-        phone: [{ value: '+1234567890', primary: true }],
+        emails: [{ value: 'jane@example.com', primary: true }],
+        phones: [{ value: '+1234567890', primary: true }],
         org_id: 5,
         visible_to: 7,
         marketing_status: 'subscribed',
@@ -114,7 +114,11 @@ describe('persons tools', () => {
       const [, options] = mockFn.mock.calls[0];
       const body = JSON.parse(options.body);
       expect(body.name).toBe('Jane Doe');
-      expect(body.email).toEqual([{ value: 'jane@example.com', primary: true }]);
+      // v2 contract: request body must use `emails`/`phones`, not `email`/`phone`
+      expect(body.emails).toEqual([{ value: 'jane@example.com', primary: true }]);
+      expect(body.phones).toEqual([{ value: '+1234567890', primary: true }]);
+      expect(body.email).toBeUndefined();
+      expect(body.phone).toBeUndefined();
       expect(body.visible_to).toBe(7);
     });
   });
@@ -138,6 +142,24 @@ describe('persons tools', () => {
 
       const [, options] = mockFn.mock.calls[0];
       expect(options.method).toBe('PATCH');
+    });
+
+    it('should send emails/phones (not email/phone) in PATCH body', async () => {
+      const mockFn = mockApiSuccess(fixtures.person);
+      const { updatePerson } = await getPersonsTools();
+
+      await updatePerson({
+        id: 1,
+        emails: [{ value: 'new@example.com', primary: true }],
+        phones: [{ value: '+1999', primary: true }],
+      });
+
+      const [, options] = mockFn.mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect(body.emails).toEqual([{ value: 'new@example.com', primary: true }]);
+      expect(body.phones).toEqual([{ value: '+1999', primary: true }]);
+      expect(body.email).toBeUndefined();
+      expect(body.phone).toBeUndefined();
     });
   });
 

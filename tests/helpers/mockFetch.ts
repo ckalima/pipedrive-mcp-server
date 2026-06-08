@@ -139,8 +139,8 @@ export const fixtures = {
   person: {
     id: 1,
     name: 'John Doe',
-    email: [{ value: 'john@example.com', primary: true }],
-    phone: [{ value: '+1234567890', primary: true }],
+    emails: [{ value: 'john@example.com', primary: true }],
+    phones: [{ value: '+1234567890', primary: true }],
     org_id: 1,
     owner_id: 1,
     add_time: '2024-01-01T00:00:00Z',

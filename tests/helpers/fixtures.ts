@@ -27,7 +27,7 @@ export function createPersonsFixture(count: number = 3) {
     ...mockFixtures.person,
     id: i + 1,
     name: `Test Person ${i + 1}`,
-    email: [{ value: `person${i + 1}@example.com`, primary: true }],
+    emails: [{ value: `person${i + 1}@example.com`, primary: true }],
   }));
 }
 
