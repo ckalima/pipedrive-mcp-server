@@ -40,7 +40,6 @@ import { handleCallTool } from '../../src/index.js';
 describe('dispatcher (handleCallTool)', () => {
   beforeEach(() => {
     setupValidEnv();
-    vi.unstubAllGlobals();
   });
 
   describe('unknown tool name -> VALIDATION_ERROR', () => {

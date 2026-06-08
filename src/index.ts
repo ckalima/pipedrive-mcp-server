@@ -15,6 +15,7 @@
 
 import "dotenv/config";
 
+import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -135,7 +136,17 @@ async function main() {
 }
 
 // Run server only when executed as the entrypoint (not when imported by tests)
-if (pathToFileURL(process.argv[1]).href === import.meta.url) {
+function isEntrypoint(): boolean {
+  const argv1 = process.argv[1];
+  if (!argv1) return false;
+  try {
+    return pathToFileURL(realpathSync(argv1)).href === import.meta.url;
+  } catch {
+    return false;
+  }
+}
+
+if (isEntrypoint()) {
   main().catch((error) => {
     console.error(`[${SERVER_NAME}] Fatal error:`, error);
     process.exit(1);
