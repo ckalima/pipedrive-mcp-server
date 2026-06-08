@@ -118,14 +118,46 @@ describe('pipelines tools', () => {
       expect(url).toContain('pipeline_id=2');
     });
 
-    it('should use v1 API', async () => {
+    it('should use v2 API', async () => {
       const mockFn = mockApiSuccess([]);
       const { listStages } = await getPipelinesTools();
 
       await listStages({});
 
       const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('/v1/stages');
+      expect(url).toContain('/api/v2/stages');
+      expect(url).not.toContain('/v1/');
+    });
+
+    it('should use cursor for pagination', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listStages } = await getPipelinesTools();
+
+      await listStages({ cursor: 'next_page_cursor' });
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('cursor=next_page_cursor');
+    });
+
+    it('should pass limit to API', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listStages } = await getPipelinesTools();
+
+      await listStages({ limit: 25 });
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('limit=25');
+    });
+
+    it('should include pagination info when more items available', async () => {
+      const { listStages } = await getPipelinesTools();
+      mockFetch({ data: [fixtures.stage], additional_data: paginationFixtures.v2WithMore });
+
+      const result = await listStages({});
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.has_more).toBe(true);
+      expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
     });
   });
 
@@ -141,14 +173,15 @@ describe('pipelines tools', () => {
       expect(parsed.data.name).toBe('Lead');
     });
 
-    it('should use v1 API', async () => {
+    it('should use v2 API', async () => {
       const mockFn = mockApiSuccess(fixtures.stage);
       const { getStage } = await getPipelinesTools();
 
       await getStage({ id: 5 });
 
       const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('/v1/stages/5');
+      expect(url).toContain('/api/v2/stages/5');
+      expect(url).not.toContain('/v1/');
     });
 
     it('should handle not found', async () => {

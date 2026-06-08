@@ -33,8 +33,10 @@ describe('pipelines schemas', () => {
   });
 
   describe('ListStagesSchema', () => {
-    it('should accept empty object', () => {
+    it('should apply default limit and accept empty object', () => {
       const result = ListStagesSchema.parse({});
+      expect(result.limit).toBe(50);
+      expect(result.cursor).toBeUndefined();
       expect(result.pipeline_id).toBeUndefined();
     });
 
@@ -50,6 +52,26 @@ describe('pipelines schemas', () => {
 
     it('should reject non-integer pipeline_id', () => {
       expect(() => ListStagesSchema.parse({ pipeline_id: 1.5 })).toThrow();
+    });
+
+    it('should accept cursor and limit', () => {
+      const result = ListStagesSchema.parse({ cursor: 'abc', limit: 25 });
+      expect(result.cursor).toBe('abc');
+      expect(result.limit).toBe(25);
+    });
+
+    it('should reject limit above 100', () => {
+      expect(() => ListStagesSchema.parse({ limit: 101 })).toThrow();
+    });
+
+    it('should reject limit below 1', () => {
+      expect(() => ListStagesSchema.parse({ limit: 0 })).toThrow();
+    });
+
+    it('should accept cursor with pipeline_id', () => {
+      const result = ListStagesSchema.parse({ cursor: 'abc', pipeline_id: 2 });
+      expect(result.cursor).toBe('abc');
+      expect(result.pipeline_id).toBe(2);
     });
   });
 

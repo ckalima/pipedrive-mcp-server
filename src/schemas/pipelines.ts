@@ -11,9 +11,9 @@ import { IdParamSchema, PaginationParamsSchema } from "./common.js";
 export const ListPipelinesSchema = PaginationParamsSchema;
 
 /**
- * List stages parameters
+ * List stages parameters (v2 cursor-based pagination, optional pipeline filter)
  */
-export const ListStagesSchema = z.object({
+export const ListStagesSchema = PaginationParamsSchema.extend({
   pipeline_id: z.number().int().positive().optional()
     .describe("Filter by pipeline ID (if not provided, returns all stages)"),
 });

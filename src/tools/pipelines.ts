@@ -51,34 +51,32 @@ export async function listPipelines(params: ListPipelinesParams) {
 export async function listStages(params: ListStagesParams) {
   const client = getClient();
 
-  const queryParams = new URLSearchParams();
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
   if (params.pipeline_id) {
     queryParams.set("pipeline_id", String(params.pipeline_id));
   }
 
-  // Uses v1 API for stages
-  const response = await client.get<unknown[]>(
-    "/stages",
-    queryParams.toString() ? queryParams : undefined,
-    "v1"
-  );
+  // Uses v2 API for stages
+  const response = await client.get<unknown[]>("/stages", queryParams);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
 
   const stages = response.data;
+  const pagination = extractPaginationV2(response);
 
-  const summary = params.pipeline_id
-    ? `Found ${stages.length} stage${stages.length !== 1 ? "s" : ""} in pipeline ${params.pipeline_id}.`
-    : `Found ${stages.length} stage${stages.length !== 1 ? "s" : ""}.`;
+  const additionalInfo = params.pipeline_id
+    ? `pipeline ${params.pipeline_id}`
+    : undefined;
 
   return {
     content: [{
       type: "text" as const,
       text: JSON.stringify({
-        summary,
+        summary: createListSummary("stage", stages.length, pagination.has_more, additionalInfo),
         data: stages,
+        pagination,
       }, null, 2),
     }],
   };
@@ -90,11 +88,7 @@ export async function listStages(params: ListStagesParams) {
 export async function getStage(params: GetStageParams) {
   const client = getClient();
 
-  const response = await client.get<unknown>(
-    `/stages/${params.id}`,
-    undefined,
-    "v1"
-  );
+  const response = await client.get<unknown>(`/stages/${params.id}`);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -130,10 +124,12 @@ export const pipelineTools = [
   },
   {
     name: "pipedrive_list_stages",
-    description: "List all stages, optionally filtered by pipeline. Stages represent steps in the sales process.",
+    description: "List stages with cursor pagination, optionally filtered by pipeline. Stages represent steps in the sales process.",
     inputSchema: {
       type: "object" as const,
       properties: {
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items to return (1-100, default 50)" },
         pipeline_id: { type: "number", description: "Filter by pipeline ID (returns all stages if not specified)" },
       },
     },
