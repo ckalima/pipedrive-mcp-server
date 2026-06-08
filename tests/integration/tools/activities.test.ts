@@ -40,13 +40,19 @@ describe('activities tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listActivities } = await getActivitiesTools();
 
+      // The removed v2 list filters are passed directly (bypassing Zod) so the
+      // not.toContain assertions guard the handler-line removals, not just schema strip.
       await listActivities({
         owner_id: 1,
         deal_id: 5,
         person_id: 10,
         done: false,
         sort_by: 'due_date',
-      });
+        type: 'call',
+        start_date: '2024-01-01',
+        end_date: '2024-01-02',
+        project_id: 1,
+      } as Record<string, unknown>);
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('owner_id=1');

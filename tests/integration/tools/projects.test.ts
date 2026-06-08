@@ -75,7 +75,9 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([projectFixture]);
       const { listProjects } = await getProjectsTools();
 
-      await listProjects({ phase_id: 2, status: 'open', filter_id: 3 });
+      // board_id/include_fields passed directly (bypassing Zod) so the assertions
+      // guard the handler-line removals, not just the schema strip.
+      await listProjects({ phase_id: 2, status: 'open', filter_id: 3, board_id: 1, include_fields: 'tasks' } as Record<string, unknown>);
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('board_id');
