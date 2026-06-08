@@ -12,6 +12,33 @@ import {
 } from "./common.js";
 
 /**
+ * Activity location (v2 structured object).
+ * Defined locally per issue #45; do not move to common.ts.
+ */
+const LocationSchema = z.object({
+  value: z.string().optional()
+    .describe("The full address of the activity"),
+  country: z.string().optional()
+    .describe("Country of the activity"),
+  admin_area_level_1: z.string().optional()
+    .describe("Admin area level 1 (e.g. state)"),
+  admin_area_level_2: z.string().optional()
+    .describe("Admin area level 2 (e.g. county)"),
+  locality: z.string().optional()
+    .describe("Locality (e.g. city)"),
+  sublocality: z.string().optional()
+    .describe("Sublocality (e.g. neighborhood)"),
+  route: z.string().optional()
+    .describe("Route (e.g. street)"),
+  street_number: z.string().optional()
+    .describe("Street number"),
+  subpremise: z.string().optional()
+    .describe("Subpremise (e.g. apartment/suite number)"),
+  postal_code: z.string().optional()
+    .describe("Postal code"),
+}).optional();
+
+/**
  * List activities parameters
  */
 export const ListActivitiesSchema = PaginationParamsSchema.extend({
@@ -87,7 +114,7 @@ export const CreateActivitySchema = z.object({
     .describe("Link to project ID"),
   note: z.string().optional()
     .describe("Activity notes/description (HTML supported)"),
-  done: z.boolean().optional().default(false)
+  done: z.boolean().optional()
     .describe("Mark as completed"),
   busy: z.boolean().optional()
     .describe("Show as busy in calendar"),
@@ -103,8 +130,8 @@ export const CreateActivitySchema = z.object({
     name: z.string().optional(),
   })).optional()
     .describe("External attendees (email addresses)"),
-  location: z.string().optional()
-    .describe("Activity location"),
+  location: LocationSchema
+    .describe("Activity location (structured object)"),
   public_description: z.string().optional()
     .describe("Public description visible to guests"),
 });
@@ -153,8 +180,8 @@ export const UpdateActivitySchema = IdParamSchema.extend({
     name: z.string().optional(),
   })).optional()
     .describe("New external attendees"),
-  location: z.string().optional()
-    .describe("New location"),
+  location: LocationSchema
+    .describe("New location (structured object)"),
 });
 
 /**

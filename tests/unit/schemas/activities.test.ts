@@ -106,7 +106,7 @@ describe('activities schemas', () => {
       });
       expect(result.subject).toBe('Follow up call');
       expect(result.type).toBe('call');
-      expect(result.done).toBe(false); // default
+      expect(result.done).toBeUndefined();
     });
 
     it('should accept all optional fields', () => {
@@ -133,7 +133,7 @@ describe('activities schemas', () => {
         attendees: [
           { email: 'guest@example.com', name: 'External Guest' },
         ],
-        location: '123 Main St, Suite 100',
+        location: { value: '123 Main St, Suite 100', locality: 'Springfield' },
         public_description: 'Quarterly business review',
       };
 
@@ -143,7 +143,7 @@ describe('activities schemas', () => {
       expect(result.duration).toBe('01:00');
       expect(result.participants).toHaveLength(2);
       expect(result.attendees).toHaveLength(1);
-      expect(result.location).toBe('123 Main St, Suite 100');
+      expect(result.location).toEqual({ value: '123 Main St, Suite 100', locality: 'Springfield' });
     });
 
     it('should reject empty subject', () => {
@@ -304,6 +304,21 @@ describe('activities schemas', () => {
       });
       expect(result.attendees).toEqual([]);
     });
+
+    it('should accept a partial location object', () => {
+      const result = CreateActivitySchema.parse({
+        subject: 'Test', type: 'meeting',
+        location: { locality: 'Springfield' },
+      });
+      expect(result.location).toEqual({ locality: 'Springfield' });
+    });
+
+    it('should reject a string location', () => {
+      expect(() => CreateActivitySchema.parse({
+        subject: 'Test', type: 'meeting',
+        location: 'plain string',
+      })).toThrow();
+    });
   });
 
   describe('UpdateActivitySchema', () => {
@@ -336,13 +351,14 @@ describe('activities schemas', () => {
         priority: 3,
         participants: [{ person_id: 3, primary: true }],
         attendees: [{ email: 'new@example.com', name: 'New Guest' }],
-        location: 'New Location',
+        location: { value: 'New Location', country: 'US' },
       };
 
       const result = UpdateActivitySchema.parse(params);
       expect(result.id).toBe(123);
       expect(result.subject).toBe('Updated Meeting');
       expect(result.done).toBe(true);
+      expect(result.location).toEqual({ value: 'New Location', country: 'US' });
     });
 
     it('should validate time format in update', () => {

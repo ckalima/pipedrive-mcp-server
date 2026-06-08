@@ -36,7 +36,7 @@ export async function listActivities(params: ListActivitiesParams) {
   if (params.org_id) queryParams.set("org_id", String(params.org_id));
   if (params.project_id) queryParams.set("project_id", String(params.project_id));
   if (params.type) queryParams.set("type", params.type);
-  if (params.done !== undefined) queryParams.set("done", params.done ? "1" : "0");
+  if (params.done !== undefined) queryParams.set("done", String(params.done));
   if (params.start_date) queryParams.set("start_date", params.start_date);
   if (params.end_date) queryParams.set("end_date", params.end_date);
   if (params.updated_since) queryParams.set("updated_since", params.updated_since);
@@ -116,7 +116,7 @@ export async function createActivity(params: CreateActivityParams) {
   if (params.org_id) body.org_id = params.org_id;
   if (params.project_id) body.project_id = params.project_id;
   if (params.note) body.note = params.note;
-  if (params.done !== undefined) body.done = params.done ? 1 : 0;
+  if (params.done !== undefined) body.done = params.done;
   if (params.busy !== undefined) body.busy = params.busy;
   if (params.priority) body.priority = params.priority;
   if (params.participants) body.participants = params.participants;
@@ -162,7 +162,7 @@ export async function updateActivity(params: UpdateActivityParams) {
   if (updateFields.org_id) body.org_id = updateFields.org_id;
   if (updateFields.project_id) body.project_id = updateFields.project_id;
   if (updateFields.note) body.note = updateFields.note;
-  if (updateFields.done !== undefined) body.done = updateFields.done ? 1 : 0;
+  if (updateFields.done !== undefined) body.done = updateFields.done;
   if (updateFields.busy !== undefined) body.busy = updateFields.busy;
   if (updateFields.priority) body.priority = updateFields.priority;
   if (updateFields.participants) body.participants = updateFields.participants;
@@ -305,7 +305,22 @@ export const activityTools = [
           },
           description: "External attendees (email addresses)",
         },
-        location: { type: "string", description: "Activity location" },
+        location: {
+          type: "object",
+          description: "Activity location (structured object)",
+          properties: {
+            value: { type: "string", description: "The full address" },
+            country: { type: "string", description: "Country" },
+            admin_area_level_1: { type: "string", description: "Admin area level 1 (e.g. state)" },
+            admin_area_level_2: { type: "string", description: "Admin area level 2 (e.g. county)" },
+            locality: { type: "string", description: "Locality (e.g. city)" },
+            sublocality: { type: "string", description: "Sublocality (e.g. neighborhood)" },
+            route: { type: "string", description: "Route (e.g. street)" },
+            street_number: { type: "string", description: "Street number" },
+            subpremise: { type: "string", description: "Subpremise (e.g. apartment/suite)" },
+            postal_code: { type: "string", description: "Postal code" },
+          },
+        },
         public_description: { type: "string", description: "Public description for guests" },
       },
       required: ["subject", "type"],
@@ -359,7 +374,22 @@ export const activityTools = [
           },
           description: "New attendees",
         },
-        location: { type: "string", description: "New location" },
+        location: {
+          type: "object",
+          description: "New location (structured object)",
+          properties: {
+            value: { type: "string", description: "The full address" },
+            country: { type: "string", description: "Country" },
+            admin_area_level_1: { type: "string", description: "Admin area level 1 (e.g. state)" },
+            admin_area_level_2: { type: "string", description: "Admin area level 2 (e.g. county)" },
+            locality: { type: "string", description: "Locality (e.g. city)" },
+            sublocality: { type: "string", description: "Sublocality (e.g. neighborhood)" },
+            route: { type: "string", description: "Route (e.g. street)" },
+            street_number: { type: "string", description: "Street number" },
+            subpremise: { type: "string", description: "Subpremise (e.g. apartment/suite)" },
+            postal_code: { type: "string", description: "Postal code" },
+          },
+        },
       },
       required: ["id"],
     },

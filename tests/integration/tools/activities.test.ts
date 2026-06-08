@@ -56,8 +56,8 @@ describe('activities tools', () => {
       expect(url).toContain('deal_id=5');
       expect(url).toContain('person_id=10');
       expect(url).toContain('type=call');
-      // Boolean is passed as 0/1 or true/false depending on implementation
-      expect(url).toMatch(/done=(false|0)/);
+      expect(url).toContain('done=false');
+      expect(url).not.toContain('done=0');
     });
 
     it('should handle pagination', async () => {
@@ -133,7 +133,7 @@ describe('activities tools', () => {
         note: 'Meeting notes',
         done: false,
         busy: true,
-        location: 'Office',
+        location: { value: '123 Main St', locality: 'Springfield', postal_code: '12345' },
         participants: [{ person_id: 1, primary: true }],
         attendees: [{ email: 'guest@example.com', name: 'Guest' }],
       });
@@ -146,6 +146,12 @@ describe('activities tools', () => {
       expect(body.due_time).toBe('14:30');
       expect(body.participants).toHaveLength(1);
       expect(body.attendees).toHaveLength(1);
+      // done must be a boolean, NOT integer 1/0
+      expect(body.done).toBe(false);
+      expect(typeof body.done).toBe('boolean');
+      // location must be the structured object, NOT a string
+      expect(body.location).toEqual({ value: '123 Main St', locality: 'Springfield', postal_code: '12345' });
+      expect(typeof body.location).toBe('object');
     });
 
     it('should handle validation error', async () => {
@@ -155,6 +161,24 @@ describe('activities tools', () => {
       const result = await createActivity({ subject: '', type: 'call' });
 
       expect(result.content[0].text).toContain('VALIDATION_ERROR');
+    });
+
+    it('should send done as boolean true (not integer 1)', async () => {
+      const mockFn = mockApiSuccess(fixtures.activity);
+      const { createActivity } = await getActivitiesTools();
+      await createActivity({ subject: 'Done call', type: 'call', done: true });
+      const [, options] = mockFn.mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect(body.done).toBe(true);
+    });
+
+    it('should omit done when not provided', async () => {
+      const mockFn = mockApiSuccess(fixtures.activity);
+      const { createActivity } = await getActivitiesTools();
+      await createActivity({ subject: 'No done flag', type: 'call' });
+      const [, options] = mockFn.mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect('done' in body).toBe(false);
     });
   });
 
@@ -193,6 +217,24 @@ describe('activities tools', () => {
       const body = JSON.parse(options.body);
       expect(body.participants).toHaveLength(1);
       expect(body.attendees).toHaveLength(1);
+    });
+
+    it('should send done as boolean on update (not integer)', async () => {
+      const mockFn = mockApiSuccess(fixtures.activity);
+      const { updateActivity } = await getActivitiesTools();
+      await updateActivity({ id: 1, done: true });
+      const [, options] = mockFn.mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect(body.done).toBe(true);
+    });
+
+    it('should send location as structured object on update', async () => {
+      const mockFn = mockApiSuccess(fixtures.activity);
+      const { updateActivity } = await getActivitiesTools();
+      await updateActivity({ id: 1, location: { value: '456 Oak Ave', country: 'US' } });
+      const [, options] = mockFn.mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect(body.location).toEqual({ value: '456 Oak Ave', country: 'US' });
     });
   });
 
