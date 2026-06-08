@@ -43,7 +43,7 @@ export const OptionalDateSchema = DateStringSchema.optional();
  * Email object schema (Pipedrive stores emails as arrays of objects)
  */
 export const EmailSchema = z.object({
-  value: z.string().email(),
+  value: z.email(),
   primary: z.boolean().optional(),
   label: z.string().optional(),
 });

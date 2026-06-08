@@ -88,7 +88,7 @@ export const CreateDealSchema = z.object({
     .describe("Label IDs to attach to deal"),
   add_time: z.string().optional()
     .describe("Creation time (RFC3339 format) - backdate the deal"),
-  custom_fields: z.record(z.unknown()).optional()
+  custom_fields: z.record(z.string(), z.unknown()).optional()
     .describe("Custom field values as object with field keys"),
 });
 
@@ -125,7 +125,7 @@ export const UpdateDealSchema = IdParamSchema.extend({
     .describe("Lost reason (when status is 'lost')"),
   label_ids: z.array(z.number()).optional()
     .describe("Label IDs to set on deal"),
-  custom_fields: z.record(z.unknown()).optional()
+  custom_fields: z.record(z.string(), z.unknown()).optional()
     .describe("Custom field values as object with field keys"),
 });
 

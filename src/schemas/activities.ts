@@ -99,7 +99,7 @@ export const CreateActivitySchema = z.object({
   })).optional()
     .describe("Activity participants (person IDs)"),
   attendees: z.array(z.object({
-    email: z.string().email(),
+    email: z.email(),
     name: z.string().optional(),
   })).optional()
     .describe("External attendees (email addresses)"),
@@ -149,7 +149,7 @@ export const UpdateActivitySchema = IdParamSchema.extend({
   })).optional()
     .describe("New activity participants"),
   attendees: z.array(z.object({
-    email: z.string().email(),
+    email: z.email(),
     name: z.string().optional(),
   })).optional()
     .describe("New external attendees"),

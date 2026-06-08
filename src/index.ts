@@ -61,7 +61,7 @@ export async function handleCallTool(request: { params: { name: string; argument
     if (schema) {
       const parseResult = schema.safeParse(args);
       if (!parseResult.success) {
-        const errors = parseResult.error.errors
+        const errors = parseResult.error.issues
           .map(e => `${e.path.join(".")}: ${e.message}`)
           .join("; ");
         console.error(`[${SERVER_NAME}] Validation error: ${errors}`);

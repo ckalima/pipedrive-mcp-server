@@ -62,7 +62,7 @@ export const CreateOrganizationSchema = z.object({
     .describe("Label IDs to attach to organization"),
   add_time: z.string().optional()
     .describe("Creation time (RFC3339 format) - backdate the organization"),
-  custom_fields: z.record(z.unknown()).optional()
+  custom_fields: z.record(z.string(), z.unknown()).optional()
     .describe("Custom field values as object with field keys"),
 });
 
@@ -79,7 +79,7 @@ export const UpdateOrganizationSchema = IdParamSchema.extend({
     .describe("New address"),
   label_ids: z.array(z.number()).optional()
     .describe("Label IDs to set on organization"),
-  custom_fields: z.record(z.unknown()).optional()
+  custom_fields: z.record(z.string(), z.unknown()).optional()
     .describe("Custom field values as object with field keys"),
 });
 

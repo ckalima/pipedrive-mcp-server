@@ -17,13 +17,13 @@ export const MailFolderSchema = z.enum(["inbox", "drafts", "sent", "archive"])
 /**
  * Get person emails parameters
  */
-export const GetPersonEmailsSchema = IdParamSchema.merge(PaginationParamsV1Schema)
+export const GetPersonEmailsSchema = IdParamSchema.extend(PaginationParamsV1Schema.shape)
   .describe("Get mail messages for a person");
 
 /**
  * Get deal emails parameters
  */
-export const GetDealEmailsSchema = IdParamSchema.merge(PaginationParamsV1Schema)
+export const GetDealEmailsSchema = IdParamSchema.extend(PaginationParamsV1Schema.shape)
   .describe("Get mail messages for a deal");
 
 /**

@@ -15,7 +15,7 @@ import {
  * Email input schema for creating/updating persons
  */
 export const EmailInputSchema = z.array(z.object({
-  value: z.string().email().describe("Email address"),
+  value: z.email().describe("Email address"),
   primary: z.boolean().optional().describe("Whether this is the primary email"),
   label: z.string().optional().describe("Label (work, home, other)"),
 })).optional().describe("List of email addresses");
@@ -86,7 +86,7 @@ export const CreatePersonSchema = z.object({
     .describe("Label IDs to attach to person"),
   add_time: z.string().optional()
     .describe("Creation time (RFC3339 format) - backdate the person"),
-  custom_fields: z.record(z.unknown()).optional()
+  custom_fields: z.record(z.string(), z.unknown()).optional()
     .describe("Custom field values as object with field keys"),
 });
 
@@ -107,7 +107,7 @@ export const UpdatePersonSchema = IdParamSchema.extend({
     .describe("New marketing status"),
   label_ids: z.array(z.number()).optional()
     .describe("Label IDs to set on person"),
-  custom_fields: z.record(z.unknown()).optional()
+  custom_fields: z.record(z.string(), z.unknown()).optional()
     .describe("Custom field values as object with field keys"),
 });
 
