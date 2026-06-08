@@ -33,24 +33,24 @@
   "author": "ckalima",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "dotenv": "^17.2.3",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^17.4.2",
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@vitest/coverage-v8": "^1.0.0",
+    "@types/node": "^22",
+    "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.39.4",
     "tsx": "^4.0.0",
-    "typescript": "^5.0.0",
-    "typescript-eslint": "^8.59.2",
-    "vitest": "^1.0.0"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1",
+    "vitest": "^4.1.8"
   },
   "publishConfig": {
     "access": "public"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "files": [
     "dist",
