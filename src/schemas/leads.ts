@@ -23,7 +23,7 @@ export const LeadValueSchema = z.object({
  * Lead ID schema - leads use UUID strings (not integer IDs)
  */
 export const LeadIdSchema = z.object({
-  id: z.string().uuid().describe("Lead UUID"),
+  id: z.uuid().describe("Lead UUID"),
 });
 
 /**
@@ -66,7 +66,7 @@ export const CreateLeadSchema = z.object({
     .describe("Monetary value of the lead"),
   owner_id: z.number().int().positive().optional()
     .describe("Owner user ID (defaults to API key owner)"),
-  label_ids: z.array(z.string().uuid()).optional()
+  label_ids: z.array(z.uuid()).optional()
     .describe("Lead label UUIDs to attach to lead"),
   expected_close_date: DateStringSchema.optional()
     .describe("Expected close date (YYYY-MM-DD format)"),
@@ -87,7 +87,7 @@ export const UpdateLeadSchema = LeadIdSchema.extend({
     .describe("New monetary value"),
   owner_id: z.number().int().positive().optional()
     .describe("New owner user ID"),
-  label_ids: z.array(z.string().uuid()).optional()
+  label_ids: z.array(z.uuid()).optional()
     .describe("New lead label UUIDs"),
   expected_close_date: DateStringSchema.optional()
     .describe("New expected close date (YYYY-MM-DD format)"),
