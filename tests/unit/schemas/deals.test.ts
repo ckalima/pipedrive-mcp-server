@@ -48,11 +48,15 @@ describe('deals schemas', () => {
     });
 
     it('should accept all valid status values', () => {
-      const statuses = ['open', 'won', 'lost', 'deleted', 'all_not_deleted'];
+      const statuses = ['open', 'won', 'lost', 'deleted'];
       statuses.forEach((status) => {
         const result = ListDealsSchema.parse({ status });
         expect(result.status).toBe(status);
       });
+    });
+
+    it('should reject all_not_deleted status (not a valid v2 status)', () => {
+      expect(() => ListDealsSchema.parse({ status: 'all_not_deleted' })).toThrow();
     });
 
     it('should accept all valid sort_by values', () => {

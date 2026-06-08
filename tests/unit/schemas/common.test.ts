@@ -220,7 +220,7 @@ describe('common schemas', () => {
 
   describe('DealStatusSchema', () => {
     it('should accept all valid statuses', () => {
-      const statuses = ['open', 'won', 'lost', 'deleted', 'all_not_deleted'];
+      const statuses = ['open', 'won', 'lost', 'deleted'];
       statuses.forEach((status) => {
         const result = DealStatusSchema.parse(status);
         expect(result).toBe(status);
@@ -229,6 +229,10 @@ describe('common schemas', () => {
 
     it('should reject invalid status', () => {
       expect(() => DealStatusSchema.parse('pending')).toThrow();
+    });
+
+    it('should reject all_not_deleted (not a valid v2 status)', () => {
+      expect(() => DealStatusSchema.parse('all_not_deleted')).toThrow();
     });
   });
 

@@ -65,8 +65,8 @@ export const SortDirectionSchema = z.enum(["asc", "desc"]).optional();
 /**
  * Deal status
  */
-export const DealStatusSchema = z.enum(["open", "won", "lost", "deleted", "all_not_deleted"])
-  .describe("Deal status filter");
+export const DealStatusSchema = z.enum(["open", "won", "lost", "deleted"])
+  .describe("Deal status filter (omit to return all non-deleted deals)");
 
 /**
  * Activity type (Pipedrive built-in types)
