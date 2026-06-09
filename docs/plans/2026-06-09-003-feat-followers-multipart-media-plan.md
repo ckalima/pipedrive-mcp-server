@@ -13,6 +13,8 @@ scope: large
 
 **Issue:** #69 | **Parent epic:** #51 | **Branch:** `agent/69-followers-multipart-media`
 
+> **Revision (2026-06-09):** Applied ce-doc-review safe-auto fixes — corrected the test-helper path to `tests/helpers/mockFetch.ts`; bounded `base64_data` with `.max(MAX_IMAGE_B64_LEN)` and sanitized `file_name` (reject path separators / control chars, 255-char cap) + an `mime_type` allowlist in the U5 schemas. Open design findings (base64-only vs. hybrid upload, `requestMultipart` boilerplate duplication, #67 `deals.ts` merge-order enforcement, and the depth of the multipart-boundary test) are surfaced below for review, not yet applied. **Note:** existing `src/tools/products.ts` carries `// U4`/`// U6` comments from #50 — this plan's U4/U5 are unrelated; ignore the old in-file numbering when implementing.
+
 ---
 
 ## Problem Frame
@@ -254,9 +256,9 @@ The two main candidates:
 
 **Schema for upload/update tools:**
 - `id`: number (product ID, required)
-- `base64_data`: string (base64-encoded image bytes, required)
-- `file_name`: string (original filename including extension, required - used to set the `filename` in the `Content-Disposition` header of the multipart part, e.g. `product.png`)
-- `mime_type`: string (optional, e.g. `image/png`, `image/jpeg` - inferred from `file_name` if not provided)
+- `base64_data`: string (base64-encoded image bytes, required; **bounded** by `.max(MAX_IMAGE_B64_LEN)` ≈ 5 MB decoded so an oversized input cannot force a huge synchronous `Buffer.from` allocation / OOM)
+- `file_name`: string (original filename including extension, required - used to set the `filename` in the `Content-Disposition` header of the multipart part, e.g. `product.png`; **sanitized** to reject path separators / control characters and capped at 255 chars)
+- `mime_type`: string (optional, e.g. `image/png`, `image/jpeg` - inferred from `file_name` if not provided; **allowlisted** to `image/(png|jpeg|gif|webp)`)
 
 **Handler approach:** `Buffer.from(params.base64_data, 'base64')` -> `new Blob([buffer], { type: mimeType })` -> `formData.append('data', blob, params.file_name)`.
 
@@ -426,10 +428,16 @@ Handler outline for `uploadProductImage`:
 
 **Zod schemas:**
 ```
+// MAX_IMAGE_B64_LEN ≈ 6_900_000 chars (~5 MB decoded). Bound the base64 string so an
+// oversized/malicious input cannot force a huge synchronous Buffer.from allocation (OOM).
+// Tune once Pipedrive's real image-size limit is confirmed (Open Question 1).
 UploadProductImageSchema = IdParamSchema.extend({
-  base64_data: z.string().min(1).describe("Base64-encoded image bytes"),
-  file_name: z.string().min(1).describe("Original filename including extension (e.g. product.png)"),
-  mime_type: z.string().optional().describe("MIME type (e.g. image/png). Inferred from file_name if omitted."),
+  base64_data: z.string().min(1).max(MAX_IMAGE_B64_LEN).describe("Base64-encoded image bytes"),
+  file_name: z.string().min(1).max(255)
+    .refine((n) => !/[\/\\\r\n\0]/.test(n), "file_name must not contain path separators or control characters")
+    .describe("Original filename including extension (e.g. product.png)"),
+  mime_type: z.string().regex(/^image\/(png|jpeg|gif|webp)$/).optional()
+    .describe("MIME type (e.g. image/png). Inferred from file_name if omitted."),
 })
 UpdateProductImageSchema = UploadProductImageSchema  // identical shape; alias or duplicate
 ```
@@ -499,7 +507,7 @@ For large images (e.g., a 5 MB product image), the base64-encoded string in the 
 | `tests/integration/tools/organizations.followers.test.ts` | New file; 4 follower tools |
 | `tests/integration/tools/products.images.test.ts` | Extend existing file; upload POST + update PUT scenarios |
 
-All integration tests follow the established pattern: `setupValidEnv()` + `vi.unstubAllGlobals()` in `beforeEach`, dynamic import of the tool module, `mockApiSuccess`/`mockApiError`/`mockFetch` helpers from `tests/integration/helpers/mockFetch.ts`.
+All integration tests follow the established pattern: `setupValidEnv()` + `vi.unstubAllGlobals()` in `beforeEach`, dynamic import of the tool module, `mockApiSuccess`/`mockApiError`/`mockFetch` helpers from `tests/helpers/mockFetch.ts` (imported as `../../helpers/mockFetch.js` from files under `tests/integration/tools/`; `setupValidEnv` comes from `tests/helpers/mockEnv.ts`). **Note:** `mockApiSuccess` does not expose the captured `fetch` `init`, so the multipart body/header assertions in U4/U5 must use a raw `vi.stubGlobal('fetch', mockFn)` that captures `init` directly.
 
 For multipart integration tests: mock `fetch` via `vi.stubGlobal('fetch', mockFn)` where `mockFn` captures the `init` argument. Assert `init.body instanceof FormData`, method is correct, URL contains `/api/v2/products/{id}/images`, and headers do not contain `Content-Type: application/json`.
 
