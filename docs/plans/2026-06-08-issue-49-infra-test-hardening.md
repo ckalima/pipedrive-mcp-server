@@ -135,7 +135,7 @@ Reviewer keeps the new contract tests, does `git checkout origin/main~N -- <src 
 ## 3. LANE B — client `version` safety (`src/client.ts`)
 
 ### 3.1 The footgun (verified)
-`get/post/patch/put/delete` all default `version: ApiVersion = "v2"` (`src/client.ts:57, 68, 79, 90, 100`). A new v1-only tool that forgets `"v1"` silently hits a non-existent v2 path and 404s. Today the v1 callers are explicit, but **23 v2 call sites rely on the implicit default** (grep: every `client.<m>(...)` in `src/tools/*` without a 3rd arg — persons/orgs/activities/deals/projects/fields/pipelines + leads convert-status at `leads.ts:291,317,380`). So "no version arg" currently means BOTH "intended v2" and "forgot v1" — indistinguishable. That ambiguity is the bug.
+`get/post/patch/put/delete` all default `version: ApiVersion = "v2"` (`src/client.ts:57, 68, 79, 90, 100`). A new v1-only tool that forgets `"v1"` silently hits a non-existent v2 path and 404s. Today the v1 callers are explicit, but **37 v2 call sites across 7 files rely on the implicit default** (VERIFIED by grep — every `client.<m>(...)` in `src/tools/*` without a 3rd version arg): **activities (5), deals (6), fields (4), organizations (6), persons (6), pipelines (3), projects (7)**. The remaining tool files are already fully explicit and need NO change: `leads.ts` (10/10), `mail.ts` (5/5), `notes.ts` (5/5), `users.ts` (3/3), plus `projects/search` (1) — in particular the leads convert-status calls (`leads.ts:294,320,383`) **already pass `"v2"`**. So "no version arg" currently means BOTH "intended v2" and "forgot v1" — indistinguishable. That ambiguity is the bug.
 
 ### 3.2 Chosen approach: **make `version` explicit & required** (not a registry) — with justification
 **Decision: require `version` as an explicit argument on every client method; remove the `= "v2"` default.** Rationale:
@@ -143,7 +143,7 @@ Reviewer keeps the new contract tests, does `git checkout origin/main~N -- <src 
 - Requiring `version` makes the choice **local and visible at the call site** and **fails at compile time** for `src/` (which IS type-checked — `tsconfig` only excludes tests). A forgotten version becomes a `tsc` error (`Expected 3 arguments, but got 2`), not a runtime 404. This is the strongest, cheapest guard and matches the issue's "make version explicit/required" option.
 - It does **not** break existing v2 callers behaviorally — they keep calling v2, just spelled `"v2"` explicitly. It is a pure mechanical edit + one signature change.
 
-**Counter-consideration (note for reviewer):** requiring the arg touches all 23 implicit-v2 call sites (a wide but mechanical diff). The registry would touch only `client.ts`. We accept the wider diff because compile-time enforcement is worth it and the call-site edits are trivial (`)` → `, "v2")`). If the reviewer prefers a smaller blast radius, the fallback is §3.4.
+**Counter-consideration (note for reviewer):** requiring the arg touches all 37 implicit-v2 call sites across 7 files (a wide but mechanical diff). The registry would touch only `client.ts`. We accept the wider diff because compile-time enforcement is worth it and the call-site edits are trivial (`)` → `, "v2")`). If the reviewer prefers a smaller blast radius, the fallback is §3.4.
 
 ### 3.3 Exact edits (Lane B)
 1. `src/client.ts`: change each public method signature to require version (drop the default):
@@ -151,7 +151,7 @@ Reviewer keeps the new contract tests, does `git checkout origin/main~N -- <src 
    - `post/patch/put<T>(endpoint, body, version: ApiVersion)` — drop `= "v2"`.
    - `delete<T>(endpoint, version: ApiVersion)` — drop `= "v2"`.
    - Keep the private `request<T>(... version: ApiVersion = "v2")` default OR also make it required (internal-only; either is fine — recommend making it required for symmetry).
-2. Update **all `src/tools/*` call sites** that omit `version` to pass `"v2"` explicitly (the 23 sites in §3.1). v1 callers already pass `"v1"` — leave them. `testConnection()` in `client.ts:192` already passes `"v1"` — leave it.
+2. Update **all `src/tools/*` call sites** that omit `version` to pass `"v2"` explicitly (the 37 sites in §3.1: activities/deals/fields/organizations/persons/pipelines/projects). v1 callers already pass `"v1"` — leave them; leads/mail/notes/users are already fully explicit — leave them. `testConnection()` in `client.ts:192` already passes `"v1"` — leave it.
 
 ### 3.4 Fallback (only if reviewer rejects the wide diff)
 Keep the default but add a **dev-time guard**: a private `assertKnownEndpointVersion(endpoint, version)` that warns (stderr, never stdout — STDIO safety) when a v1-shaped endpoint string (`/notes`, `/mailbox`, `/users`, `/leads` without `/search` or `/convert`, `/leads/{id}`) is requested with v2. This is weaker (runtime, string-heuristic) and is NOT recommended; documented only as an escape hatch. **Do not implement both.**
@@ -275,7 +275,7 @@ The existing crud-flows assertions do NOT inspect the outbound body, so by thems
 | `tests/contract/responseShape.contract.test.ts` (NEW) | ✏️ | | | |
 | `package.json` (add js-yaml devDep) | ✏️ | | | |
 | `src/client.ts` | | ✏️ | | |
-| `src/tools/*.ts` (add explicit `"v2"` at 23 call sites) | | ✏️ | | |
+| `src/tools/*.ts` (add explicit `"v2"` at 37 call sites: activities/deals/fields/organizations/persons/pipelines/projects) | | ✏️ | | |
 | `tests/unit/client.test.ts` (edit or NEW) | | ✏️ | | |
 | `docs/v1-only-capabilities.md` (NEW) | | | ✏️ | |
 | `CLAUDE.md` | | | ✏️ | |
@@ -305,11 +305,12 @@ The existing crud-flows assertions do NOT inspect the outbound body, so by thems
 
 ---
 
-## 9. OPEN QUESTIONS / RISKS
-- **Q1 (Lane A, #60 tracker style):** use Vitest `it.fails(...)` for the #60-catching handler test (auto-flips to RED when #60 lands, forcing follow-through) vs `it.skip(...)` + TODO (safer if `it.fails` is flaky under Vitest 4)? Recommend `it.fails`. Decide before implement.
-- **Q2 (Lane B blast radius):** require `version` everywhere (compile-time safety, ~24-file diff) vs registry vs the §3.4 stderr-warn fallback (small diff, weaker)? Plan recommends **required `version`**. Confirm the wide-but-mechanical diff is acceptable.
-- **Q3 (js-yaml dependency):** OK to add `js-yaml` (+`@types/js-yaml`) as a devDependency for the contract harness (it's already transitively present at 4.1.1)? Alternative: hand-write a minimal YAML reader (rejected — js-yaml is battle-tested and already in the tree). Recommend adding it.
-- **Q4 (sunset date authority):** the hard "2026-07-31" is partner-sourced (Make/Zapier), not a first-party Pipedrive calendar commitment (their docs say "grace period ≥1 year"). Accept partner sourcing as sufficient for a planning horizon, with the §4/§5 caveat? (If the user wants a first-party-only date, the only such date is 2025-12-31, which does NOT apply to this repo's v1-only tools.)
+## 9. DECISIONS (RESOLVED 2026-06-08 by user) / RISKS
+> All four open questions were reviewed and decided by the user before implement. These are now **binding spec** — the implementer follows them; no re-litigation.
+- **Q1 (Lane A, #60 tracker style) → `it.fails`.** Use Vitest `it.fails(...)` for the #60-catching handler test, with a **narrow assertion + a `// KNOWN GAP #60` comment** so a *different* failure can't hide behind the expected-fail. It auto-flips RED when #60 lands, forcing follow-through. Only if `it.fails` proves genuinely flaky under Vitest 4, fall back to `it.skip` + `// TODO #60` — but try `it.fails` first.
+- **Q2 (Lane B) → required `version` arg.** Make `version` a required argument on every client method; drop the `="v2"` defaults. Compile-time safety wins over the registry (relocates the silent fallback) and the §3.4 stderr-warn fallback (weaker). **The §3.4 fallback is NOT to be implemented.**
+- **Q3 (js-yaml) → add it.** Add `js-yaml` + `@types/js-yaml` to `devDependencies` (pins the already-present transitive `4.1.1`; zero new install). Do NOT hand-roll a YAML reader and do NOT vendor the spec as JSON. Remember the `package.json` **denylist exception** on the PR.
+- **Q4 (sunset date) → keep 2026-07-31, annotated.** Document 2026-07-31 as the working sunset horizon for the v1-only capabilities, explicitly flagged **partner-sourced (Make/Zapier) + "re-verify"**; also record the first-party **2025-12-31** date with its scope note (does NOT cover notes/mail/users/leads). Lead the doc with the *no-v2-path* risk, not the date.
 - **Risk (low):** contract tests are expected GREEN on current `main` (the P0s are fixed). If any contract test fails on `main`, that surfaces a *real, currently-shipping* bug — treat as a finding, not a test defect, and report (do not weaken the assertion to make it pass).
 - **Risk (low):** `client.test.ts` path is assumed — implementer must `ls tests/unit/` and either extend an existing client test or create `tests/unit/client.test.ts` (Lane B; no contention either way).
 
