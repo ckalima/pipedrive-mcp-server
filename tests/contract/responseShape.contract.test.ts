@@ -7,14 +7,11 @@
  *      `field_code` (NOT `key`). These read the parsed spec directly and are
  *      revert-proof against the contract (claim G; field_code at
  *      openapi-v2.yaml:1456).
- *   2. A handler-level `it.fails` test that feeds `getField` a v2-shaped fixture
- *      keyed by `field_code` and asserts the field is found. `getField` currently
- *      matches on `.key` (src/tools/fields.ts:154), so it does NOT find a
- *      field_code-only object today — the test is EXPECTED to fail now. `it.fails`
- *      keeps the suite green while the gap exists AND turns RED the moment #60
- *      fixes the handler to read `field_code`, forcing follow-through.
- *
- * Out of scope here: fixing getField. That is #60.
+ *   2. A handler-level test that feeds `getField` a v2-shaped fixture keyed by
+ *      `field_code` and asserts the field is found. #60 fixed `getField` to match
+ *      on `field_code` (with a legacy `key` fallback), so this now passes as a
+ *      normal `it` and serves as the regression guard: revert the handler to
+ *      `.key`-only and this test goes red.
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -46,14 +43,11 @@ describe("response-shape contract (v2)", () => {
   });
 
   describe("getField finds a v2 field_code-keyed field", () => {
-    // KNOWN GAP #60: getField matches on `f.key` while v2 field responses key on
-    // `field_code`. This test feeds a field_code-only (v2-shaped) field and asserts
-    // it is found. It is EXPECTED TO FAIL today (handler looks up `.key`), hence
-    // `it.fails`. When #60 fixes getField to read `field_code`, this starts passing,
-    // which `it.fails` reports as a failure — forcing #60 to flip it back to `it`.
-    // The assertion is narrow (one identity check) so a different failure cannot
-    // masquerade as the expected gap.
-    it.fails("finds an activity field by its field_code (KNOWN GAP #60)", async () => {
+    // #60 (FIXED): v2 field responses key on `field_code`, not `key`. getField now
+    // matches `field_code` first (falling back to legacy `key`), so a field_code-only
+    // (v2-shaped) field is found. This regression-guards the fix: revert getField to
+    // `.key`-only and the narrow identity assertion below goes red.
+    it("finds an activity field by its field_code (#60)", async () => {
       // v2-shaped field: keyed by `field_code`, with NO legacy `key` property.
       const v2Field = {
         field_code: "subject",
@@ -68,12 +62,11 @@ describe("response-shape contract (v2)", () => {
       const result = await getField({ entity_type: "activity", key: "subject" });
 
       // Narrow assertion: the returned payload must carry the matched field's
-      // field_code. Today getField cannot match (it reads `.key`) and returns a
-      // "Field not found" message, so this single check fails as expected.
-      // Assert field_code identity FIRST (whitespace-robust) so the expected-fail
-      // lands on the gap itself, not on a JSON.parse crash of the not-found string.
+      // field_code. Assert field_code identity FIRST (whitespace-robust) so a
+      // regression (getField reverting to `.key`-only → "Field not found") lands
+      // here, not on a JSON.parse crash of the not-found string.
       const text = result.content[0].text;
-      expect(text).toContain('"field_code"'); // #60: today text is "Field not found: ..." — fails here, not at JSON.parse
+      expect(text).toContain('"field_code"');
       const parsed = JSON.parse(text);
       expect(parsed.data.field_code).toBe("subject");
     });

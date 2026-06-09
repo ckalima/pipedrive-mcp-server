@@ -110,6 +110,8 @@ export async function listPersonFields(params: ListPersonFieldsParams) {
 
 /**
  * Get a single field by key — paginates v2 field pages to find the field.
+ * v2 field-list responses key each field on `field_code` (not `key`), so we
+ * match on `field_code` first and fall back to the legacy `key` for safety (#60).
  * All entity types use the v2 endpoint.
  */
 export async function getField(params: GetFieldParams) {
@@ -137,12 +139,12 @@ export async function getField(params: GetFieldParams) {
 
   // Paginate through all pages (v2 cursor) until the field is found or pages are exhausted.
   let cursor: string | undefined;
-  let field: { key: string; [k: string]: unknown } | undefined;
+  let field: { field_code?: string; key?: string; [k: string]: unknown } | undefined;
 
   do {
     const queryParams = buildPaginationParamsV2(cursor);
 
-    const response = await client.get<Array<{ key: string; [k: string]: unknown }>>(
+    const response = await client.get<Array<{ field_code?: string; key?: string; [k: string]: unknown }>>(
       endpoint,
       queryParams,
       "v2"
@@ -152,7 +154,8 @@ export async function getField(params: GetFieldParams) {
       return mcpErrorResult(response);
     }
 
-    field = response.data.find(f => f.key === params.key);
+    // v2 keys each field on `field_code`; fall back to legacy `key` for safety (#60).
+    field = response.data.find(f => f.field_code === params.key || f.key === params.key);
 
     const pagination = extractPaginationV2(response);
     cursor = pagination.has_more ? pagination.next_cursor : undefined;
