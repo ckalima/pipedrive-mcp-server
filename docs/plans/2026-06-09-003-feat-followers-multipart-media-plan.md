@@ -13,7 +13,14 @@ scope: large
 
 **Issue:** #69 | **Parent epic:** #51 | **Branch:** `agent/69-followers-multipart-media`
 
-> **Revision (2026-06-09):** Applied ce-doc-review safe-auto fixes — corrected the test-helper path to `tests/helpers/mockFetch.ts`; bounded `base64_data` with `.max(MAX_IMAGE_B64_LEN)` and sanitized `file_name` (reject path separators / control chars, 255-char cap) + an `mime_type` allowlist in the U5 schemas. Open design findings (base64-only vs. hybrid upload, `requestMultipart` boilerplate duplication, #67 `deals.ts` merge-order enforcement, and the depth of the multipart-boundary test) are surfaced below for review, not yet applied. **Note:** existing `src/tools/products.ts` carries `// U4`/`// U6` comments from #50 — this plan's U4/U5 are unrelated; ignore the old in-file numbering when implementing.
+> **Revision (2026-06-09):** Incorporated ce-doc-review findings (5-persona review, all 4 open findings resolved as Apply).
+> - **Safe-auto fixes:** corrected the test-helper path to `tests/helpers/mockFetch.ts`; bounded `base64_data` with `.max(MAX_IMAGE_B64_LEN)`, sanitized `file_name` (reject path separators / control chars, 255-char cap), added an `mime_type` allowlist.
+> - **#1 (P1) Hybrid upload:** U5 now accepts **either** `file_path` (server reads via `fs.readFile`, no context cost) **or** `base64_data` (transport-safe), exactly one required — removes the base64-only context-bloat risk (Decision 2 + U5).
+> - **#2 (P2) Merge-order enforced:** R1 hardened with a tracked heads-up on #67 + an implementer pre-check, not just "coordinate."
+> - **#3 (P2) Shared client helpers required:** U4 now requires extracting URL-build/auth/parse helpers shared by `request()` and `requestMultipart()` (no copy-paste), with an acceptance criterion.
+> - **#4 (P2) Real-boundary test added:** U4 adds a `undici` `MockAgent` test asserting the outgoing `Content-Type` starts with `multipart/form-data; boundary=`.
+>
+> **Note:** existing `src/tools/products.ts` carries `// U4`/`// U6` comments from #50 — this plan's U4/U5 are unrelated; ignore the old in-file numbering when implementing.
 
 ---
 
@@ -178,89 +185,77 @@ Rationale:
 - Two methods is a small surface increase (two functions, ~20 lines total). The alternative refactor of `request()` would add branching to the hot path for all requests.
 - Callers in `src/tools/products.ts` call `client.postMultipart(...)` or `client.putMultipart(...)` - the different name signals the different transport to the reader immediately.
 
+**REQUIRED — no boilerplate duplication (review finding, 2026-06-09).** `requestMultipart` must NOT copy-paste the URL construction, auth branching, or response/error parsing from `request()`. Extract the shared steps into private helpers that BOTH `request()` and `requestMultipart()` call, so the two paths cannot drift if auth logic ever changes. The only thing that differs between the JSON and multipart paths is body serialization + the `Content-Type` handling. Acceptance: a reviewer can confirm there is exactly one implementation of the URL-build and auth-header logic in `src/client.ts`, shared by both methods (see U4 acceptance criterion).
+
 **Directional implementation sketch (not normative code):**
 
 ```
-// In PipedriveClient:
+// In PipedriveClient — extract the shared steps first:
+private buildRequestUrl(config: Config, endpoint: string, version: ApiVersion): URL { /* baseUrl + endpoint */ }
+private applyAuth(config: Config, version: ApiVersion, url: URL, headers: Record<string,string>): void {
+  // v2 = x-api-token header; v1 = api_token query param. Single source of truth.
+}
+private parseResponse<T>(response: Response, body: Record<string, unknown>): ApiResponse<T> { /* ok/error envelope */ }
+
+// request() (JSON) and requestMultipart() (FormData) BOTH call the three helpers above.
 async postMultipart<T>(endpoint: string, formData: FormData, version: ApiVersion): Promise<ApiResponse<T>> {
   return this.requestMultipart<T>("POST", endpoint, formData, version);
 }
-
 async putMultipart<T>(endpoint: string, formData: FormData, version: ApiVersion): Promise<ApiResponse<T>> {
   return this.requestMultipart<T>("PUT", endpoint, formData, version);
 }
 
-private async requestMultipart<T>(
-  method: string, endpoint: string, formData: FormData, version: ApiVersion
-): Promise<ApiResponse<T>> {
+private async requestMultipart<T>(method, endpoint, formData: FormData, version): Promise<ApiResponse<T>> {
   const config = this.ensureInitialized();
-  const baseUrl = this.getBaseUrl(config, version);
-  const url = new URL(`${baseUrl}${endpoint}`);
-
   const headers: Record<string, string> = { "Accept": "application/json" };
+  const url = this.buildRequestUrl(config, endpoint, version);
+  this.applyAuth(config, version, url, headers);
 
-  // Auth: same as request() - v2 = header, v1 = query param
-  if (version === "v2") {
-    headers["x-api-token"] = config.apiKey;
-  } else {
-    url.searchParams.set("api_token", config.apiKey);
-  }
-
-  // CRITICAL: DO NOT set Content-Type. fetch/undici sets it automatically
-  //           with the correct multipart boundary when body is FormData.
-
+  // CRITICAL: DO NOT set Content-Type. fetch/undici sets multipart/form-data;
+  //           boundary=… automatically when body is FormData.
   try {
     console.error(`[pipedrive-mcp] ${method} ${endpoint} (multipart)`);
     const response = await fetch(url.toString(), {
-      method, headers, body: formData,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      method, headers, body: formData, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const responseData = await response.json() as Record<string, unknown>;
-    if (!response.ok) {
-      return { success: false, error: handleApiError(response.status, responseData) };
-    }
-    return {
-      success: true,
-      data: responseData.data as T,
-      additional_data: responseData.additional_data as ApiResponse<T>["additional_data"],
-    };
+    return this.parseResponse<T>(response, responseData);
   } catch (error) {
     console.error(`[pipedrive-mcp] Network error: ${error}`);
-    return {
-      success: false,
-      error: createErrorResponse("NETWORK_ERROR", error instanceof Error ? error.message : "Unknown network error", "Check your internet connection and try again"),
-    };
+    return { success: false, error: createErrorResponse("NETWORK_ERROR", error instanceof Error ? error.message : "Unknown network error", "Check your internet connection and try again") };
   }
 }
 ```
 
-The key invariant: `Content-Type` must NOT be set manually. When `body` is a `FormData` instance, the `fetch` global (both Node.js 18+ undici and browser) automatically generates a `multipart/form-data; boundary=<generated>` header. Any manual `Content-Type` set before the fetch call will conflict with or override the boundary, causing a malformed request.
+The key invariant: `Content-Type` must NOT be set manually. When `body` is a `FormData` instance, the `fetch` global (Node.js 18+ undici) automatically generates a `multipart/form-data; boundary=<generated>` header. Any manual `Content-Type` set before the fetch call will conflict with or override the boundary, causing a malformed request.
 
-**Alternative rejected:** Branching inside the existing `request()` method on `body instanceof FormData`. This would allow reuse of the auth/URL/error-handling boilerplate but introduces a union type (`Record<string, unknown> | FormData`) in the shared method signature, adds `instanceof` checks, and makes the common JSON path slightly more expensive. The code sharing benefit is marginal given how small `requestMultipart` is.
+**Alternative rejected:** Branching inside the existing `request()` method on `body instanceof FormData` — a union type (`Record<string, unknown> | FormData`) in the shared signature plus `instanceof` checks on the hot JSON path. The chosen approach keeps separate public methods (explicit type contract) while still sharing the boilerplate via private helpers, which is strictly better than either copy-paste or union-branching.
 
 ### Decision 2: STDIO Upload UX - How Image Bytes Reach the Tool
 
-**Choice: `base64_data` + `file_name` parameters (base64-encoded image, transport-safe).**
+**Choice (revised 2026-06-09 per review finding): HYBRID — accept either `file_path` OR `base64_data` (exactly one required).** The handler prefers `file_path` when present (reads the bytes server-side), otherwise decodes `base64_data`. This removes the base64-only context-bloat risk for callers that DO share a filesystem, while keeping a transport-safe fallback for those that don't.
 
-The two main candidates:
+Why neither single option is sufficient alone:
 
-**(a) `file_path` string** - The tool accepts a local filesystem path. The handler calls `fs.readFileSync(params.file_path)`, creates a `Blob`, and appends it to `FormData` as the `data` field.
-- Pro: Clean tool invocation; no message size inflation; familiar pattern for shell-adjacent workflows.
-- Con: Assumes the MCP server process and the MCP client share a filesystem. In Claude Desktop, Cursor, or remote MCP deployments this assumption frequently fails. The server process runs in a different working directory or container. Path-based upload is unreliable for the primary use case.
+**`file_path` alone** — The tool accepts a local filesystem path; the handler does `await fs.readFile(params.file_path)`.
+- Pro: No message-size inflation; the image never enters the MCP/STDIO message or the model context.
+- Con: Assumes the MCP server process and the caller share a filesystem. In Claude Desktop / remote MCP deployments this frequently fails — the server runs in a different cwd/container.
 
-**(b) `base64_data` + `file_name` parameters** - The caller base64-encodes the image bytes and passes them as a string param. The handler decodes the string, creates a `Buffer`, wraps it in a `Blob` with the declared MIME type (inferred from `file_name` extension or a `mime_type` param), and appends to `FormData` as the `data` field.
-- Pro: Completely transport-safe over STDIO; no filesystem dependency; works in all MCP client configurations including remote.
-- Con: Base64 expands payload by ~33%. A 1 MB image becomes ~1.37 MB in the STDIO message. This is unusual for MCP but not prohibited. The MCP spec imposes no message size limit at the protocol layer (individual clients may).
+**`base64_data` alone** — The caller base64-encodes the bytes and passes them as a string.
+- Pro: Transport-safe over STDIO; works in all MCP client configurations including remote.
+- Con: Base64 inflates ~33% AND the entire image rides inside the STDIO message → it lands in the model context (a ~500 KB JPEG ≈ ~170K tokens), which can exhaust the context window. Bounded by `.max()` but the context cost remains.
 
-**Recommendation: base64 (option b).** The core constraint is transport safety. An STDIO-based MCP server cannot be guaranteed to share a filesystem with its caller. Option (a) would silently fail for the majority of Claude Desktop users. Option (b) works universally. The payload size increase is acceptable for product image uploads (typically small images, e.g. product thumbnails).
+**Hybrid resolution:** Expose both as optional params with a Zod `.refine()` requiring **exactly one** of `file_path` / `base64_data`. Filesystem-adjacent callers (CLI, local agents) pass `file_path` (no context cost); sandboxed/remote callers (Claude Desktop) pass `base64_data` (transport-safe). The handler normalizes both into a `Buffer` before building the `Blob`/`FormData`, so U5's downstream path is identical regardless of input mode.
 
 **Schema for upload/update tools:**
 - `id`: number (product ID, required)
-- `base64_data`: string (base64-encoded image bytes, required; **bounded** by `.max(MAX_IMAGE_B64_LEN)` ≈ 5 MB decoded so an oversized input cannot force a huge synchronous `Buffer.from` allocation / OOM)
-- `file_name`: string (original filename including extension, required - used to set the `filename` in the `Content-Disposition` header of the multipart part, e.g. `product.png`; **sanitized** to reject path separators / control characters and capped at 255 chars)
+- `file_path`: string (optional — absolute/relative path the SERVER reads via `fs.readFile`; use when caller shares the server's filesystem). Mutually exclusive with `base64_data`.
+- `base64_data`: string (optional — base64-encoded image bytes; transport-safe fallback). **Bounded** by `.max(MAX_IMAGE_B64_LEN)` ≈ 5 MB decoded so an oversized input cannot force a huge synchronous `Buffer.from` allocation / OOM. Mutually exclusive with `file_path`.
+- Exactly one of `file_path` / `base64_data` is required (Zod `.refine()`).
+- `file_name`: string (original filename including extension, required - sets the `filename` in the multipart part's `Content-Disposition`, e.g. `product.png`; **sanitized** to reject path separators / control characters, capped at 255 chars). Note: `file_name` is the multipart part name, distinct from `file_path` (the source location); when `file_path` is used, `file_name` may default to its basename.
 - `mime_type`: string (optional, e.g. `image/png`, `image/jpeg` - inferred from `file_name` if not provided; **allowlisted** to `image/(png|jpeg|gif|webp)`)
 
-**Handler approach:** `Buffer.from(params.base64_data, 'base64')` -> `new Blob([buffer], { type: mimeType })` -> `formData.append('data', blob, params.file_name)`.
+**Handler approach:** resolve bytes → `const buffer = params.file_path ? await fs.readFile(params.file_path) : Buffer.from(params.base64_data, 'base64')` → `new Blob([buffer], { type: mimeType })` → `formData.append('data', blob, params.file_name)`. The `fs.readFile` path must guard against read errors (missing/permission-denied file) and return `mcpErrorResult`-shaped failures, not throw.
 
 ---
 
@@ -368,29 +363,29 @@ The two main candidates:
 - `async postMultipart<T>(endpoint: string, formData: FormData, version: ApiVersion): Promise<ApiResponse<T>>`
 - `async putMultipart<T>(endpoint: string, formData: FormData, version: ApiVersion): Promise<ApiResponse<T>>`
 - Both must NOT set `Content-Type` header manually (let fetch set multipart boundary)
-- Both must apply the same auth logic as `request()`: v2 = `x-api-token` header, v1 = `api_token` query param
+- **REQUIRED — shared boilerplate, no copy-paste:** the URL-build, auth (v2 `x-api-token` header / v1 `api_token` query param), and response/error parsing must live in private helpers called by BOTH `request()` and `requestMultipart()`. `requestMultipart` must NOT duplicate that logic inline. **Acceptance criterion:** `src/client.ts` contains exactly one implementation of the URL-build and auth-header logic, shared by the JSON and multipart paths; a reviewer reverting the auth logic in the shared helper breaks both paths' tests.
 - Both must use the same error handling (`handleApiError`, `createErrorResponse`) and timeout (`REQUEST_TIMEOUT_MS`)
 - Both must log to stderr (not stdout) to avoid STDIO protocol corruption
 
 **Dependencies:** None (self-contained client change). U5 depends on U4.
 
 **Files:**
-- `src/client.ts` - add `postMultipart`, `putMultipart`, private `requestMultipart` methods
+- `src/client.ts` - extract shared private helpers (e.g. `buildRequestUrl`, `applyAuth`, `parseResponse`) and refactor `request()` to use them; add `postMultipart`, `putMultipart`, private `requestMultipart`
 - `tests/unit/client.test.ts` - add multipart routing tests
 
-**Approach:** See directional sketch in Key Technical Decisions. Add a private `requestMultipart` method containing the URL construction, auth, and error handling. The public `postMultipart` and `putMultipart` delegate to it with `"POST"` and `"PUT"` respectively.
+**Approach:** See the directional sketch + the **REQUIRED — no boilerplate duplication** note in Key Technical Decisions / Decision 1. First extract the shared helpers and point the existing `request()` at them (behavior-neutral; existing client tests must stay green), THEN add the multipart methods on top.
 
 **Test scenarios:**
 - `postMultipart` with v2 sends `x-api-token` header and does NOT include `api_token` query param
-- `postMultipart` does NOT set `Content-Type: application/json` (the critical multipart test)
+- `postMultipart` does NOT set `Content-Type: application/json` (app-side omission guard)
 - `postMultipart` sends `FormData` as the request body directly (not `JSON.stringify`'d)
 - `putMultipart` uses method `PUT`
 - Network error returns `{ success: false, error: { code: 'NETWORK_ERROR' } }`
 - HTTP error response (e.g., 413 Payload Too Large) returns `{ success: false, error: ... }`
+- **Real-boundary test (review finding 2026-06-09):** the "no `Content-Type: application/json`" assertion only proves the app side. Add a test that exercises the REAL fetch path — use `undici`'s `MockAgent`/`setGlobalDispatcher` (or an in-process `http` server) to capture the actual outbound request — and assert its `Content-Type` header **starts with** `multipart/form-data; boundary=`. This proves the boundary is genuinely generated, not merely that we didn't override it.
+- Shared-helper regression: a test that confirms `request()` (JSON path) and `postMultipart` (multipart path) both emit the same v2 `x-api-token` auth (so the extraction didn't fork auth behavior).
 
-The test asserting no `Content-Type: application/json` is the key regression guard for the invariant that the fetch global must set the boundary automatically.
-
-**Verification:** `npm test` green. Existing client tests pass unchanged.
+**Verification:** `npm test` green. Existing client tests pass unchanged after the helper extraction (proves behavior-neutral refactor).
 
 ---
 
@@ -401,7 +396,7 @@ The test asserting no `Content-Type: application/json` is the key regression gua
 **Requirements:**
 - `pipedrive_upload_product_image`: POST `/products/{id}/images`, `multipart/form-data`, field `data` = image bytes
 - `pipedrive_update_product_image`: PUT `/products/{id}/images`, `multipart/form-data`, field `data` = image bytes
-- Both accept `base64_data` (string, required) and `file_name` (string, required) parameters (see Decision 2)
+- Both accept **either** `file_path` **or** `base64_data` (exactly one required, hybrid — see Decision 2), plus `file_name` (string, required) and optional `mime_type`
 - Both accept optional `mime_type` (string) parameter; infer from `file_name` extension if absent
 - Neither is a destructive operation (upload/update are not deletes; no `destructiveOperationGuard()`)
 - Response 201/200: return `{ summary, data: { id, product_id, company_id, add_time } }`
@@ -410,15 +405,15 @@ The test asserting no `Content-Type: application/json` is the key regression gua
 
 **Files:**
 - `src/schemas/products.ts` - add `UploadProductImageSchema`, `UpdateProductImageSchema` + type exports
-- `src/tools/products.ts` - add `uploadProductImage`, `updateProductImage` handler functions + 2 entries in `productTools` array (append after `pipedrive_delete_product_image`)
-- `tests/unit/schemas/products.images.test.ts` - extend with upload/update schema tests
+- `src/tools/products.ts` - add `uploadProductImage`, `updateProductImage` handler functions + 2 entries in `productTools` array (append after `pipedrive_delete_product_image`); import `fs/promises` for the `file_path` branch
+- `tests/unit/schemas/products.images.test.ts` - extend with upload/update schema tests (incl. the exactly-one-of refine)
 - `tests/integration/tools/products.images.test.ts` - extend with upload/update integration tests
 
 **Approach:**
 
 Handler outline for `uploadProductImage`:
-1. `const buffer = Buffer.from(params.base64_data, 'base64')`
-2. Infer `mimeType` from `params.mime_type` or from `file_name` extension mapping (basic: `.png` -> `image/png`, `.jpg`/`.jpeg` -> `image/jpeg`, `.gif` -> `image/gif`, `.webp` -> `image/webp`; default fallback: `application/octet-stream`)
+1. Resolve bytes by input mode: `const buffer = params.file_path ? await fs.readFile(params.file_path) : Buffer.from(params.base64_data!, 'base64')`. Wrap the `fs.readFile` in try/catch and return an `mcpErrorResult`-shaped failure (NOT a throw) on missing/unreadable file.
+2. Infer `mimeType` from `params.mime_type` or from `file_name` extension mapping (`.png` -> `image/png`, `.jpg`/`.jpeg` -> `image/jpeg`, `.gif` -> `image/gif`, `.webp` -> `image/webp`; default fallback: `application/octet-stream`)
 3. `const blob = new Blob([buffer], { type: mimeType })`
 4. `const formData = new FormData(); formData.append('data', blob, params.file_name)`
 5. `const response = await client.postMultipart<unknown>(`/products/${params.id}/images`, formData, "v2")`
@@ -432,21 +427,28 @@ Handler outline for `uploadProductImage`:
 // oversized/malicious input cannot force a huge synchronous Buffer.from allocation (OOM).
 // Tune once Pipedrive's real image-size limit is confirmed (Open Question 1).
 UploadProductImageSchema = IdParamSchema.extend({
-  base64_data: z.string().min(1).max(MAX_IMAGE_B64_LEN).describe("Base64-encoded image bytes"),
+  file_path: z.string().min(1).optional()
+    .describe("Path the SERVER reads via fs.readFile (use when caller shares the server filesystem). Mutually exclusive with base64_data."),
+  base64_data: z.string().min(1).max(MAX_IMAGE_B64_LEN).optional()
+    .describe("Base64-encoded image bytes (transport-safe fallback). Mutually exclusive with file_path."),
   file_name: z.string().min(1).max(255)
     .refine((n) => !/[\/\\\r\n\0]/.test(n), "file_name must not contain path separators or control characters")
     .describe("Original filename including extension (e.g. product.png)"),
   mime_type: z.string().regex(/^image\/(png|jpeg|gif|webp)$/).optional()
     .describe("MIME type (e.g. image/png). Inferred from file_name if omitted."),
-})
+}).refine(
+  (v) => (v.file_path == null) !== (v.base64_data == null),
+  { message: "Provide exactly one of file_path or base64_data" },
+)
 UpdateProductImageSchema = UploadProductImageSchema  // identical shape; alias or duplicate
 ```
 
 **Test scenarios:**
-- Schema: accepts valid `{ id, base64_data, file_name }`, rejects missing `id`, rejects missing `base64_data`, rejects missing `file_name`, accepts optional `mime_type`
-- Integration (upload): mock fetch captures `FormData` body; assert request method is `POST`; assert URL is `/api/v2/products/{id}/images`; assert no `Content-Type: application/json` in request headers; assert response summary contains "uploaded"
-- Integration (update): same as above but method is `PUT`; summary contains "updated"
-- Integration: base64 roundtrip - encode a small buffer to base64, pass to handler, mock fetch receives `FormData`, verify field name is `data`
+- Schema: accepts `{ id, base64_data, file_name }`; accepts `{ id, file_path, file_name }`; **rejects** when BOTH `file_path` and `base64_data` are present; **rejects** when NEITHER is present; rejects missing `id`/`file_name`; accepts optional `mime_type`; rejects `mime_type` outside the image allowlist; rejects `file_name` with a path separator
+- Integration (upload, base64 mode): mock fetch captures `FormData` body; assert method `POST`; URL `/api/v2/products/{id}/images`; no `Content-Type: application/json`; summary contains "uploaded"; field name is `data`
+- Integration (upload, file_path mode): stub `fs.readFile` to return a small buffer; assert the same `FormData`/method/URL; assert the image bytes never appear as a base64 param
+- Integration (file_path error): `fs.readFile` rejects (ENOENT) → handler returns `isError: true` via `mcpErrorResult`, no fetch call
+- Integration (update): method `PUT`; summary contains "updated"
 
 **Verification:** `npm test` green. Upload and update tools appear in `productTools` array.
 
@@ -460,7 +462,10 @@ UpdateProductImageSchema = UploadProductImageSchema  // identical shape; alias o
 
 Similarly: `src/tools/persons.ts` and `src/tools/organizations.ts` may be touched by other issues in #51 epic. Verify no open PRs touch these files before starting U2/U3.
 
-**Mitigation:** Coordinate with #67 implementors. If #67 starts first, the deal follower work from U1 must be rebased on top.
+**Mitigation (hardened 2026-06-09 per review finding — enforced, not just social):**
+1. **Tracked dependency:** a heads-up comment is posted on issue **#67** stating that #69 U1 adds deal-follower handlers to `src/tools/deals.ts` / `src/schemas/deals.ts`, that **#69 owns deal followers** (so #67 must NOT add them), and that #67 must branch from / rebase onto the merged #69 commit before editing those files.
+2. **Merge-order rule:** #69 U1 (deal followers) is the gating change. If #67 nonetheless opens first, the second PR to merge owns the rebase; the conflict is confined to the follower block appended at the end of `dealTools` + the four schemas, so the rebase is mechanical.
+3. **Implementer check:** before starting U1/U2/U3, run `gh pr list --search "deals.ts OR persons.ts OR organizations.ts"` (or inspect open PRs) to confirm no in-flight PR touches these files.
 
 ### R2 - `Content-Type` Boundary Corruption
 
