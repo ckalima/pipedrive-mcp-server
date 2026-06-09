@@ -12,6 +12,15 @@ import {
   DeleteProductSchema,
   BillingFrequencySchema,
   PriceInputSchema,
+  VariationPriceInputSchema,
+  ListProductVariationsSchema,
+  AddProductVariationSchema,
+  UpdateProductVariationSchema,
+  DeleteProductVariationSchema,
+  ListProductFollowersSchema,
+  AddProductFollowerSchema,
+  DeleteProductFollowerSchema,
+  ProductFollowersChangelogSchema,
 } from '../../../src/schemas/products.js';
 
 describe('products schemas', () => {
@@ -315,6 +324,190 @@ describe('products schemas', () => {
       expect(result.price).toBe(99.99);
       expect(result.cost).toBe(50);
       expect(result.direct_cost).toBe(30);
+    });
+  });
+
+  // ─── U3: Variation schemas ─────────────────────────────────────────────────
+
+  describe('ListProductVariationsSchema', () => {
+    it('should require id', () => {
+      expect(() => ListProductVariationsSchema.parse({})).toThrow();
+    });
+
+    it('should accept id with cursor and limit', () => {
+      const result = ListProductVariationsSchema.parse({ id: 5, cursor: 'abc', limit: 25 });
+      expect(result.id).toBe(5);
+      expect(result.cursor).toBe('abc');
+      expect(result.limit).toBe(25);
+    });
+
+    it('should default limit to 50', () => {
+      const result = ListProductVariationsSchema.parse({ id: 5 });
+      expect(result.limit).toBe(50);
+    });
+  });
+
+  describe('AddProductVariationSchema', () => {
+    it('should require id and name', () => {
+      expect(() => AddProductVariationSchema.parse({})).toThrow();
+      expect(() => AddProductVariationSchema.parse({ id: 5 })).toThrow();
+      expect(() => AddProductVariationSchema.parse({ name: 'Var' })).toThrow();
+    });
+
+    it('should reject name longer than 255 characters', () => {
+      expect(() => AddProductVariationSchema.parse({ id: 5, name: 'a'.repeat(256) })).toThrow();
+    });
+
+    it('should accept name up to 255 characters', () => {
+      const result = AddProductVariationSchema.parse({ id: 5, name: 'a'.repeat(255) });
+      expect(result.name).toHaveLength(255);
+    });
+
+    it('should accept prices array with notes', () => {
+      const result = AddProductVariationSchema.parse({
+        id: 5,
+        name: 'Gold Edition',
+        prices: [{ currency: 'USD', price: 99.99, notes: 'Special pricing' }],
+      });
+      expect(result.prices).toHaveLength(1);
+      expect(result.prices![0].notes).toBe('Special pricing');
+    });
+
+    it('should use VariationPriceInputSchema which requires price', () => {
+      expect(() => AddProductVariationSchema.parse({
+        id: 5,
+        name: 'Var',
+        prices: [{ currency: 'USD' }],
+      })).toThrow();
+    });
+  });
+
+  describe('UpdateProductVariationSchema', () => {
+    it('should require id and product_variation_id', () => {
+      expect(() => UpdateProductVariationSchema.parse({})).toThrow();
+      expect(() => UpdateProductVariationSchema.parse({ id: 5 })).toThrow();
+      expect(() => UpdateProductVariationSchema.parse({ product_variation_id: 10 })).toThrow();
+    });
+
+    it('should accept id and product_variation_id with no updates', () => {
+      const result = UpdateProductVariationSchema.parse({ id: 5, product_variation_id: 10 });
+      expect(result.id).toBe(5);
+      expect(result.product_variation_id).toBe(10);
+    });
+
+    it('should accept optional name', () => {
+      const result = UpdateProductVariationSchema.parse({ id: 5, product_variation_id: 10, name: 'Updated' });
+      expect(result.name).toBe('Updated');
+    });
+
+    it('should reject name longer than 255 characters', () => {
+      expect(() => UpdateProductVariationSchema.parse({
+        id: 5,
+        product_variation_id: 10,
+        name: 'a'.repeat(256),
+      })).toThrow();
+    });
+  });
+
+  describe('DeleteProductVariationSchema', () => {
+    it('should require both id and product_variation_id', () => {
+      expect(() => DeleteProductVariationSchema.parse({})).toThrow();
+      expect(() => DeleteProductVariationSchema.parse({ id: 5 })).toThrow();
+    });
+
+    it('should accept both ids', () => {
+      const result = DeleteProductVariationSchema.parse({ id: 5, product_variation_id: 10 });
+      expect(result.id).toBe(5);
+      expect(result.product_variation_id).toBe(10);
+    });
+  });
+
+  describe('VariationPriceInputSchema', () => {
+    it('should require price', () => {
+      expect(() => VariationPriceInputSchema.parse({ currency: 'USD' })).toThrow();
+    });
+
+    it('should accept price with optional notes', () => {
+      const result = VariationPriceInputSchema.parse({ price: 49.99, notes: 'Sale price' });
+      expect(result.price).toBe(49.99);
+      expect(result.notes).toBe('Sale price');
+    });
+
+    it('should accept all fields including notes', () => {
+      const result = VariationPriceInputSchema.parse({
+        currency: 'USD',
+        price: 99.99,
+        cost: 50,
+        direct_cost: 30,
+        notes: 'Promo pricing',
+      });
+      expect(result.notes).toBe('Promo pricing');
+    });
+  });
+
+  // ─── U4: Follower schemas ──────────────────────────────────────────────────
+
+  describe('ListProductFollowersSchema', () => {
+    it('should require id', () => {
+      expect(() => ListProductFollowersSchema.parse({})).toThrow();
+    });
+
+    it('should accept id with cursor and limit', () => {
+      const result = ListProductFollowersSchema.parse({ id: 3, cursor: 'c1', limit: 10 });
+      expect(result.id).toBe(3);
+      expect(result.cursor).toBe('c1');
+      expect(result.limit).toBe(10);
+    });
+
+    it('should default limit to 50', () => {
+      const result = ListProductFollowersSchema.parse({ id: 3 });
+      expect(result.limit).toBe(50);
+    });
+  });
+
+  describe('AddProductFollowerSchema', () => {
+    it('should require id and user_id', () => {
+      expect(() => AddProductFollowerSchema.parse({})).toThrow();
+      expect(() => AddProductFollowerSchema.parse({ id: 3 })).toThrow();
+      expect(() => AddProductFollowerSchema.parse({ user_id: 7 })).toThrow();
+    });
+
+    it('should accept id and user_id', () => {
+      const result = AddProductFollowerSchema.parse({ id: 3, user_id: 7 });
+      expect(result.id).toBe(3);
+      expect(result.user_id).toBe(7);
+    });
+  });
+
+  describe('DeleteProductFollowerSchema', () => {
+    it('should require id and follower_id', () => {
+      expect(() => DeleteProductFollowerSchema.parse({})).toThrow();
+      expect(() => DeleteProductFollowerSchema.parse({ id: 3 })).toThrow();
+      expect(() => DeleteProductFollowerSchema.parse({ follower_id: 7 })).toThrow();
+    });
+
+    it('should accept id and follower_id', () => {
+      const result = DeleteProductFollowerSchema.parse({ id: 3, follower_id: 7 });
+      expect(result.id).toBe(3);
+      expect(result.follower_id).toBe(7);
+    });
+  });
+
+  describe('ProductFollowersChangelogSchema', () => {
+    it('should require id', () => {
+      expect(() => ProductFollowersChangelogSchema.parse({})).toThrow();
+    });
+
+    it('should accept id with cursor and limit', () => {
+      const result = ProductFollowersChangelogSchema.parse({ id: 3, cursor: 'c2', limit: 20 });
+      expect(result.id).toBe(3);
+      expect(result.cursor).toBe('c2');
+      expect(result.limit).toBe(20);
+    });
+
+    it('should default limit to 50', () => {
+      const result = ProductFollowersChangelogSchema.parse({ id: 3 });
+      expect(result.limit).toBe(50);
     });
   });
 });

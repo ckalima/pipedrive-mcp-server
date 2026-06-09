@@ -10,12 +10,28 @@ import {
   CreateProductSchema,
   UpdateProductSchema,
   DeleteProductSchema,
+  ListProductVariationsSchema,
+  AddProductVariationSchema,
+  UpdateProductVariationSchema,
+  DeleteProductVariationSchema,
+  ListProductFollowersSchema,
+  AddProductFollowerSchema,
+  DeleteProductFollowerSchema,
+  ProductFollowersChangelogSchema,
   type ListProductsParams,
   type GetProductParams,
   type SearchProductsParams,
   type CreateProductParams,
   type UpdateProductParams,
   type DeleteProductParams,
+  type ListProductVariationsParams,
+  type AddProductVariationParams,
+  type UpdateProductVariationParams,
+  type DeleteProductVariationParams,
+  type ListProductFollowersParams,
+  type AddProductFollowerParams,
+  type DeleteProductFollowerParams,
+  type ProductFollowersChangelogParams,
 } from "../schemas/products.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
@@ -231,6 +247,229 @@ export async function deleteProduct(params: DeleteProductParams) {
   };
 }
 
+// ─── U3: Product variation handlers ──────────────────────────────────────────
+
+/**
+ * List variations for a product
+ */
+export async function listProductVariations(params: ListProductVariationsParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>(`/products/${params.id}/variations`, queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const data = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: createListSummary("product variation", data.length, pagination.has_more),
+        data,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Add a variation to a product
+ */
+export async function addProductVariation(params: AddProductVariationParams) {
+  const client = getClient();
+
+  const body: Record<string, unknown> = { name: params.name };
+  if (params.prices !== undefined) body.prices = params.prices;
+
+  const response = await client.post<unknown>(`/products/${params.id}/variations`, body, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: "Product variation created",
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Update a product variation
+ */
+export async function updateProductVariation(params: UpdateProductVariationParams) {
+  const client = getClient();
+
+  const { id, product_variation_id, ...fields } = params;
+  const body: Record<string, unknown> = {};
+
+  if (fields.name !== undefined) body.name = fields.name;
+  if (fields.prices !== undefined) body.prices = fields.prices;
+
+  const response = await client.patch<unknown>(`/products/${id}/variations/${product_variation_id}`, body, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Product variation ${product_variation_id} updated`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Delete a product variation
+ */
+export async function deleteProductVariation(params: DeleteProductVariationParams) {
+  const guard = destructiveOperationGuard();
+  if (guard) return guard;
+
+  const client = getClient();
+
+  const response = await client.delete<{ id: number }>(`/products/${params.id}/variations/${params.product_variation_id}`, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Product variation ${params.product_variation_id} deleted`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+// ─── U4: Product follower handlers ────────────────────────────────────────────
+
+/**
+ * List followers for a product
+ */
+export async function listProductFollowers(params: ListProductFollowersParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>(`/products/${params.id}/followers`, queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const data = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: createListSummary("follower", data.length, pagination.has_more),
+        data,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Add a follower to a product
+ */
+export async function addProductFollower(params: AddProductFollowerParams) {
+  const client = getClient();
+
+  const body = { user_id: params.user_id };
+
+  const response = await client.post<unknown>(`/products/${params.id}/followers`, body, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: "Follower added to product",
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Get the followers changelog for a product
+ */
+export async function getProductFollowersChangelog(params: ProductFollowersChangelogParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>(`/products/${params.id}/followers/changelog`, queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const data = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Followers changelog for product ${params.id}`,
+        data,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Delete a product follower
+ */
+export async function deleteProductFollower(params: DeleteProductFollowerParams) {
+  const guard = destructiveOperationGuard();
+  if (guard) return guard;
+
+  const client = getClient();
+
+  const response = await client.delete<{ user_id: number }>(`/products/${params.id}/followers/${params.follower_id}`, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Follower ${params.follower_id} removed from product ${params.id}`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
 // ─── Tool definitions for MCP registration ───────────────────────────────────
 
 export const productTools = [
@@ -384,5 +623,153 @@ export const productTools = [
     },
     handler: deleteProduct,
     schema: DeleteProductSchema,
+  },
+  // U3: Product variation tools
+  {
+    name: "pipedrive_list_product_variations",
+    description: "List all variations for a product.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+        cursor: { type: "string", description: "Cursor for pagination" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+      },
+      required: ["id"],
+    },
+    handler: listProductVariations,
+    schema: ListProductVariationsSchema,
+  },
+  {
+    name: "pipedrive_add_product_variation",
+    description: "Add a variation to a product.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+        name: { type: "string", description: "Product variation name (required, max 255 chars)" },
+        prices: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              currency: { type: "string", description: "3-letter ISO currency code" },
+              price: { type: "number", description: "Price amount" },
+              cost: { type: "number", description: "Cost amount" },
+              direct_cost: { type: "number", description: "Direct cost amount" },
+              notes: { type: "string", description: "Notes about this price" },
+            },
+            required: ["price"],
+          },
+          description: "Array of price objects per currency",
+        },
+      },
+      required: ["id", "name"],
+    },
+    handler: addProductVariation,
+    schema: AddProductVariationSchema,
+  },
+  {
+    name: "pipedrive_update_product_variation",
+    description: "Update an existing product variation.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+        product_variation_id: { type: "number", description: "The product variation ID" },
+        name: { type: "string", description: "Product variation name (max 255 chars)" },
+        prices: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              currency: { type: "string", description: "3-letter ISO currency code" },
+              price: { type: "number", description: "Price amount" },
+              cost: { type: "number", description: "Cost amount" },
+              direct_cost: { type: "number", description: "Direct cost amount" },
+              notes: { type: "string", description: "Notes about this price" },
+            },
+            required: ["price"],
+          },
+          description: "Array of price objects per currency",
+        },
+      },
+      required: ["id", "product_variation_id"],
+    },
+    handler: updateProductVariation,
+    schema: UpdateProductVariationSchema,
+  },
+  {
+    name: "pipedrive_delete_product_variation",
+    description: "Delete a product variation.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+        product_variation_id: { type: "number", description: "The product variation ID" },
+      },
+      required: ["id", "product_variation_id"],
+    },
+    handler: deleteProductVariation,
+    schema: DeleteProductVariationSchema,
+  },
+  // U4: Product follower tools
+  {
+    name: "pipedrive_list_product_followers",
+    description: "List all followers for a product.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+        cursor: { type: "string", description: "Cursor for pagination" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+      },
+      required: ["id"],
+    },
+    handler: listProductFollowers,
+    schema: ListProductFollowersSchema,
+  },
+  {
+    name: "pipedrive_add_product_follower",
+    description: "Add a follower to a product.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+        user_id: { type: "number", description: "The ID of the user to add as a follower (required)" },
+      },
+      required: ["id", "user_id"],
+    },
+    handler: addProductFollower,
+    schema: AddProductFollowerSchema,
+  },
+  {
+    name: "pipedrive_delete_product_follower",
+    description: "Remove a follower from a product.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+        follower_id: { type: "number", description: "The ID of the follower (user) to remove" },
+      },
+      required: ["id", "follower_id"],
+    },
+    handler: deleteProductFollower,
+    schema: DeleteProductFollowerSchema,
+  },
+  {
+    name: "pipedrive_get_product_followers_changelog",
+    description: "Get the followers changelog for a product.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+        cursor: { type: "string", description: "Cursor for pagination" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+      },
+      required: ["id"],
+    },
+    handler: getProductFollowersChangelog,
+    schema: ProductFollowersChangelogSchema,
   },
 ];

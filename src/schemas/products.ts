@@ -153,6 +153,78 @@ export const UpdateProductSchema = IdParamSchema.extend({
  */
 export const DeleteProductSchema = IdParamSchema;
 
+// ─── U3: Product variation schemas ───────────────────────────────────────────
+
+/**
+ * Price input for a product variation (extends base price with notes)
+ */
+export const VariationPriceInputSchema = PriceInputSchema.extend({
+  notes: z.string().optional().describe("Notes about this price"),
+});
+
+/**
+ * List product variations parameters
+ */
+export const ListProductVariationsSchema = PaginationParamsSchema.extend({
+  id: z.number().int().positive().describe("The product ID"),
+});
+
+/**
+ * Add product variation parameters
+ */
+export const AddProductVariationSchema = IdParamSchema.extend({
+  name: z.string().min(1).max(255).describe("Product variation name (required, max 255 chars)"),
+  prices: z.array(VariationPriceInputSchema).optional()
+    .describe("Array of price objects per currency"),
+});
+
+/**
+ * Update product variation parameters
+ */
+export const UpdateProductVariationSchema = IdParamSchema.extend({
+  product_variation_id: z.number().int().positive().describe("The product variation ID"),
+  name: z.string().min(1).max(255).optional().describe("Product variation name (max 255 chars)"),
+  prices: z.array(VariationPriceInputSchema).optional()
+    .describe("Array of price objects per currency"),
+});
+
+/**
+ * Delete product variation parameters
+ */
+export const DeleteProductVariationSchema = IdParamSchema.extend({
+  product_variation_id: z.number().int().positive().describe("The product variation ID"),
+});
+
+// ─── U4: Product follower schemas ─────────────────────────────────────────────
+
+/**
+ * List product followers parameters
+ */
+export const ListProductFollowersSchema = PaginationParamsSchema.extend({
+  id: z.number().int().positive().describe("The product ID"),
+});
+
+/**
+ * Add product follower parameters
+ */
+export const AddProductFollowerSchema = IdParamSchema.extend({
+  user_id: z.number().int().positive().describe("The ID of the user to add as a follower (required)"),
+});
+
+/**
+ * Delete product follower parameters
+ */
+export const DeleteProductFollowerSchema = IdParamSchema.extend({
+  follower_id: z.number().int().positive().describe("The ID of the follower (user) to remove"),
+});
+
+/**
+ * Product followers changelog parameters
+ */
+export const ProductFollowersChangelogSchema = PaginationParamsSchema.extend({
+  id: z.number().int().positive().describe("The product ID"),
+});
+
 // ─── Type exports ─────────────────────────────────────────────────────────────
 
 export type ListProductsParams = z.infer<typeof ListProductsSchema>;
@@ -161,3 +233,11 @@ export type SearchProductsParams = z.infer<typeof SearchProductsSchema>;
 export type CreateProductParams = z.infer<typeof CreateProductSchema>;
 export type UpdateProductParams = z.infer<typeof UpdateProductSchema>;
 export type DeleteProductParams = z.infer<typeof DeleteProductSchema>;
+export type ListProductVariationsParams = z.infer<typeof ListProductVariationsSchema>;
+export type AddProductVariationParams = z.infer<typeof AddProductVariationSchema>;
+export type UpdateProductVariationParams = z.infer<typeof UpdateProductVariationSchema>;
+export type DeleteProductVariationParams = z.infer<typeof DeleteProductVariationSchema>;
+export type ListProductFollowersParams = z.infer<typeof ListProductFollowersSchema>;
+export type AddProductFollowerParams = z.infer<typeof AddProductFollowerSchema>;
+export type DeleteProductFollowerParams = z.infer<typeof DeleteProductFollowerSchema>;
+export type ProductFollowersChangelogParams = z.infer<typeof ProductFollowersChangelogSchema>;
