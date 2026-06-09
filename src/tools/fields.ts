@@ -8,10 +8,12 @@ import {
   ListOrganizationFieldsSchema,
   ListDealFieldsSchema,
   ListPersonFieldsSchema,
+  ListProductFieldsSchema,
   GetFieldSchema,
   type ListOrganizationFieldsParams,
   type ListDealFieldsParams,
   type ListPersonFieldsParams,
+  type ListProductFieldsParams,
   type GetFieldParams,
 } from "../schemas/fields.js";
 import {
@@ -101,6 +103,36 @@ export async function listPersonFields(params: ListPersonFieldsParams) {
       type: "text" as const,
       text: JSON.stringify({
         summary: createListSummary("person field", fields.length, pagination.has_more),
+        data: fields,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * List product fields
+ */
+export async function listProductFields(params: ListProductFieldsParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+  if (params.include_fields) queryParams.set("include_fields", params.include_fields);
+
+  const response = await client.get<unknown[]>("/productFields", queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const fields = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: createListSummary("product field", fields.length, pagination.has_more),
         data: fields,
         pagination,
       }, null, 2),
@@ -223,6 +255,24 @@ export const fieldTools = [
     },
     handler: listPersonFields,
     schema: ListPersonFieldsSchema,
+  },
+  {
+    name: "pipedrive_list_product_fields",
+    description: "List all product field definitions, including custom fields.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+        include_fields: {
+          type: "string",
+          enum: ["ui_visibility"],
+          description: "Additional data namespaces to include (ui_visibility)",
+        },
+      },
+    },
+    handler: listProductFields,
+    schema: ListProductFieldsSchema,
   },
   {
     name: "pipedrive_get_field",

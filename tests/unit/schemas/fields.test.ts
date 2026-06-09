@@ -8,6 +8,7 @@ import {
   ListOrganizationFieldsSchema,
   ListDealFieldsSchema,
   ListPersonFieldsSchema,
+  ListProductFieldsSchema,
   GetFieldSchema,
 } from '../../../src/schemas/fields.js';
 
@@ -91,6 +92,33 @@ describe('fields schemas', () => {
 
     it('should reject limit above 100', () => {
       expect(() => ListPersonFieldsSchema.parse({ limit: 500 })).toThrow();
+    });
+  });
+
+  describe('ListProductFieldsSchema', () => {
+    it('should accept minimal params (empty object)', () => {
+      const result = ListProductFieldsSchema.parse({});
+      expect(result.limit).toBe(50);
+      expect(result.include_fields).toBeUndefined();
+    });
+
+    it('should accept include_fields=ui_visibility', () => {
+      const result = ListProductFieldsSchema.parse({ include_fields: 'ui_visibility' });
+      expect(result.include_fields).toBe('ui_visibility');
+    });
+
+    it('should reject invalid include_fields value', () => {
+      expect(() => ListProductFieldsSchema.parse({ include_fields: 'bogus' })).toThrow();
+    });
+
+    it('should accept cursor and limit params', () => {
+      const result = ListProductFieldsSchema.parse({ cursor: 'tok', limit: 25 });
+      expect(result.cursor).toBe('tok');
+      expect(result.limit).toBe(25);
+    });
+
+    it('should reject limit above 100', () => {
+      expect(() => ListProductFieldsSchema.parse({ limit: 101 })).toThrow();
     });
   });
 

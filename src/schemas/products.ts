@@ -225,6 +225,14 @@ export const ProductFollowersChangelogSchema = PaginationParamsSchema.extend({
   id: z.number().int().positive().describe("The product ID"),
 });
 
+// ─── U6: Product image schemas (get + delete; multipart upload/update deferred) ───
+
+/** Get product image parameters */
+export const GetProductImageSchema = IdParamSchema;
+
+/** Delete product image parameters */
+export const DeleteProductImageSchema = IdParamSchema;
+
 // ─── Type exports ─────────────────────────────────────────────────────────────
 
 export type ListProductsParams = z.infer<typeof ListProductsSchema>;
@@ -241,3 +249,5 @@ export type ListProductFollowersParams = z.infer<typeof ListProductFollowersSche
 export type AddProductFollowerParams = z.infer<typeof AddProductFollowerSchema>;
 export type DeleteProductFollowerParams = z.infer<typeof DeleteProductFollowerSchema>;
 export type ProductFollowersChangelogParams = z.infer<typeof ProductFollowersChangelogSchema>;
+export type GetProductImageParams = z.infer<typeof GetProductImageSchema>;
+export type DeleteProductImageParams = z.infer<typeof DeleteProductImageSchema>;

@@ -18,6 +18,8 @@ import {
   AddProductFollowerSchema,
   DeleteProductFollowerSchema,
   ProductFollowersChangelogSchema,
+  GetProductImageSchema,
+  DeleteProductImageSchema,
   type ListProductsParams,
   type GetProductParams,
   type SearchProductsParams,
@@ -32,6 +34,8 @@ import {
   type AddProductFollowerParams,
   type DeleteProductFollowerParams,
   type ProductFollowersChangelogParams,
+  type GetProductImageParams,
+  type DeleteProductImageParams,
 } from "../schemas/products.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
@@ -470,6 +474,57 @@ export async function deleteProductFollower(params: DeleteProductFollowerParams)
   };
 }
 
+// ─── U6: Product image handlers ───────────────────────────────────────────────
+
+/**
+ * Get the image for a product
+ */
+export async function getProductImage(params: GetProductImageParams) {
+  const client = getClient();
+
+  const response = await client.get<unknown>(`/products/${params.id}/images`, undefined, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Image for product ${params.id}`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Delete the image of a product
+ */
+export async function deleteProductImage(params: DeleteProductImageParams) {
+  const guard = destructiveOperationGuard();
+  if (guard) return guard;
+
+  const client = getClient();
+
+  const response = await client.delete<{ id: number }>(`/products/${params.id}/images`, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Image deleted from product ${params.id}`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
 // ─── Tool definitions for MCP registration ───────────────────────────────────
 
 export const productTools = [
@@ -771,5 +826,32 @@ export const productTools = [
     },
     handler: getProductFollowersChangelog,
     schema: ProductFollowersChangelogSchema,
+  },
+  // U6: Product image tools
+  {
+    name: "pipedrive_get_product_image",
+    description: "Get the image of a product (returns a single image with a public URL valid for 7 days).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+      },
+      required: ["id"],
+    },
+    handler: getProductImage,
+    schema: GetProductImageSchema,
+  },
+  {
+    name: "pipedrive_delete_product_image",
+    description: "Delete the image of a product.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+      },
+      required: ["id"],
+    },
+    handler: deleteProductImage,
+    schema: DeleteProductImageSchema,
   },
 ];

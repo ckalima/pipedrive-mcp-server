@@ -158,6 +158,78 @@ describe('fields tools', () => {
     });
   });
 
+  describe('listProductFields', () => {
+    it('should return list of product fields with summary', async () => {
+      const fields = [
+        createFieldFixture('name', 'Name', 'varchar'),
+        createFieldFixture('code', 'Code', 'varchar'),
+        createFieldFixture('price', 'Price', 'monetary'),
+      ];
+      mockApiSuccess(fields);
+      const { listProductFields } = await getFieldsTools();
+
+      const result = await listProductFields({});
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.summary).toContain('3');
+      expect(parsed.summary).toContain('product field');
+      expect(parsed.data).toHaveLength(3);
+    });
+
+    it('should call v2 /productFields endpoint', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listProductFields } = await getFieldsTools();
+
+      await listProductFields({});
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('/api/v2/productFields');
+    });
+
+    it('should include next_cursor from additional_data in pagination', async () => {
+      mockApiSuccess(
+        [createFieldFixture('name', 'Name', 'varchar')],
+        paginationFixtures.v2WithMore,
+      );
+      const { listProductFields } = await getFieldsTools();
+
+      const result = await listProductFields({});
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
+      expect(parsed.pagination.has_more).toBe(true);
+    });
+
+    it('should forward include_fields=ui_visibility in the request URL', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listProductFields } = await getFieldsTools();
+
+      await listProductFields({ include_fields: 'ui_visibility' });
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('include_fields=ui_visibility');
+    });
+
+    it('should NOT include include_fields param when not provided', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listProductFields } = await getFieldsTools();
+
+      await listProductFields({});
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).not.toContain('include_fields');
+    });
+
+    it('should return isError on API failure', async () => {
+      mockApiError(500, 'Internal Server Error');
+      const { listProductFields } = await getFieldsTools();
+
+      const result = await listProductFields({});
+
+      expect(result.isError).toBe(true);
+    });
+  });
+
   describe('getField', () => {
     it('should return single deal field from list', async () => {
       // getField paginates all fields and finds by key

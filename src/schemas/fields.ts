@@ -27,6 +27,14 @@ export const ListDealFieldsSchema = PaginationParamsSchema;
 export const ListPersonFieldsSchema = PaginationParamsSchema;
 
 /**
+ * List product fields parameters
+ */
+export const ListProductFieldsSchema = PaginationParamsSchema.extend({
+  include_fields: z.enum(["ui_visibility"]).optional()
+    .describe("Additional data namespaces to include (ui_visibility)"),
+});
+
+/**
  * Get field by key parameters
  */
 export const GetFieldSchema = z.object({
@@ -42,4 +50,5 @@ export const GetFieldSchema = z.object({
 export type ListOrganizationFieldsParams = z.infer<typeof ListOrganizationFieldsSchema>;
 export type ListDealFieldsParams = z.infer<typeof ListDealFieldsSchema>;
 export type ListPersonFieldsParams = z.infer<typeof ListPersonFieldsSchema>;
+export type ListProductFieldsParams = z.infer<typeof ListProductFieldsSchema>;
 export type GetFieldParams = z.infer<typeof GetFieldSchema>;
