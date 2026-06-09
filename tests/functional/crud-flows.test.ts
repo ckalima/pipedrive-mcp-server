@@ -76,14 +76,22 @@ describe('CRUD Flows', () => {
         await import('../../src/tools/persons.js');
 
       // Create
-      mockApiSuccess({ ...fixtures.person, id: 200, name: 'John Smith' });
+      // §6.2/§6.3: v2 key is `emails` (array), not v1 scalar `email`.
+      // Wire assertion below is revert-proof: if `email:` is restored, the handler reads
+      // `params.emails` (undefined) and omits `emails` from the body, so Array.isArray fails.
+      const personCreateMock = mockApiSuccess({ ...fixtures.person, id: 200, name: 'John Smith' });
       let result = await createPerson({
         name: 'John Smith',
-        email: [{ value: 'john.smith@example.com', primary: true }],
+        emails: [{ value: 'john.smith@example.com', primary: true }],
       });
       let parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toBe('Person created');
       const personId = parsed.data.id;
+      // Wire assertion — outbound body must carry `emails` as array, never the v1 `email` key.
+      const [, personCreateInit] = personCreateMock.mock.calls[0];
+      const personCreateBody = JSON.parse((personCreateInit as RequestInit).body as string);
+      expect(Array.isArray(personCreateBody.emails)).toBe(true);
+      expect(personCreateBody).not.toHaveProperty('email');
 
       // Get
       vi.unstubAllGlobals();
@@ -154,14 +162,23 @@ describe('CRUD Flows', () => {
         await import('../../src/tools/organizations.js');
 
       // Create
-      mockApiSuccess({ ...fixtures.organization, id: 400, name: 'TechCorp Inc' });
+      // §6.2/§6.3: v2 `address` is an object (AddressSchema), not a plain string.
+      // Wire assertion below is revert-proof: if `address: '100 Tech Way'` (string) is restored,
+      // `typeof orgCreateBody.address` is 'string' and `orgCreateBody.address.value` is undefined,
+      // so both assertions fail.
+      const orgCreateMock = mockApiSuccess({ ...fixtures.organization, id: 400, name: 'TechCorp Inc' });
       let result = await createOrganization({
         name: 'TechCorp Inc',
-        address: '100 Tech Way',
+        address: { value: '100 Tech Way' },
       });
       let parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toBe('Organization created');
       const orgId = parsed.data.id;
+      // Wire assertion — outbound body must carry `address` as an object with `value`.
+      const [, orgCreateInit] = orgCreateMock.mock.calls[0];
+      const orgCreateBody = JSON.parse((orgCreateInit as RequestInit).body as string);
+      expect(typeof orgCreateBody.address).toBe('object');
+      expect(orgCreateBody.address.value).toBe('100 Tech Way');
 
       // Get
       vi.unstubAllGlobals();

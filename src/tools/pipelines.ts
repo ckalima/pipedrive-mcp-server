@@ -24,7 +24,7 @@ export async function listPipelines(params: ListPipelinesParams) {
   const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
 
   // Uses v2 API for pipelines
-  const response = await client.get<unknown[]>("/pipelines", queryParams);
+  const response = await client.get<unknown[]>("/pipelines", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -57,7 +57,7 @@ export async function listStages(params: ListStagesParams) {
   }
 
   // Uses v2 API for stages
-  const response = await client.get<unknown[]>("/stages", queryParams);
+  const response = await client.get<unknown[]>("/stages", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -88,7 +88,7 @@ export async function listStages(params: ListStagesParams) {
 export async function getStage(params: GetStageParams) {
   const client = getClient();
 
-  const response = await client.get<unknown>(`/stages/${params.id}`);
+  const response = await client.get<unknown>(`/stages/${params.id}`, undefined, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);

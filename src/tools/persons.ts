@@ -40,7 +40,7 @@ export async function listPersons(params: ListPersonsParams) {
   if (params.include_fields) queryParams.set("include_fields", params.include_fields);
   if (params.custom_fields) queryParams.set("custom_fields", params.custom_fields);
 
-  const response = await client.get<unknown[]>("/persons", queryParams);
+  const response = await client.get<unknown[]>("/persons", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -73,7 +73,8 @@ export async function getPerson(params: GetPersonParams) {
 
   const response = await client.get<unknown>(
     `/persons/${params.id}`,
-    queryParams.toString() ? queryParams : undefined
+    queryParams.toString() ? queryParams : undefined,
+    "v2"
   );
 
   if (!response.success || !response.data) {
@@ -111,7 +112,7 @@ export async function createPerson(params: CreatePersonParams) {
   if (params.add_time) body.add_time = params.add_time;
   if (params.custom_fields) body.custom_fields = params.custom_fields;
 
-  const response = await client.post<unknown>("/persons", body);
+  const response = await client.post<unknown>("/persons", body, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -147,7 +148,7 @@ export async function updatePerson(params: UpdatePersonParams) {
   if (updateFields.label_ids) body.label_ids = updateFields.label_ids;
   if (updateFields.custom_fields) body.custom_fields = updateFields.custom_fields;
 
-  const response = await client.patch<unknown>(`/persons/${id}`, body);
+  const response = await client.patch<unknown>(`/persons/${id}`, body, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -178,7 +179,7 @@ export async function searchPersons(params: SearchPersonsParams) {
   if (params.limit) queryParams.set("limit", String(params.limit));
   if (params.cursor) queryParams.set("cursor", params.cursor);
 
-  const response = await client.get<{ items?: unknown[] }>("/persons/search", queryParams);
+  const response = await client.get<{ items?: unknown[] }>("/persons/search", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -207,7 +208,7 @@ export async function deletePerson(params: DeletePersonParams) {
 
   const client = getClient();
 
-  const response = await client.delete<{ id: number }>(`/persons/${params.id}`);
+  const response = await client.delete<{ id: number }>(`/persons/${params.id}`, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);

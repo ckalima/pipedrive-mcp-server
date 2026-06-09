@@ -33,7 +33,7 @@ describe('PipedriveClient', () => {
       const client = new PipedriveClient();
       mockFetch({ data: [] });
 
-      await expect(client.get('/deals')).rejects.toThrow('PIPEDRIVE_API_KEY');
+      await expect(client.get('/deals', undefined, 'v2')).rejects.toThrow('PIPEDRIVE_API_KEY');
     });
   });
 
@@ -42,7 +42,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess([fixtures.deal]);
       const client = new PipedriveClient();
 
-      await client.get('/deals');
+      await client.get('/deals', undefined, 'v2');
 
       expect(mockFn).toHaveBeenCalledTimes(1);
       const [url, options] = mockFn.mock.calls[0];
@@ -57,7 +57,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess([fixtures.deal]);
       const client = new PipedriveClient();
 
-      await client.get('/deals');
+      await client.get('/deals', undefined, 'v2');
 
       const [, options] = mockFn.mock.calls[0];
       expect(options.signal).toBeInstanceOf(AbortSignal);
@@ -70,7 +70,7 @@ describe('PipedriveClient', () => {
       params.set('status', 'open');
       params.set('limit', '50');
 
-      await client.get('/deals', params);
+      await client.get('/deals', params, 'v2');
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('status=open');
@@ -92,7 +92,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess([]);
       const client = new PipedriveClient();
 
-      await client.get('/deals');
+      await client.get('/deals', undefined, 'v2');
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/deals');
@@ -102,7 +102,7 @@ describe('PipedriveClient', () => {
       mockApiSuccess([fixtures.deal, fixtures.deal]);
       const client = new PipedriveClient();
 
-      const response = await client.get<typeof fixtures.deal[]>('/deals');
+      const response = await client.get<typeof fixtures.deal[]>('/deals', undefined, 'v2');
 
       expect(response.success).toBe(true);
       expect(response.data).toHaveLength(2);
@@ -115,7 +115,7 @@ describe('PipedriveClient', () => {
       });
       const client = new PipedriveClient();
 
-      const response = await client.get('/deals');
+      const response = await client.get('/deals', undefined, 'v2');
 
       expect(response.success).toBe(true);
       expect(response.additional_data?.next_cursor).toBe('cursor_abc123');
@@ -127,7 +127,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess([fixtures.deal]);
       const client = new PipedriveClient();
 
-      await client.get('/deals'); // default version = "v2"
+      await client.get('/deals', undefined, 'v2');
 
       const [url, options] = mockFn.mock.calls[0];
       expect(url).not.toContain('api_token');
@@ -149,7 +149,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess(fixtures.deal);
       const client = new PipedriveClient();
 
-      await client.post('/deals', { title: 'New' }); // default version = "v2"
+      await client.post('/deals', { title: 'New' }, 'v2');
 
       const [url, options] = mockFn.mock.calls[0];
       expect(url).not.toContain('api_token');
@@ -160,7 +160,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess(fixtures.deal);
       const client = new PipedriveClient();
 
-      await client.patch('/deals/1', { title: 'Updated' }); // default version = "v2"
+      await client.patch('/deals/1', { title: 'Updated' }, 'v2');
 
       const [url, options] = mockFn.mock.calls[0];
       expect(url).not.toContain('api_token');
@@ -171,7 +171,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess({ id: 1 });
       const client = new PipedriveClient();
 
-      await client.delete('/deals/1'); // default version = "v2"
+      await client.delete('/deals/1', 'v2');
 
       const [url, options] = mockFn.mock.calls[0];
       expect(url).not.toContain('api_token');
@@ -195,7 +195,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess(fixtures.deal);
       const client = new PipedriveClient();
 
-      await client.post('/deals', { title: 'New Deal', value: 10000 });
+      await client.post('/deals', { title: 'New Deal', value: 10000 }, 'v2');
 
       const [url, options] = mockFn.mock.calls[0];
       expect(options.method).toBe('POST');
@@ -207,7 +207,7 @@ describe('PipedriveClient', () => {
       mockApiSuccess(fixtures.deal);
       const client = new PipedriveClient();
 
-      const response = await client.post('/deals', { title: 'Test' });
+      const response = await client.post('/deals', { title: 'Test' }, 'v2');
 
       expect(response.success).toBe(true);
       expect(response.data).toBeDefined();
@@ -219,7 +219,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess(fixtures.deal);
       const client = new PipedriveClient();
 
-      await client.patch('/deals/1', { title: 'Updated' });
+      await client.patch('/deals/1', { title: 'Updated' }, 'v2');
 
       const [, options] = mockFn.mock.calls[0];
       expect(options.method).toBe('PATCH');
@@ -231,7 +231,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess(fixtures.deal);
       const client = new PipedriveClient();
 
-      await client.put('/deals/1', { title: 'Replaced' });
+      await client.put('/deals/1', { title: 'Replaced' }, 'v2');
 
       const [, options] = mockFn.mock.calls[0];
       expect(options.method).toBe('PUT');
@@ -243,7 +243,7 @@ describe('PipedriveClient', () => {
       const mockFn = mockApiSuccess({ id: 1 });
       const client = new PipedriveClient();
 
-      await client.delete('/deals/1');
+      await client.delete('/deals/1', 'v2');
 
       const [, options] = mockFn.mock.calls[0];
       expect(options.method).toBe('DELETE');
@@ -254,7 +254,7 @@ describe('PipedriveClient', () => {
       mockApiSuccess({ id: 1 });
       const client = new PipedriveClient();
 
-      const response = await client.delete('/deals/1');
+      const response = await client.delete('/deals/1', 'v2');
 
       expect(response.success).toBe(true);
       expect(response.data).toEqual({ id: 1 });
@@ -266,7 +266,7 @@ describe('PipedriveClient', () => {
       mockApiError(400, 'Invalid parameter value');
       const client = new PipedriveClient();
 
-      const response = await client.post('/deals', {});
+      const response = await client.post('/deals', {}, 'v2');
 
       expect(response.success).toBe(false);
       expect(response.error?.code).toBe('VALIDATION_ERROR');
@@ -276,7 +276,7 @@ describe('PipedriveClient', () => {
       mockApiError(401, 'Invalid API key');
       const client = new PipedriveClient();
 
-      const response = await client.get('/deals');
+      const response = await client.get('/deals', undefined, 'v2');
 
       expect(response.success).toBe(false);
       expect(response.error?.code).toBe('INVALID_API_KEY');
@@ -286,7 +286,7 @@ describe('PipedriveClient', () => {
       mockApiError(403, 'Access denied');
       const client = new PipedriveClient();
 
-      const response = await client.get('/deals/1');
+      const response = await client.get('/deals/1', undefined, 'v2');
 
       expect(response.success).toBe(false);
       expect(response.error?.code).toBe('PERMISSION_DENIED');
@@ -296,7 +296,7 @@ describe('PipedriveClient', () => {
       mockApiError(404, 'Deal not found');
       const client = new PipedriveClient();
 
-      const response = await client.get('/deals/99999');
+      const response = await client.get('/deals/99999', undefined, 'v2');
 
       expect(response.success).toBe(false);
       expect(response.error?.code).toBe('NOT_FOUND');
@@ -306,7 +306,7 @@ describe('PipedriveClient', () => {
       mockApiError(429, 'Too many requests');
       const client = new PipedriveClient();
 
-      const response = await client.get('/deals');
+      const response = await client.get('/deals', undefined, 'v2');
 
       expect(response.success).toBe(false);
       expect(response.error?.code).toBe('RATE_LIMITED');
@@ -316,7 +316,7 @@ describe('PipedriveClient', () => {
       mockApiError(500, 'Internal server error');
       const client = new PipedriveClient();
 
-      const response = await client.get('/deals');
+      const response = await client.get('/deals', undefined, 'v2');
 
       expect(response.success).toBe(false);
       expect(response.error?.code).toBe('API_ERROR');
@@ -326,7 +326,7 @@ describe('PipedriveClient', () => {
       mockFetchNetworkError('Connection refused');
       const client = new PipedriveClient();
 
-      const response = await client.get('/deals');
+      const response = await client.get('/deals', undefined, 'v2');
 
       expect(response.success).toBe(false);
       expect(response.error?.code).toBe('NETWORK_ERROR');

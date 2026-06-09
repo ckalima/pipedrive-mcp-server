@@ -40,7 +40,7 @@ export async function listProjects(params: ListProjectsParams) {
   if (params.phase_id) queryParams.set("phase_id", String(params.phase_id));
   if (params.status) queryParams.set("status", params.status);
 
-  const response = await client.get<unknown[]>("/projects", queryParams);
+  const response = await client.get<unknown[]>("/projects", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -67,7 +67,7 @@ export async function listProjects(params: ListProjectsParams) {
 export async function getProject(params: GetProjectParams) {
   const client = getClient();
 
-  const response = await client.get<unknown>(`/projects/${params.id}`);
+  const response = await client.get<unknown>(`/projects/${params.id}`, undefined, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -106,7 +106,7 @@ export async function createProject(params: CreateProjectParams) {
   if (params.org_ids) body.org_ids = params.org_ids;
   if (params.label_ids) body.label_ids = params.label_ids;
 
-  const response = await client.post<unknown>("/projects", body);
+  const response = await client.post<unknown>("/projects", body, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -145,7 +145,7 @@ export async function updateProject(params: UpdateProjectParams) {
   if (updateFields.org_ids) body.org_ids = updateFields.org_ids;
   if (updateFields.label_ids) body.label_ids = updateFields.label_ids;
 
-  const response = await client.patch<unknown>(`/projects/${id}`, body);
+  const response = await client.patch<unknown>(`/projects/${id}`, body, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -171,7 +171,7 @@ export async function deleteProject(params: DeleteProjectParams) {
 
   const client = getClient();
 
-  const response = await client.delete<{ id: number }>(`/projects/${params.id}`);
+  const response = await client.delete<{ id: number }>(`/projects/${params.id}`, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -194,7 +194,7 @@ export async function deleteProject(params: DeleteProjectParams) {
 export async function archiveProject(params: ArchiveProjectParams) {
   const client = getClient();
 
-  const response = await client.post<unknown>(`/projects/${params.id}/archive`, {});
+  const response = await client.post<unknown>(`/projects/${params.id}/archive`, {}, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -249,7 +249,7 @@ export async function listProjectTasks(params: ListProjectTasksParams) {
   const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
   queryParams.set("project_id", String(params.id));
 
-  const response = await client.get<unknown[]>("/tasks", queryParams);
+  const response = await client.get<unknown[]>("/tasks", queryParams, "v2");
 
   if (!response.success) {
     return mcpErrorResult(response);

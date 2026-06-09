@@ -34,7 +34,7 @@ src/
 - **v1**: notes, mail, fields, pipelines, users (`https://api.pipedrive.com/v1`)
 - Auth: `api_token` query parameter for both versions
 
-v1 hard sunset: July 31, 2026. Migration to v2 is tracked in Phase 2 issues.
+v1 full sunset: 2026-07-31 (working horizon — per Pipedrive integration partners Make/Zapier; Pipedrive's own docs state only "grace period ≥ 1 year"; re-verify before committing). Official first-party date: 2025-12-31 applies only to selected endpoints with v2 equivalents — it does NOT cover notes, mail, users, or leads CRUD. See `docs/v1-only-capabilities.md`.
 
 ## Conventions
 

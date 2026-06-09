@@ -29,7 +29,7 @@ export async function listOrganizationFields(params: ListOrganizationFieldsParam
 
   const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
 
-  const response = await client.get<unknown[]>("/organizationFields", queryParams);
+  const response = await client.get<unknown[]>("/organizationFields", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -58,7 +58,7 @@ export async function listDealFields(params: ListDealFieldsParams) {
 
   const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
 
-  const response = await client.get<unknown[]>("/dealFields", queryParams);
+  const response = await client.get<unknown[]>("/dealFields", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -87,7 +87,7 @@ export async function listPersonFields(params: ListPersonFieldsParams) {
 
   const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
 
-  const response = await client.get<unknown[]>("/personFields", queryParams);
+  const response = await client.get<unknown[]>("/personFields", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -145,6 +145,7 @@ export async function getField(params: GetFieldParams) {
     const response = await client.get<Array<{ key: string; [k: string]: unknown }>>(
       endpoint,
       queryParams,
+      "v2"
     );
 
     if (!response.success || !response.data) {

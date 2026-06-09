@@ -39,7 +39,7 @@ export async function listOrganizations(params: ListOrganizationsParams) {
   if (params.include_fields) queryParams.set("include_fields", params.include_fields);
   if (params.custom_fields) queryParams.set("custom_fields", params.custom_fields);
 
-  const response = await client.get<unknown[]>("/organizations", queryParams);
+  const response = await client.get<unknown[]>("/organizations", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -72,7 +72,8 @@ export async function getOrganization(params: GetOrganizationParams) {
 
   const response = await client.get<unknown>(
     `/organizations/${params.id}`,
-    queryParams.toString() ? queryParams : undefined
+    queryParams.toString() ? queryParams : undefined,
+    "v2"
   );
 
   if (!response.success || !response.data) {
@@ -107,7 +108,7 @@ export async function createOrganization(params: CreateOrganizationParams) {
   if (params.add_time) body.add_time = params.add_time;
   if (params.custom_fields) body.custom_fields = params.custom_fields;
 
-  const response = await client.post<unknown>("/organizations", body);
+  const response = await client.post<unknown>("/organizations", body, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -140,7 +141,7 @@ export async function updateOrganization(params: UpdateOrganizationParams) {
   if (updateFields.label_ids) body.label_ids = updateFields.label_ids;
   if (updateFields.custom_fields) body.custom_fields = updateFields.custom_fields;
 
-  const response = await client.patch<unknown>(`/organizations/${id}`, body);
+  const response = await client.patch<unknown>(`/organizations/${id}`, body, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -170,7 +171,7 @@ export async function searchOrganizations(params: SearchOrganizationsParams) {
   if (params.limit) queryParams.set("limit", String(params.limit));
   if (params.cursor) queryParams.set("cursor", params.cursor);
 
-  const response = await client.get<{ items?: unknown[] }>("/organizations/search", queryParams);
+  const response = await client.get<{ items?: unknown[] }>("/organizations/search", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -199,7 +200,7 @@ export async function deleteOrganization(params: DeleteOrganizationParams) {
 
   const client = getClient();
 
-  const response = await client.delete<{ id: number }>(`/organizations/${params.id}`);
+  const response = await client.delete<{ id: number }>(`/organizations/${params.id}`, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);

@@ -44,7 +44,7 @@ export async function listDeals(params: ListDealsParams) {
   if (params.include_fields) queryParams.set("include_fields", params.include_fields);
   if (params.custom_fields) queryParams.set("custom_fields", params.custom_fields);
 
-  const response = await client.get<unknown[]>("/deals", queryParams);
+  const response = await client.get<unknown[]>("/deals", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -77,7 +77,8 @@ export async function getDeal(params: GetDealParams) {
 
   const response = await client.get<unknown>(
     `/deals/${params.id}`,
-    queryParams.toString() ? queryParams : undefined
+    queryParams.toString() ? queryParams : undefined,
+    "v2"
   );
 
   if (!response.success || !response.data) {
@@ -119,7 +120,7 @@ export async function createDeal(params: CreateDealParams) {
   if (params.label_ids) body.label_ids = params.label_ids;
   if (params.custom_fields) body.custom_fields = params.custom_fields;
 
-  const response = await client.post<unknown>("/deals", body);
+  const response = await client.post<unknown>("/deals", body, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -162,7 +163,7 @@ export async function updateDeal(params: UpdateDealParams) {
   if (updateFields.label_ids) body.label_ids = updateFields.label_ids;
   if (updateFields.custom_fields) body.custom_fields = updateFields.custom_fields;
 
-  const response = await client.patch<unknown>(`/deals/${id}`, body);
+  const response = await client.patch<unknown>(`/deals/${id}`, body, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -195,7 +196,7 @@ export async function searchDeals(params: SearchDealsParams) {
   if (params.limit) queryParams.set("limit", String(params.limit));
   if (params.cursor) queryParams.set("cursor", params.cursor);
 
-  const response = await client.get<{ items?: unknown[] }>("/deals/search", queryParams);
+  const response = await client.get<{ items?: unknown[] }>("/deals/search", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -224,7 +225,7 @@ export async function deleteDeal(params: DeleteDealParams) {
 
   const client = getClient();
 
-  const response = await client.delete<{ id: number }>(`/deals/${params.id}`);
+  const response = await client.delete<{ id: number }>(`/deals/${params.id}`, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);

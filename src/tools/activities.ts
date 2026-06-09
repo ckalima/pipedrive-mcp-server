@@ -41,7 +41,7 @@ export async function listActivities(params: ListActivitiesParams) {
   if (params.sort_direction) queryParams.set("sort_direction", params.sort_direction);
   if (params.include_fields) queryParams.set("include_fields", params.include_fields);
 
-  const response = await client.get<unknown[]>("/activities", queryParams);
+  const response = await client.get<unknown[]>("/activities", queryParams, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -73,7 +73,8 @@ export async function getActivity(params: GetActivityParams) {
 
   const response = await client.get<unknown>(
     `/activities/${params.id}`,
-    queryParams.toString() ? queryParams : undefined
+    queryParams.toString() ? queryParams : undefined,
+    "v2"
   );
 
   if (!response.success || !response.data) {
@@ -120,7 +121,7 @@ export async function createActivity(params: CreateActivityParams) {
   if (params.location) body.location = params.location;
   if (params.public_description) body.public_description = params.public_description;
 
-  const response = await client.post<unknown>("/activities", body);
+  const response = await client.post<unknown>("/activities", body, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -165,7 +166,7 @@ export async function updateActivity(params: UpdateActivityParams) {
   if (updateFields.attendees) body.attendees = updateFields.attendees;
   if (updateFields.location) body.location = updateFields.location;
 
-  const response = await client.patch<unknown>(`/activities/${id}`, body);
+  const response = await client.patch<unknown>(`/activities/${id}`, body, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -191,7 +192,7 @@ export async function deleteActivity(params: DeleteActivityParams) {
 
   const client = getClient();
 
-  const response = await client.delete<{ id: number }>(`/activities/${params.id}`);
+  const response = await client.delete<{ id: number }>(`/activities/${params.id}`, "v2");
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);

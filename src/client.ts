@@ -53,8 +53,8 @@ export class PipedriveClient {
    */
   async get<T>(
     endpoint: string,
-    params?: URLSearchParams,
-    version: ApiVersion = "v2"
+    params: URLSearchParams | undefined,
+    version: ApiVersion
   ): Promise<ApiResponse<T>> {
     return this.request<T>("GET", endpoint, params, undefined, version);
   }
@@ -65,7 +65,7 @@ export class PipedriveClient {
   async post<T>(
     endpoint: string,
     body: Record<string, unknown>,
-    version: ApiVersion = "v2"
+    version: ApiVersion
   ): Promise<ApiResponse<T>> {
     return this.request<T>("POST", endpoint, undefined, body, version);
   }
@@ -76,7 +76,7 @@ export class PipedriveClient {
   async patch<T>(
     endpoint: string,
     body: Record<string, unknown>,
-    version: ApiVersion = "v2"
+    version: ApiVersion
   ): Promise<ApiResponse<T>> {
     return this.request<T>("PATCH", endpoint, undefined, body, version);
   }
@@ -87,7 +87,7 @@ export class PipedriveClient {
   async put<T>(
     endpoint: string,
     body: Record<string, unknown>,
-    version: ApiVersion = "v2"
+    version: ApiVersion
   ): Promise<ApiResponse<T>> {
     return this.request<T>("PUT", endpoint, undefined, body, version);
   }
@@ -97,7 +97,7 @@ export class PipedriveClient {
    */
   async delete<T>(
     endpoint: string,
-    version: ApiVersion = "v2"
+    version: ApiVersion
   ): Promise<ApiResponse<T>> {
     return this.request<T>("DELETE", endpoint, undefined, undefined, version);
   }
@@ -108,9 +108,9 @@ export class PipedriveClient {
   private async request<T>(
     method: string,
     endpoint: string,
-    params?: URLSearchParams,
-    body?: Record<string, unknown>,
-    version: ApiVersion = "v2"
+    params: URLSearchParams | undefined,
+    body: Record<string, unknown> | undefined,
+    version: ApiVersion
   ): Promise<ApiResponse<T>> {
     const config = this.ensureInitialized();
 

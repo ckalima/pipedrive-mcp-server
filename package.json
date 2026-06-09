@@ -38,9 +38,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.39.4",
+    "js-yaml": "^4.2.0",
     "tsx": "^4.0.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.60.1",

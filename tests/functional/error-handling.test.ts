@@ -141,7 +141,7 @@ describe('Error Handling', () => {
       const client = new PipedriveClient();
 
       // Client initialization should throw when API key is missing
-      await expect(client.get('/deals')).rejects.toThrow('PIPEDRIVE_API_KEY');
+      await expect(client.get('/deals', undefined, 'v2')).rejects.toThrow('PIPEDRIVE_API_KEY');
     });
   });
 
