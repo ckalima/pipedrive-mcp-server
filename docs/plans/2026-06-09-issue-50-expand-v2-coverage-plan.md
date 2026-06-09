@@ -11,6 +11,12 @@ scope: large
 
 # Expand v2 coverage: Products entity, sub-resources, followers, config writes
 
+> **Revision (2026-06-09):** Incorporated document-review findings. Fixed the variation endpoint path
+> to `/products/{id}/variations/{product_variation_id}`; resolved Q1 (`/productFields` is v2, removed the
+> v1 404-fallback); pinned the U5 schema to `src/schemas/fields.ts`; split U6 so image list/delete ship
+> with U1–U5 (only multipart upload/update defers); required the `deleteProduct` summary to state the
+> 30-day soft-delete; and resolved the U6/R3 person-picture dependency (v2 upload endpoint unconfirmed).
+
 ## Problem Frame
 
 The MCP server now covers the core v2 CRM entities (deals, persons, organizations,
@@ -83,7 +89,7 @@ into their own detailed plans before implementation:
 | Product fields (list) | "Products entity (… product fields)" | U5 |
 | Deal sub-resources | "Deal sub-resources (…)" | R1 (roadmap) |
 | Project sub-entities | "Project sub-entities (…)" | R2 (roadmap) |
-| Followers + picture | "Followers+picture (…)" | R4-aware; R3 (roadmap) |
+| Followers + picture | "Followers+picture (…)" | R3 (roadmap) |
 | Config writes | "Config writes (… v2 renames)" | R4 (roadmap); product-field writes folded here |
 
 ## Research / Patterns to Follow
@@ -143,7 +149,7 @@ All new code mirrors the established entity conventions. Concrete references:
   `additional_data.next_cursor`. (Same `data.items` envelope as `searchPersons`.)
 - **Variations** `/products/{id}/variations`: GET (`cursor`, `limit`) → `data[]` of
   `{ id, name, product_id, prices[] }`; POST body required `name`, optional `prices` array of
-  `{currency, price, cost?, direct_cost?, notes?}`; PATCH `/variations/{variation_id}`; DELETE.
+  `{currency, price, cost?, direct_cost?, notes?}`; PATCH `/products/{id}/variations/{product_variation_id}`; DELETE.
 - **Followers** `/products/{id}/followers`: `getProductFollowers`, `addProductFollower`
   (body `user_id`), `getProductFollowersChangelog`, `deleteProductFollower`.
 - **Product fields** `/productFields`: `getProductFields` (list, paginated config metadata read).
@@ -194,12 +200,14 @@ Each unit is its own PR-sized slice. After each unit: `npm run build` clean + `n
   `CurrencyCodeSchema`-style validation; `price` required within each entry.
 - `billing_frequency` enum exactly the 6 API values; `billing_frequency_cycles` `z.number().int().max(208).nullable().optional()`.
 - `visible_to` via `VisibilitySchema`. `custom_fields` via `z.record(z.string(), CustomFieldValueSchema)`.
-- `deleteProduct` opens with `destructiveOperationGuard()`; entry shipped but delete blocked unless `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`.
+- `deleteProduct` opens with `destructiveOperationGuard()`; entry shipped but delete blocked unless
+  `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`. The success summary states the **30-day soft-delete** ("will be
+  permanently removed after 30 days"), mirroring `deletePerson` and the spec's soft-delete semantics.
 
 **Test scenarios:**
 - create: required `name` enforced; body built with only provided fields; `prices`/`custom_fields`/`billing_frequency` forwarded; success returns created product JSON.
 - update: `{ id, ...fields }` split; empty-update behavior; partial field forwarding; 404 path.
-- delete: guard returns `DESTRUCTIVE_DISABLED` when env unset (assert no `fetch` call); with env set, calls `DELETE /products/{id}` and returns `{ id }`.
+- delete: guard returns `DESTRUCTIVE_DISABLED` when env unset (assert no `fetch` call); with env set, calls `DELETE /products/{id}`, returns `{ id }`, and the summary mentions the 30-day soft-delete.
 - `billing_frequency_cycles` > 208 rejected; invalid `billing_frequency` rejected.
 
 ### U3 — Product variations (list, add, update, delete)
@@ -211,7 +219,7 @@ Each unit is its own PR-sized slice. After each unit: `npm run build` clean + `n
   `updateProductVariation`, `deleteProductVariation` + entries.
 
 **Decisions:**
-- Paths: `GET/POST /products/{id}/variations`, `PATCH/DELETE /products/{id}/variations/{variation_id}`.
+- Paths: `GET/POST /products/{id}/variations`, `PATCH/DELETE /products/{id}/variations/{product_variation_id}`.
 - `prices` entry shape mirrors U2 with optional `notes`.
 - Delete gated by `destructiveOperationGuard()`.
 
@@ -233,16 +241,16 @@ Each unit is its own PR-sized slice. After each unit: `npm run build` clean + `n
 ### U5 — Product field reads (list product fields)
 
 **Files:**
-- `src/schemas/fields.ts` (edit) **or** `src/schemas/products.ts`: `ListProductFieldsSchema`
-  (pagination). *Decision: place in existing `src/tools/fields.ts` to keep field-metadata concerns
-  together with the existing `getField`* — disjoint from `products.ts`, so U5 can land in parallel with U2–U4.
+- `src/schemas/fields.ts` (edit): `ListProductFieldsSchema` (pagination). *Decision: place the schema
+  in `src/schemas/fields.ts` and the handler in `src/tools/fields.ts`, keeping field-metadata concerns
+  together with the existing `getField`.* Disjoint from `products.ts`, so U5 can land in parallel with U2–U4.
 - `src/tools/fields.ts` (edit): `listProductFields` handler + `fieldTools` entry.
 
 **Decisions:**
-- `GET /productFields` (config metadata read, paginated). Read-only — field **writes** are R4.
-- Confirm v2 vs v1 base for `/productFields`: this plan assumes the v2 path; the implementer must
-  verify against `openapi-v2.yaml` `/productFields` (line ~15282) and fall back to v1 `productFields`
-  only if v2 returns 404. (Open question Q1.)
+- `GET /productFields` (config metadata read, paginated). Read-only; field **writes** are R4.
+- `/productFields` is served by **v2** (confirmed: `openapi-v2.yaml` defines `getProductFields` at line
+  ~15282, and `src/tools/fields.ts` already calls `/productFields` with version `"v2"`). Call it on the
+  v2 base; no v1 fallback. (Q1 resolved.)
 
 **Test scenarios:** list pagination; success shape; failure → `mcpErrorResult`.
 
@@ -255,11 +263,16 @@ Each unit is its own PR-sized slice. After each unit: `npm run build` clean + `n
 - `src/tools/products.ts` (edit): image handlers + entries.
 
 **Decisions:**
-- This is the **highest-risk, lowest-priority** Products unit: it is the only one needing a client
-  change, and file uploads from an STDIO MCP context are awkward (no real filesystem contract with
-  the caller — image bytes/path must be passed in). **Recommendation: defer U6** out of the first
-  Products PR train; ship U1–U5 first, then decide whether image support is worth the client
-  surface-area increase. Flagged explicitly so it is not silently dropped.
+- **Only POST (upload) and PUT (update) are `multipart/form-data`.** Image **list** (`GET
+  /products/{id}/images`) and **delete** (`DELETE /products/{id}/images/{id}`) are plain JSON and need
+  **no** client change, so they can ship with U1–U5. Only the multipart upload/update require the
+  `src/client.ts` enhancement and stay deferred.
+- The multipart upload/update is the **highest-risk, lowest-priority** piece: it is the only part
+  needing a client change, and file uploads from an STDIO MCP context are awkward (no real filesystem
+  contract with the caller, so image bytes or a path must be passed in). **Recommendation: defer the
+  multipart upload/update** out of the first Products PR train; ship U1–U5 (plus image list/delete)
+  first, then decide whether upload support is worth the client surface-area increase. Flagged
+  explicitly so it is not silently dropped.
 
 **Test scenarios (if built):** multipart body assembled without JSON `Content-Type`; upload/get/update/delete paths; delete guard.
 
@@ -281,8 +294,12 @@ Each phase is a future `/backlog` slice with its own detailed plan. Listed with 
 
 ### R3 — Followers + picture (cross-entity)
 - Files: `src/tools/deals.ts`, `src/tools/persons.ts`, `src/tools/organizations.ts` (additive).
-- Endpoints: follower mgmt for deals/persons/orgs; person picture (multipart — shares the U6 client work).
-- Sequencing note: do **after** U6 if person-picture upload reuses the multipart client helper.
+- Endpoints: follower mgmt for deals/persons/orgs; person picture.
+- **Multipart dependency unconfirmed:** a v2 person-picture **upload** endpoint has not been located in
+  `docs/api/openapi-v2.yaml` (picture data may be read-only in v2). Before planning R3, verify whether a
+  v2 upload endpoint exists. If it does and reuses multipart, sequence that piece after the U6 client
+  helper lands; if it does not, R3 follower management carries **no** U6 dependency and can proceed
+  independently.
 
 ### R4 — Config writes (with v2 field renames)
 - Files: `src/schemas/fields.ts`, `src/tools/fields.ts`, `src/schemas/pipelines.ts`,
@@ -297,10 +314,11 @@ Each phase is a future `/backlog` slice with its own detailed plan. Listed with 
 
 - **R-1 (U6 client surface):** Multipart support expands `src/client.ts` and the upload UX is weak
   over STDIO. Mitigation: defer U6; ship U1–U5 without touching the client.
-- **R-2 (`/productFields` version):** v2 path existence unverified at runtime. Mitigation: implementer
-  verifies against spec + live 404 fallback to v1 (Q1).
+- **R-2 (resolved):** `/productFields` is confirmed v2 (spec line ~15282; `src/tools/fields.ts` already
+  calls it on v2). No version risk and no v1 fallback (Q1 resolved).
 - **R-3 (shared-file serialization):** U2–U4 all edit `products.ts`/`products` schema, so they cannot
-  be parallelized cleanly; sequence them. U5 (fields.ts) and U6 (client.ts) are disjoint and may overlap.
+  be parallelized cleanly; sequence them. U5 (fields.ts) and U6 (client.ts) touch disjoint files and can
+  run in parallel with the U2–U4 train.
 - **R-4 (scope creep into R1–R4):** Keep each Products unit a separate PR; do not let roadmap areas
   leak into the Products train.
 
@@ -319,7 +337,8 @@ Each phase is a future `/backlog` slice with its own detailed plan. Listed with 
 2. **U2** (write) — additive to U1's files.
 3. **U3** (variations) → **U4** (followers) — additive, sequential (shared files).
 4. **U5** (product-field read) — parallelizable (disjoint `fields.ts`).
-5. **U6** (images) — **deferred**; revisit after U1–U5 ship.
+5. **U6**: image list/delete ship with U1–U5 (JSON, no client change). Multipart upload/update is
+   deferred; revisit after U1–U5 ship.
 6. Then R1→R4 as their own planned slices. #51 closes when this work completes.
 
 Recommended first PR: **U1 + U2** together (a coherent "Products CRUD + search" slice), then U3/U4,
@@ -327,11 +346,12 @@ then U5. This balances PR size against review coherence while keeping the entity
 
 ## Open Questions (resolve at implementation, not blocking)
 
-- **Q1:** Is `/productFields` served by v2 or only v1? Verify against spec (line ~15282) and a live
-  404 probe; fall back to v1 base if needed (U5).
+- **Q1 (resolved):** `/productFields` is served by **v2**: the spec defines `getProductFields` at line
+  ~15282 and `src/tools/fields.ts` already calls it on the v2 base. Use v2; no v1 fallback.
 - **Q2:** Should `deleteProduct`/variation/follower deletes be one combined gated path or individual?
   Default: individual handlers, each calling `destructiveOperationGuard()` (matches `deletePerson`).
-- **Q3:** Ship U6 at all? Default recommendation: defer until U1–U5 land and demand is confirmed.
+- **Q3:** Ship the U6 **multipart upload/update** at all? Default: defer until U1–U5 (plus image
+  list/delete, which need no client change) land and upload demand is confirmed.
 
 ## Confidence
 
