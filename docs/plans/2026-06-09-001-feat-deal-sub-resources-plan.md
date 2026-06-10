@@ -11,6 +11,8 @@ scope: large
 
 # feat: deal sub-resources
 
+> **Revision (2026-06-10):** Incorporated ce-doc-review feedback - resolved the empty-body convert POST via the shipped `archiveProject` precedent (dropped the unimplementable `undefined` fallback); added a polling/terminal-status contract to U5; committed U4 to the schema alias and Sequencing to a single 4-slice order; corrected the stale #67/#69 merge ordering (#69 already shipped, #67 rebases onto `main`); plus minor hardening (discount UUID-keyed delete summary, installments `deal_ids` encoding verification, U3 dependency tightened to U1).
+
 ## Problem Frame
 
 The existing `deals.ts` tool covers CRUD and search on the Deal entity itself, but the Pipedrive v2 API exposes several rich sub-resource endpoints that are not yet surfaced in the MCP server:
@@ -66,8 +68,8 @@ Without these tools, AI agents using the MCP server cannot manage product pricin
 
 The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the definitive template. Key conventions observed:
 
-- Section dividers in `tools/` file: `// --- U3: Product variation handlers ---`
-- Schema blocks organized with `// --- U3: Variation schemas ---` headings in `schemas/` file.
+- Section dividers in `tools/` file: `// ─── U3: Product variation handlers ──────────────────────────────────────────` (em-dash box-drawing `─` padded to ~80 chars, not hyphens, matching `src/tools/products.ts`)
+- Schema blocks organized with `// ─── U3: Product variation schemas ───────────────────────────────────────────` headings in `schemas/` file.
 - Each handler: `const client = getClient()` then build params/body, then `const response = await client.<verb>(..., "v2")`, then `if (!response.success || !response.data) return mcpErrorResult(response);`, then return `{ content: [{ type: "text" as const, text: JSON.stringify({ summary, data, pagination? }, null, 2) }] }`.
 - List handlers always use `buildPaginationParamsV2(params.cursor, params.limit)` and `extractPaginationV2(response)`, and report `createListSummary(noun, count, pagination.has_more)`.
 - Delete handlers always call `destructiveOperationGuard()` first; if it returns truthy, return it immediately (no network call).
@@ -284,7 +286,7 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 - `pipedrive_update_deal_installment` - PATCH `/deals/{id}/installments/{installment_id}`, all fields optional.
 - `pipedrive_delete_deal_installment` - DELETE `/deals/{id}/installments/{installment_id}`, gated by `destructiveOperationGuard()`.
 
-**Dependencies:** U1, U2.
+**Dependencies:** U1 (U3 has no semantic dependency on U2/discounts; it only needs U1 to have established the sub-resource pattern in deals.ts).
 
 **Files:**
 - `src/schemas/deals.ts` (append U3 section)
@@ -294,7 +296,7 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 
 **Approach:**
 - Schema: `ListDealInstallmentsSchema` extends `PaginationParamsSchema` (for cursor/limit) with required `deal_ids: z.array(z.number().int().positive()).min(1).max(100)` plus optional `sort_by` (id/billing_date/deal_id) and `sort_direction`. Note: no `id` path param since this is a collection endpoint. `AddDealInstallmentSchema` extends `IdParamSchema` with required `description` (string), `amount` (number, positive), `billing_date` (string, YYYY-MM-DD). `UpdateDealInstallmentSchema` extends `IdParamSchema` with required `installment_id` (integer) and all optional body fields. `DeleteDealInstallmentSchema` is `IdParamSchema` + `installment_id` (integer).
-- List handler: `buildPaginationParamsV2(params.cursor, params.limit)` then `queryParams.set("deal_ids", params.deal_ids.join(","))` plus optional sort params. Endpoint is `/deals/installments` (no `{id}` segment).
+- List handler: `buildPaginationParamsV2(params.cursor, params.limit)` then `queryParams.set("deal_ids", params.deal_ids.join(","))` plus optional sort params. Endpoint is `/deals/installments` (no `{id}` segment). **Verify the `deal_ids` query encoding** against the `style`/`explode` setting for this parameter in `openapi-v2.yaml` before coding -- the comma-joined `deal_ids=1,2,3` form is an assumption. Because U3 cannot be exercised end-to-end without a Growth+ account, mocked tests assert whatever the handler emits, so a wrong path or encoding passes CI and only fails against a live tenant. Do a one-time manual smoke test against a Growth+ sandbox before closing #67.
 - Add handler: POSTs to `/deals/${params.id}/installments`. Descriptions in the tool entry should note Growth+ restriction.
 - Delete handler: `destructiveOperationGuard()` first.
 - Spec discrepancy with issue body: the issue lists this as `/deals/{id}/installments` (implying a per-deal list), but the spec's GET is at `/deals/installments` (collection-level, requires `deal_ids` array). The spec takes precedence. Plan accordingly.
@@ -327,21 +329,20 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 **Dependencies:** U1 (file already extended; stable to append).
 
 **Files:**
-- `src/schemas/deals.ts` (append U4 section or reuse `ListDealsSchema` via `.extend()`)
+- `src/schemas/deals.ts` (add the `ListArchivedDealsSchema = ListDealsSchema` alias + type export)
 - `src/tools/deals.ts` (append U4 handler + tool entry)
-- `tests/unit/schemas/deals.test.ts` (append U4 schema tests if new schema; otherwise omit)
+- `tests/unit/schemas/deals.test.ts` (no change -- the alias is covered by the existing `ListDealsSchema` tests)
 - `tests/integration/tools/deals.archived.test.ts` (new file)
 
 **Approach:**
-- Schema: `ListArchivedDealsSchema` can mirror `ListDealsSchema` exactly (same params), or import `ListDealsSchema` directly and reuse. Since the spec's filter set is identical, prefer defining a type alias `export const ListArchivedDealsSchema = ListDealsSchema` with a corresponding `export type ListArchivedDealsParams = z.infer<typeof ListArchivedDealsSchema>` to minimize duplication. If code review prefers a distinct named schema, define a `PaginationParamsSchema.extend({...})` block mirroring `ListDealsSchema`.
+- Schema: **reuse `ListDealsSchema` via an alias** -- `export const ListArchivedDealsSchema = ListDealsSchema` plus `export type ListArchivedDealsParams = z.infer<typeof ListArchivedDealsSchema>`. The spec filter set is byte-identical (openapi-v2.yaml lines 2431-2544), so a distinct `.extend({...})` block would be pure duplication. This is a committed decision, not an option for the implementer to weigh.
 - Handler: nearly identical to `listDeals` but hits `/deals/archived`. Returns `createListSummary("archived deal", ...)`.
 - No additional query params beyond what `ListDealsSchema` already captures (confirmed against spec at lines 2431-2544).
 
 **Patterns to follow:** `listDeals` in `src/tools/deals.ts` -- copy the query-param forwarding block, change endpoint to `/deals/archived` and summary noun.
 
 **Test scenarios (unit, schemas):**
-- If `ListArchivedDealsSchema = ListDealsSchema`: no separate unit tests needed; the existing schema tests cover it.
-- If a distinct schema is defined: same tests as `ListDealsSchema` -- verify defaults, filter params, sort params.
+- No separate unit tests needed: `ListArchivedDealsSchema` is an alias of `ListDealsSchema`, so the existing `ListDealsSchema` tests cover it.
 
 **Test scenarios (integration):**
 - `listArchivedDeals`: hits `/deals/archived` (not `/deals`); forwards all filter params when provided; cursor and limit forwarded; returns `{ summary: "X archived deals ...", data, pagination }`; `isError` on API failure; absent optional params not included in query string.
@@ -355,8 +356,8 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 **Goal:** Expose the async deal-to-lead conversion flow: trigger the conversion (POST, returns `conversion_id`) and poll the status (GET, returns `status` + optional `lead_id`).
 
 **Requirements:**
-- `pipedrive_convert_deal_to_lead` - POST `/deals/{id}/convert/lead`, no body. Returns `{ conversion_id }`.
-- `pipedrive_get_deal_conversion_status` - GET `/deals/{id}/convert/status/{conversion_id}`. Returns `{ status, lead_id?, conversion_id }`.
+- `pipedrive_convert_deal_to_lead` - POST `/deals/{id}/convert/lead`, no body. Returns `{ conversion_id }`. Tool description must tell the agent the conversion is async and it must poll `pipedrive_get_deal_conversion_status` with the returned `conversion_id` until a terminal status.
+- `pipedrive_get_deal_conversion_status` - GET `/deals/{id}/convert/status/{conversion_id}`. Returns `{ status, lead_id?, conversion_id }`. Tool description must enumerate the status contract so the agent knows when to stop: `completed` (terminal; carries `lead_id`), `failed`/`rejected` (terminal; stop polling, no lead produced), `not_started`/`running` (in-progress; re-poll). Only `completed` carries `lead_id`, and the spec notes conversion status is purged after a few days, so an agent that stops early or waits too long loses the `lead_id` permanently.
 
 **Dependencies:** U1 (file stable to append).
 
@@ -368,11 +369,11 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 
 **Approach:**
 - Schema: `ConvertDealToLeadSchema` is simply `IdParamSchema` (just `id`). `GetDealConversionStatusSchema` extends `IdParamSchema` with `conversion_id: z.string().uuid()`.
-- Handler `convertDealToLead`: `client.post<{ conversion_id: string }>(`/deals/${params.id}/convert/lead`, {}, "v2")`. Returns `{ summary: "Deal conversion initiated", data }` including the `conversion_id` prominently so callers know what to poll.
-- Handler `getDealConversionStatus`: `client.get<{ status: string; lead_id?: string; conversion_id: string }>(`/deals/${params.id}/convert/status/${params.conversion_id}`, undefined, "v2")`. Returns `{ summary: "Conversion status: <status>", data }`.
+- Handler `convertDealToLead`: `client.post<{ conversion_id: string }>(`/deals/${params.id}/convert/lead`, {}, "v2")`. Returns `{ summary: "Deal conversion initiated; poll get_deal_conversion_status with conversion_id until a terminal status", data }` surfacing `conversion_id` prominently.
+- Handler `getDealConversionStatus`: `client.get<{ status: string; lead_id?: string; conversion_id: string }>(`/deals/${params.id}/convert/status/${params.conversion_id}`, undefined, "v2")`. Build the summary from the status so the agent knows whether to keep polling: terminal `completed` -> `"Conversion completed; lead_id: <lead_id>"`; terminal `failed`/`rejected` -> `"Conversion <status>; no lead produced, stop polling"`; in-progress `not_started`/`running` -> `"Conversion <status>; re-poll"`.
 - No destructive guard needed (POST to convert is not a delete; GET status is read-only).
 - No pagination needed.
-- Note: the POST body for convert/lead is empty (no request body in spec). Pass `{}` (empty object) to `client.post`. The `client.post` signature accepts a body param; passing an empty object is correct.
+- **Empty body is settled, not an open risk:** `convert/lead` takes no request body, so pass `{}` (an empty object) exactly as the shipped `archiveProject` handler does (`client.post(`/projects/${params.id}/archive`, {}, "v2")`, `src/tools/projects.ts:194-207`, integration-tested). `client.post`'s `body` param is non-optional (`Record<string, unknown>`, `src/client.ts:65`), so passing `undefined` is a type error -- `{}` is the correct and only call shape.
 
 **Patterns to follow:** `getDeal` / `createDeal` in `src/tools/deals.ts` for the single-resource write+read pattern (no pagination).
 
@@ -393,11 +394,11 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 | ID | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
 | R-1 | Bulk endpoint returns HTTP 201 while single-add returns 200. The `PipedriveClient` parses the response body regardless of status code, so this is transparent -- but integration tests must assert on the returned `data` shape (array vs object). | Low | Low | Assert response shape in integration tests; do not assert HTTP status code (client abstracts it). |
-| R-2 | Discount `discount_id` is a UUID string but the spec's delete response shows `{ id: integer }`. The `id` field in the delete response may differ from the string UUID used in the path. Surface the response verbatim and note the inconsistency in comments. | Low | Low | Return the spec response as-is; add an inline comment in the delete handler noting the UUID/integer mismatch. |
+| R-2 | Discount `discount_id` is a UUID string but the spec's delete response shows `{ id: integer }`. An agent that reads the returned integer `id` and tries to reuse it as a `discount_id` in a later PATCH/DELETE will fail, because those endpoints require the UUID. | Low | Low | Return the spec response data verbatim, but key the delete handler's `summary` on the UUID the caller passed (e.g. `Discount ${discount_id} deleted from deal ${id}`), and add an inline comment noting the returned integer `id` is not a reusable discount identifier. |
 | R-3 | Installments are Growth+ only. A basic Pipedrive plan will receive a 402 or 403 for installment endpoints. The `mcpErrorResult` path handles this correctly, but tool descriptions should call out the plan restriction explicitly so AI agents understand the prerequisite. | Medium | Low | Add "Growth+ plan required" to all three installment tool descriptions. |
 | R-4 | The installments list endpoint is at `/deals/installments` (not `/deals/{id}/installments`), requiring `deal_ids` as a required query array. This diverges from the pattern of all other sub-resources in this issue. Implementors unfamiliar with the spec may code the wrong path. | Medium | Medium | Note this explicitly in U3 Approach; the schema has no `id` path param for the list. |
-| R-5 | `deals.ts` is a shared file with issue #69 (cross-entity followers). If #69 is implemented concurrently, both branches modify `src/tools/deals.ts` and `src/schemas/deals.ts`, causing merge conflicts. | High | Medium | Serialize: do not merge #67 and #69 in parallel. #67 appends sub-resources; #69 appends followers. Either sequence works, but they must not be open PRs with changes to these files at the same time. |
-| R-6 | The `convert/lead` POST has no request body, but `client.post` expects a body argument. Passing `{}` should be safe (the client serializes it as an empty JSON object `{}`; the API ignores it). Verify this does not cause a 400 on a live integration test. | Low | Low | If `{}` causes 400, pass `undefined` (check the `client.post` signature for whether body is optional). |
+| R-5 | `deals.ts` is a shared file with issue #69 (cross-entity followers). #69 has already shipped (PR #71, merged to `main`), so its follower block is already present in `src/tools/deals.ts` and `src/schemas/deals.ts`. | Resolved | Low | Branch #67 from / rebase onto current `main` (which already includes #69's followers). The only remaining conflict surface is the relative ordering of appended blocks -- mechanical. Do NOT re-add deal followers in #67. |
+| R-6 | The `convert/lead` POST has no request body. `client.post`'s `body` param is non-optional (`src/client.ts:65`), so the handler must pass a value. | Resolved | Low | Pass `{}` -- the exact shape the shipped `archiveProject` handler uses for a bodyless v2 POST (`src/tools/projects.ts:197`, integration-tested), confirming the empty object is safe. Passing `undefined` is not an option (type error against the non-optional `body` param). |
 
 ---
 
@@ -421,30 +422,27 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 
 All units share `src/tools/deals.ts` and `src/schemas/deals.ts`, so they serialize (no parallel implementation within this issue).
 
-Recommended PR order:
-1. **U1** (line-item products) -- largest surface, establishes the pattern in deals.ts. Ship as "PR slice 1".
-2. **U2** (discounts) -- additive, moderate size. Ship as "PR slice 2" (or bundle with U4 if small).
-3. **U3** (installments) -- additive, similar size to U2. Ship as "PR slice 3".
-4. **U4** (archived deals) -- small, mostly a copy of `listDeals`. Can bundle with U2 or U3 if reviewers prefer fewer PRs.
-5. **U5** (convert-to-lead) -- two handlers, small. Ship last as "PR slice 4" (or bundle with U4).
+**Committed PR order (single strategy -- 4 slices):**
+1. **Slice 1 = U1** (line-item products) -- largest surface, establishes the sub-resource pattern in deals.ts.
+2. **Slice 2 = U2 + U4** (discounts + archived deals) -- U4 is mostly a copy of `listDeals`; bundling keeps the PR coherent and small.
+3. **Slice 3 = U3** (installments) -- additive, similar size to U2; kept isolated because it is Growth+ gated and carries the `deal_ids` encoding caveat.
+4. **Slice 4 = U5** (convert-to-lead) -- two small handlers; ship last.
 
-Alternatively, a **two-slice strategy** is acceptable:
-- Slice 1: U1 + U2 (products + discounts, coherent "deal value" feature area).
-- Slice 2: U3 + U4 + U5 (installments + archived + convert, smaller units bundled).
+(An earlier draft floated an alternative two-slice bundling; it has been dropped in favor of the single committed order above so the implementer has no sequencing decision to make mid-execution.)
 
-**File-conflict alert with issue #69:** Do NOT work on #67 and #69 in parallel if both have open PRs touching `src/tools/deals.ts`. Merge #67 first; #69 rebases on top.
+**Coordination with issue #69:** #69 (cross-entity followers) has already shipped (PR #71, merged to `main`). Branch #67 from / rebase onto current `main`, which already contains #69's follower block in `deals.ts`/`schemas/deals.ts`. The only conflict surface is the relative position of appended blocks -- mechanical. Do NOT re-add deal followers in #67.
 
 ---
 
 ## Open Questions
 
-1. **Deal followers ownership boundary (#67 vs #69):** Issue #67 originally listed `/deals/{id}/followers` in scope (issue body). This plan explicitly defers all follower management (deals, persons, organizations) to issue #69 per the task prompt. The plan reviewer should confirm: is #69 still the agreed owner of deal followers, and has no work started on followers in this branch? If #69 is cancelled or de-scoped, deal follower tools would need to be added back to #67 before it is closed.
+1. **Deal followers ownership boundary (#67 vs #69): RESOLVED.** #69 owns deal-follower management and has already shipped (PR #71, merged to `main`). Deal followers are out of scope for #67 and are NOT to be re-added here. #67 can close without follower tools.
 
-2. **`client.post` with empty body:** The `convertDealToLead` handler needs to POST with no meaningful body. Does `client.post(endpoint, {}, "v2")` serialize a `{}` body or is there a way to omit the body entirely? Check `src/client.ts` `post` method signature before implementation. If the API returns 400 for an unexpected body, use `undefined` or an overload if available.
+2. **`client.post` with empty body: RESOLVED.** The shipped `archiveProject` handler (`src/tools/projects.ts:197`) already POSTs a bodyless v2 endpoint with `client.post(endpoint, {}, "v2")` and is integration-tested, confirming `{}` is accepted. `client.post`'s `body` is non-optional (`src/client.ts:65`), so `{}` is the correct call shape and `undefined` is not an option. No client change needed.
 
 3. **Discounts list -- no pagination:** The spec defines no `cursor`/`limit` for GET `/deals/{id}/discounts`. This is inconsistent with all other list sub-resources in this issue. Confirm at implementation time by trying to pass a cursor; if the API ignores it gracefully, adding pagination params anyway is harmless but unnecessary. This plan omits them from the schema.
 
-4. **Bulk-add response status code (201 vs 200):** The bulk-add endpoint returns HTTP 201 (not 200) per spec. The `PipedriveClient` parses response body regardless of status code. Confirm this remains true (read `src/client.ts` request method before implementation) so there is no silent drop of the response.
+4. **Bulk-add response status code (201 vs 200): CONFIRMED.** `src/client.ts:154` parses the response body (`await response.json()`) before the `response.ok` branch, and any 2xx -- including 201 -- returns `{ success: true, data }` (client.ts:168-172). So the 201 bulk-add response is surfaced normally; no silent drop. (Note: a non-2xx response parses the body but returns `{ success: false, error }` without `data` -- which is the desired error path, asserted via `isError: true` in the integration tests.)
 
 5. **UUID `discount_id` path param type:** Zod schema uses `z.string().uuid()`. The MCP tool `inputSchema` property should declare this as `{ type: "string", format: "uuid" }` or just `{ type: "string" }`. Use `{ type: "string" }` with a description noting UUID format, for widest compatibility with AI agents.
 
