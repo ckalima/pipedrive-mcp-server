@@ -10,12 +10,20 @@ import {
   UpdateOrganizationSchema,
   SearchOrganizationsSchema,
   DeleteOrganizationSchema,
+  ListOrganizationFollowersSchema,
+  AddOrganizationFollowerSchema,
+  DeleteOrganizationFollowerSchema,
+  OrganizationFollowersChangelogSchema,
   type ListOrganizationsParams,
   type GetOrganizationParams,
   type CreateOrganizationParams,
   type UpdateOrganizationParams,
   type SearchOrganizationsParams,
   type DeleteOrganizationParams,
+  type ListOrganizationFollowersParams,
+  type AddOrganizationFollowerParams,
+  type DeleteOrganizationFollowerParams,
+  type OrganizationFollowersChangelogParams,
 } from "../schemas/organizations.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
@@ -217,6 +225,117 @@ export async function deleteOrganization(params: DeleteOrganizationParams) {
   };
 }
 
+// ─── Follower handlers (U3, #69) ──────────────────────────────────────────────
+
+/**
+ * List followers for an organization
+ */
+export async function listOrganizationFollowers(params: ListOrganizationFollowersParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>(`/organizations/${params.id}/followers`, queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const data = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: createListSummary("follower", data.length, pagination.has_more),
+        data,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Add a follower to an organization
+ */
+export async function addOrganizationFollower(params: AddOrganizationFollowerParams) {
+  const client = getClient();
+
+  const body = { user_id: params.user_id };
+
+  const response = await client.post<unknown>(`/organizations/${params.id}/followers`, body, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: "Follower added to organization",
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Get the followers changelog for an organization
+ */
+export async function getOrganizationFollowersChangelog(params: OrganizationFollowersChangelogParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>(`/organizations/${params.id}/followers/changelog`, queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const data = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Followers changelog for organization ${params.id}`,
+        data,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Delete an organization follower
+ */
+export async function deleteOrganizationFollower(params: DeleteOrganizationFollowerParams) {
+  const guard = destructiveOperationGuard();
+  if (guard) return guard;
+
+  const client = getClient();
+
+  const response = await client.delete<{ user_id: number }>(`/organizations/${params.id}/followers/${params.follower_id}`, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Follower ${params.follower_id} removed from organization ${params.id}`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
 /**
  * Tool definitions for MCP registration
  */
@@ -355,5 +474,64 @@ export const organizationTools = [
     },
     handler: deleteOrganization,
     schema: DeleteOrganizationSchema,
+  },
+  // Follower tools (U3, #69)
+  {
+    name: "pipedrive_list_organization_followers",
+    description: "List all followers for an organization.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The organization ID" },
+        cursor: { type: "string", description: "Cursor for pagination" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+      },
+      required: ["id"],
+    },
+    handler: listOrganizationFollowers,
+    schema: ListOrganizationFollowersSchema,
+  },
+  {
+    name: "pipedrive_add_organization_follower",
+    description: "Add a follower to an organization.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The organization ID" },
+        user_id: { type: "number", description: "The ID of the user to add as a follower (required)" },
+      },
+      required: ["id", "user_id"],
+    },
+    handler: addOrganizationFollower,
+    schema: AddOrganizationFollowerSchema,
+  },
+  {
+    name: "pipedrive_delete_organization_follower",
+    description: "Remove a follower from an organization.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The organization ID" },
+        follower_id: { type: "number", description: "The ID of the follower (user) to remove" },
+      },
+      required: ["id", "follower_id"],
+    },
+    handler: deleteOrganizationFollower,
+    schema: DeleteOrganizationFollowerSchema,
+  },
+  {
+    name: "pipedrive_get_organization_followers_changelog",
+    description: "Get the followers changelog for an organization.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The organization ID" },
+        cursor: { type: "string", description: "Cursor for pagination" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+      },
+      required: ["id"],
+    },
+    handler: getOrganizationFollowersChangelog,
+    schema: OrganizationFollowersChangelogSchema,
   },
 ];

@@ -11,6 +11,10 @@ import {
   SearchOrganizationsSchema,
   DeleteOrganizationSchema,
   AddressSchema,
+  ListOrganizationFollowersSchema,
+  AddOrganizationFollowerSchema,
+  DeleteOrganizationFollowerSchema,
+  OrganizationFollowersChangelogSchema,
 } from '../../../src/schemas/organizations.js';
 
 describe('organizations schemas', () => {
@@ -248,6 +252,66 @@ describe('organizations schemas', () => {
 
     it('should reject a non-string subfield', () => {
       expect(() => AddressSchema.parse({ postal_code: 94085 as any })).toThrow();
+    });
+  });
+
+  describe('follower schemas (U3, #69)', () => {
+    describe('ListOrganizationFollowersSchema', () => {
+      it('should require id', () => {
+        expect(() => ListOrganizationFollowersSchema.parse({})).toThrow();
+      });
+
+      it('should accept id with pagination defaults', () => {
+        const result = ListOrganizationFollowersSchema.parse({ id: 3 });
+        expect(result.id).toBe(3);
+        expect(result.limit).toBe(50);
+      });
+
+      it('should reject non-positive id', () => {
+        expect(() => ListOrganizationFollowersSchema.parse({ id: 0 })).toThrow();
+      });
+    });
+
+    describe('AddOrganizationFollowerSchema', () => {
+      it('should require id and user_id', () => {
+        expect(() => AddOrganizationFollowerSchema.parse({ id: 3 })).toThrow();
+        expect(() => AddOrganizationFollowerSchema.parse({ user_id: 7 })).toThrow();
+      });
+
+      it('should accept valid id and user_id', () => {
+        const result = AddOrganizationFollowerSchema.parse({ id: 3, user_id: 7 });
+        expect(result.id).toBe(3);
+        expect(result.user_id).toBe(7);
+      });
+
+      it('should reject non-positive user_id', () => {
+        expect(() => AddOrganizationFollowerSchema.parse({ id: 3, user_id: 0 })).toThrow();
+      });
+    });
+
+    describe('DeleteOrganizationFollowerSchema', () => {
+      it('should require id and follower_id', () => {
+        expect(() => DeleteOrganizationFollowerSchema.parse({ id: 3 })).toThrow();
+        expect(() => DeleteOrganizationFollowerSchema.parse({ follower_id: 7 })).toThrow();
+      });
+
+      it('should accept valid id and follower_id', () => {
+        const result = DeleteOrganizationFollowerSchema.parse({ id: 3, follower_id: 7 });
+        expect(result.id).toBe(3);
+        expect(result.follower_id).toBe(7);
+      });
+    });
+
+    describe('OrganizationFollowersChangelogSchema', () => {
+      it('should require id', () => {
+        expect(() => OrganizationFollowersChangelogSchema.parse({})).toThrow();
+      });
+
+      it('should accept id with pagination', () => {
+        const result = OrganizationFollowersChangelogSchema.parse({ id: 3, cursor: 'xyz' });
+        expect(result.id).toBe(3);
+        expect(result.cursor).toBe('xyz');
+      });
     });
   });
 });

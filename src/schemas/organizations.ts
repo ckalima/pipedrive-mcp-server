@@ -132,6 +132,36 @@ export const SearchOrganizationsSchema = z.object({
  */
 export const DeleteOrganizationSchema = IdParamSchema;
 
+// ─── Follower schemas (U3, #69) ───────────────────────────────────────────────
+
+/**
+ * List organization followers parameters
+ */
+export const ListOrganizationFollowersSchema = PaginationParamsSchema.extend({
+  id: z.number().int().positive().describe("The organization ID"),
+});
+
+/**
+ * Add organization follower parameters
+ */
+export const AddOrganizationFollowerSchema = IdParamSchema.extend({
+  user_id: z.number().int().positive().describe("The ID of the user to add as a follower (required)"),
+});
+
+/**
+ * Delete organization follower parameters
+ */
+export const DeleteOrganizationFollowerSchema = IdParamSchema.extend({
+  follower_id: z.number().int().positive().describe("The ID of the follower (user) to remove"),
+});
+
+/**
+ * Organization followers changelog parameters
+ */
+export const OrganizationFollowersChangelogSchema = PaginationParamsSchema.extend({
+  id: z.number().int().positive().describe("The organization ID"),
+});
+
 /**
  * Type exports
  */
@@ -141,3 +171,7 @@ export type CreateOrganizationParams = z.infer<typeof CreateOrganizationSchema>;
 export type UpdateOrganizationParams = z.infer<typeof UpdateOrganizationSchema>;
 export type SearchOrganizationsParams = z.infer<typeof SearchOrganizationsSchema>;
 export type DeleteOrganizationParams = z.infer<typeof DeleteOrganizationSchema>;
+export type ListOrganizationFollowersParams = z.infer<typeof ListOrganizationFollowersSchema>;
+export type AddOrganizationFollowerParams = z.infer<typeof AddOrganizationFollowerSchema>;
+export type DeleteOrganizationFollowerParams = z.infer<typeof DeleteOrganizationFollowerSchema>;
+export type OrganizationFollowersChangelogParams = z.infer<typeof OrganizationFollowersChangelogSchema>;
