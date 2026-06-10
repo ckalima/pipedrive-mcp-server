@@ -967,7 +967,7 @@ export const productTools = [
   // Product image upload/update tools (#69 U5)
   {
     name: "pipedrive_upload_product_image",
-    description: "Upload an image for a product. Provide the image via EITHER file_path (the server reads the file — use when the caller shares the server's filesystem) OR base64_data (transport-safe). Exactly one is required. Supports png, jpeg, gif, and webp.",
+    description: "Upload an image for a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem — only use it when the server shares your filesystem (e.g. a local CLI); otherwise use base64_data, which is transport-safe.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -984,7 +984,7 @@ export const productTools = [
   },
   {
     name: "pipedrive_update_product_image",
-    description: "Update (replace) the image of a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp.",
+    description: "Update (replace) the image of a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem — only use it when the server shares your filesystem (e.g. a local CLI); otherwise use base64_data, which is transport-safe.",
     inputSchema: {
       type: "object" as const,
       properties: {
