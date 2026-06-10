@@ -15,6 +15,7 @@ import { noteTools } from "./notes.js";
 import { leadsTools } from "./leads.js";
 import { projectTools } from "./projects.js";
 import { productTools } from "./products.js";
+import { taskTools } from "./tasks.js";
 
 /**
  * All available tools
@@ -28,6 +29,7 @@ export const allTools = [
   ...leadsTools,
   ...projectTools,
   ...productTools,
+  ...taskTools,
 
   // Tier 2: Email/Mail Tools
   ...mailTools,
