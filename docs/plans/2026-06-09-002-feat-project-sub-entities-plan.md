@@ -11,6 +11,14 @@ scope: large
 
 # feat: project sub-entities (issue #68)
 
+> **Revision (2026-06-10):** Incorporated ce-doc-review feedback (5 reviewers). Fixed the
+> Requirements Traceability table (was off-by-one from R-P1 down; R-U1/R-C1 pointed at the empty
+> U8); removed the phantom U8 unit and relocated its PR-grouping guidance into Sequencing; resolved
+> Q4 (`parent_task_id` is spec-confirmed `type: string`, `z.string().optional()`); made an explicit
+> decision on the `listTasks`/`listProjectTasks` redundancy (delegate + sharpened descriptions, see
+> R-1); added LLM-visible `done`/`milestone` description guidance (R-4); noted the intentional
+> limit-100 cap (R-9) and the tool-count growth (R-8). Feasibility review passed with zero findings.
+
 > **R2 of the #51 epic.** This is the largest of the four split issues (#67-#70). Tasks and boards
 > are standalone top-level entities (not nested under `/projects/{id}/`) and are large enough to
 > justify new files. Phases also live at the top level. All endpoints confirmed against
@@ -71,12 +79,12 @@ candidates — they do not exist in the vendored spec. **Do not implement them.*
 |--------|-------------------------|------------|
 | R-T1 | Tasks CRUD (`/tasks`) | U1 (list+get), U2 (create+update+delete) |
 | R-B1 | Boards (`/boards`) | U3 (list+get+create+update+delete) |
-| R-P1 | Phases (`/phases`) | U4 (list+get+create+update+delete) |
-| R-PT1 | Project templates (`/projectTemplates`) | U5 |
-| R-PF1 | Project fields list (`/projectFields`) | U6 |
-| R-A1 | Archived projects (`/projects/archived`) | U7 |
-| R-U1 | Permitted users (`/projects/{id}/permittedUsers`) | U8 |
-| R-C1 | Project changelog (`/projects/{id}/changelog`) | U8 |
+| R-P1 | Phases (`/phases`) | U3 (boards + phases share one unit) |
+| R-PT1 | Project templates (`/projectTemplates`) | U4 |
+| R-PF1 | Project fields list (`/projectFields`) | U5 |
+| R-A1 | Archived projects (`/projects/archived`) | U6 |
+| R-U1 | Permitted users (`/projects/{id}/permittedUsers`) | U7 |
+| R-C1 | Project changelog (`/projects/{id}/changelog`) | U7 |
 
 ---
 
@@ -119,8 +127,8 @@ return { content: [{ type: "text" as const, text: JSON.stringify({ summary: `...
 ### Registration pattern (from `src/tools/index.ts`)
 
 The index imports named `*Tools` arrays and spreads them into `allTools`. New task, board, and
-phase tools must be registered here. Project-fields (U6) is appended to `fieldTools` in the
-existing `src/tools/fields.ts`. Archived projects, permitted users, and changelog (U7/U8) are
+phase tools must be registered here. Project-fields (U5) is appended to `fieldTools` in the
+existing `src/tools/fields.ts`. Archived projects, permitted users, and changelog (U6/U7) are
 additive to `src/tools/projects.ts`.
 
 ### Test pattern (from `tests/integration/tools/products.read.test.ts`)
@@ -270,10 +278,10 @@ src/
     fields.ts          # EDIT - add: ListProjectFieldsSchema
   tools/
     tasks.ts           # NEW - all task handlers + taskTools array
-    boards.ts          # NEW - board + phase handlers + boardTools + phaseTools arrays (or boardPhaseTools)
+    boards.ts          # NEW - board + phase handlers + boardTools + phaseTools arrays
     projects.ts        # EDIT - add: listArchivedProjects, getProjectPermittedUsers, getProjectChangelog handlers
     fields.ts          # EDIT - add: listProjectFields handler + fieldTools entry
-    index.ts           # EDIT - import + spread taskTools, boardTools (new files); no change for projects/fields
+    index.ts           # EDIT - import + spread taskTools, boardTools, phaseTools (new files); no change for projects/fields
 
 tests/
   unit/schemas/
@@ -291,9 +299,9 @@ tests/
 
 **Decision: boards and phases share `src/tools/boards.ts` and `src/schemas/boards.ts`** because:
 phases are always scoped to a board (`board_id` required), they share GET/POST/PATCH/DELETE shape,
-and the combined handler count (~10 handlers) remains manageable in one file. The exported arrays
-can be `boardTools` and `phaseTools` (or combined `boardPhaseTools`) — either is acceptable; keep
-them separate for clearer granularity.
+and the combined handler count (~10 handlers) remains manageable in one file. Export two separate
+arrays, `boardTools` and `phaseTools` (matching the `index.ts` import below), for clearer
+granularity in the registration list.
 
 **`src/tools/index.ts` changes required:**
 ```typescript
@@ -323,13 +331,14 @@ export const allTools = [
 
 ## Implementation Units
 
-Units are ordered for incremental, independently-mergeable delivery. U1-U2 share `tasks.ts` files
-(sequential). U3 (boards+phases) and U4 (project templates) are file-disjoint from U1-U2 and from
-each other — they can be started in parallel on separate branches. U5, U6, U7, U8 each touch
-existing files but in different locations, so they are disjoint from each other and from U1-U4.
+Units are ordered for incremental, independently-mergeable delivery. U1-U2 share the `tasks.ts`
+files (sequential). U3 (boards+phases) is in new files, file-disjoint from U1-U2. U5 (project
+fields) edits only `fields.ts`, disjoint from everything else here. U4, U6, and U7 all edit
+`src/tools/projects.ts` (and its schema), so they are NOT disjoint from each other — they must be
+serialized or merged into one PR (see R-6).
 
 The recommended PR strategy: **U1+U2 as one PR** (tasks CRUD), **U3 as one PR** (boards+phases),
-**U4+U5+U6+U7+U8 as one PR** (smaller additions to existing files). Alternatively, all 8 units
+and **U4+U5+U6+U7 as one PR** (smaller additions to existing files). Alternatively, all seven units
 ship as 3-4 PRs: tasks / boards-phases / projects-extensions. Decide based on review bandwidth.
 
 ---
@@ -337,8 +346,9 @@ ship as 3-4 PRs: tasks / boards-phases / projects-extensions. Decide based on re
 ### U1 - Tasks read (list, get)
 
 **Goal:** Add `listTasks` and `getTask` as the foundational task handlers. Establishes
-`src/tools/tasks.ts` and `src/schemas/tasks.ts`. Does NOT overlap with the existing
-`listProjectTasks` in `projects.ts` (which stays as a project-scoped convenience).
+`src/tools/tasks.ts` and `src/schemas/tasks.ts`. `listTasks` is the general-purpose task list
+(optional `project_id` filter); the existing `listProjectTasks` stays as a narrowly-scoped
+project convenience — see R-1 for the sharpened descriptions that keep the two non-overlapping.
 
 **Requirements:** R-T1 (partial)
 
@@ -353,6 +363,7 @@ ship as 3-4 PRs: tasks / boards-phases / projects-extensions. Decide based on re
 
 **Approach:**
 - `ListTasksSchema` extends `PaginationParamsSchema` with `is_done` (boolean optional), `is_milestone` (boolean optional), `assignee_id` (int optional), `project_id` (int optional), `parent_task_id` (string optional — API accepts `"null"` as a string to mean root-only, or an integer-string for subtask filtering)
+- **Limit cap (intentional):** `PaginationParamsSchema` / `buildPaginationParamsV2` clamp `limit` to max 100, matching every other v2 list tool, even though the `/tasks` spec documents max 500. Do NOT raise the schema max to 500 — keep parity with the existing convention. The test asserting `limit>100` rejection is correct, not a defect. (Applies equally to U4 templates, U5 fields, U6 archived, U7 changelog.)
 - `GetTaskSchema` = `IdParamSchema`
 - `listTasks`: `buildPaginationParamsV2` + conditionally set each filter; `client.get<unknown[]>("/tasks", queryParams, "v2")`
 - `getTask`: `client.get<unknown>(\`/tasks/${params.id}\`, undefined, "v2")`
@@ -399,7 +410,9 @@ ship as 3-4 PRs: tasks / boards-phases / projects-extensions. Decide based on re
 - `CreateTaskSchema`: `title` (string, min 1, max 255, required), `project_id` (int, required), all others optional
 - `UpdateTaskSchema`: `IdParamSchema` extended with all body fields optional
 - `DeleteTaskSchema`: `IdParamSchema`
-- **Key asymmetry:** POST/PATCH body uses `done` (int 0|1) and `milestone` (int 0|1), NOT booleans. The Zod schema must use `z.union([z.literal(0), z.literal(1)])` for these fields. The `is_done`/`is_milestone` booleans are only response fields. Document this asymmetry explicitly in schema comments.
+- **Key asymmetry (done/milestone):** POST/PATCH body uses `done` (int 0|1) and `milestone` (int 0|1), NOT booleans. The `is_done`/`is_milestone` booleans are only GET-response fields. Because the GET response trains the calling LLM on the boolean names, the LLM is likely to send `done: true` on create/update. Two mitigations, both required:
+  1. **Coerce, don't hard-reject:** wrap the field in `z.preprocess` that maps `true`/`false` to `1`/`0` before a `z.union([z.literal(0), z.literal(1)])` check, so a stray `done: true` becomes `done: 1` rather than a hard validation error the LLM cannot easily self-correct. (Reject genuinely out-of-range values like `2` or non-coercible strings.)
+  2. **LLM-visible description:** state in the `createTask`/`updateTask` tool *descriptions* (the LLM never sees schema comments) that `done`/`milestone` take `0` or `1`, and that the corresponding read fields are `is_done`/`is_milestone`.
 - `createTask`: build body with required fields first, then conditionally add optional fields
 - `updateTask`: `const { id, ...fields } = params;`, build body with only defined fields
 - `deleteTask`: `destructiveOperationGuard()` first; note the subtask cascade in the summary string
@@ -407,7 +420,7 @@ ship as 3-4 PRs: tasks / boards-phases / projects-extensions. Decide based on re
 **Test scenarios (`tasks.schema.test.ts`):**
 - `CreateTaskSchema` requires both `title` and `project_id`
 - `CreateTaskSchema` rejects `title` of length 0 and > 255
-- `done` field accepts 0 and 1, rejects 2 or `true` (boolean)
+- `done` field accepts `0` and `1`, coerces `true`→`1` and `false`→`0`, rejects `2` and non-coercible values
 - `milestone` field same constraints
 - `assignee_ids` max 10 items
 - `UpdateTaskSchema` only requires `id`
@@ -503,8 +516,8 @@ in spec. Templates are global/account-level resources.
 
 **Requirements:** R-PT1
 
-**Dependencies:** None (additive to `projects.ts`/`projects` schema; disjoint from U1-U3 until
-U7/U8 also touch those files, so coordinate sequencing with U7/U8)
+**Dependencies:** File-disjoint from U1-U3, but U4 shares `projects.ts` (and its schema) with U6
+and U7 — serialize or co-PR with them (see R-6).
 
 **Files:**
 - `src/schemas/projects.ts` (edit: add `ListProjectTemplatesSchema`, `GetProjectTemplateSchema`)
@@ -569,7 +582,7 @@ separate tool for clarity.
 **Requirements:** R-A1
 
 **Dependencies:** Additive to `projects.ts` and `projects` schema. Coordinate sequencing with U4
-and U8 (all touch the same two files) — land sequentially or as one combined PR.
+and U7 (all touch the same two files) — land sequentially or as one combined PR.
 
 **Files:**
 - `src/schemas/projects.ts` (edit: add `ListArchivedProjectsSchema`)
@@ -636,31 +649,28 @@ Project changelog:
 
 **Verification:** `npm run build` clean, `npm test` green
 
----
-
-### U8 - Project templates (get-by-id only; DEFERRED if combined with U4)
-
-> **Note:** U4 covers both list and get-by-id. This U8 slot is intentionally EMPTY — the
-> `getProjectTemplate` handler is included in U4. No separate unit needed. The issue body
-> mentioned the endpoint, which is covered by U4.
-
-If U4 and U7 cannot ship in the same PR (e.g., due to shared-file conflicts), split them
-cleanly. The recommended grouping for the `projects.ts` extensions is:
-- **PR A**: U4 (templates) + U6 (archived)
-- **PR B**: U7 (permittedUsers + changelog)
-
-Both PR A and PR B are file-disjoint from U1-U3 but file-overlapping with each other. Land them sequentially.
+> **Note:** This plan has seven units (U1-U7). `getProjectTemplate` (get-by-id) is covered by U4
+> alongside the templates list — there is no separate unit for it. PR-grouping guidance for the
+> shared-`projects.ts` units lives in the Sequencing section below.
 
 ---
 
 ## Risks
 
-**R-1 (tasks are a top-level entity, not a sub-resource).** `GET /tasks` with `project_id` filter
-is already used by `listProjectTasks` in `projects.ts`. The new `listTasks` in `tasks.ts` is a
-superset. The existing `listProjectTasks` handler in `projects.ts` should NOT be removed — it
-provides a convenience interface scoped to a project. The two tools serve different UX needs.
-Mitigation: keep both; document in `listProjectTasks` description that `pipedrive_list_tasks` is
-the full-featured alternative.
+**R-1 (listTasks vs listProjectTasks — overlapping tools).** `listTasks` (general, optional
+`project_id`) is a functional superset of the existing `listProjectTasks` (project-scoped). For an
+LLM caller, two tools that both "list a project's tasks" raise tool-selection cost and can drift.
+**Decision: keep both, but make the boundary explicit and the drift risk bounded.**
+- **Sharpen descriptions so they do not overlap.** `pipedrive_list_project_tasks`: "List tasks for
+  a project you already have the ID for — pass only `project_id`." `pipedrive_list_tasks`: "General
+  task query across all projects, with optional `project_id`, `assignee_id`, done/milestone, and
+  parent filters. Use for anything beyond a single project's full task list."
+- **Bound the drift.** Both call `GET /tasks` with identical response handling, so today they cannot
+  diverge in output shape; only the filter set differs. If `listTasks` later gains response-shaping
+  logic, refactor `listProjectTasks` to delegate to it at that point. Until then no delegation is
+  needed and U1 stays greenfield.
+- The one-line description tweak to `listProjectTasks` is a trivial, non-conflicting edit folded
+  into whichever `projects.ts`-touching unit lands first (U4/U6/U7).
 
 **R-2 (boards and phases have no cursor pagination).** The list endpoints for `/boards` and
 `/phases` return all records with no `next_cursor`. Handlers must NOT call `extractPaginationV2`
@@ -675,9 +685,11 @@ enforce in schema; assert in test.
 
 **R-4 (task body asymmetry: done/milestone vs is_done/is_milestone).** POST/PATCH task body uses
 `done` (int 0|1) and `milestone` (int 0|1); GET response returns `is_done`/`is_milestone`
-(booleans). Do not conflate them. Use `z.union([z.literal(0), z.literal(1)])` for the write
-fields. Mitigation: add prominent schema-file comment; add a schema test that explicitly rejects
-`done: true`.
+(booleans). The GET response trains the LLM on the boolean names, so it will likely send
+`done: true` on write. Mitigation (see U2 Approach): wrap the write fields in `z.preprocess` that
+coerces `true`/`false` → `1`/`0` before the `z.union([z.literal(0), z.literal(1)])` check (so a
+stray boolean is repaired, not hard-rejected), AND state the `0`/`1` rule in the LLM-visible
+`createTask`/`updateTask` tool descriptions. Add schema tests for both the accept and coerce paths.
 
 **R-5 (permittedUsers response is `number[]`, not `object[]`).** The response `data` is an array
 of integers, not objects. `client.get<number[]>(...)` is the correct type annotation. Do not
@@ -689,8 +701,26 @@ of numbers.
 in parallel to the same branch. Recommended: land U4+U6 together (same PR), then U7 (separate
 PR). Both PRs can be drafted in parallel on feature branches and merged sequentially.
 
-**R-7 (Beta tag).** All project endpoints carry `Beta` tag. Add "(Projects add-on; Projects API
-in public beta.)" to all new tool descriptions, consistent with existing `projectTools` descriptions.
+**R-7 (Beta tag).** The task/board/phase/project endpoints carry the `Beta` tag. Add "(Projects
+add-on; Projects API in public beta.)" to all new tool descriptions, consistent with existing
+`projectTools` descriptions. **Exception:** `GET /projectTemplates` is NOT Beta-tagged in the spec
+(see Q5) — omit the beta disclaimer from the two template tool descriptions.
+
+**R-8 (tool-count growth / agent selection — accept, with awareness).** This adds ~17 tools (tasks
+×5, boards ×5, phases ×5, templates ×2, plus fields/archived/permittedUsers/changelog) to an
+already-large surface; the consumer is an LLM doing tool selection from a flat list. We accept the
+growth — the endpoints are in scope for #68 — but the mitigation is that each new tool gets a
+distinct, action-scoped description (R-1 makes the one genuine near-duplicate explicit). If agent
+tool-selection accuracy is ever measured and degrades, the levers are: consolidate near-duplicates,
+group related tools in `allTools` registration order, or gate the Projects-add-on tools behind an
+env flag for operators without the add-on. None of those are needed now; noted so the option is
+pre-identified rather than discovered late.
+
+**R-9 (limit cap is intentional, not a spec mismatch).** Every new paginated list tool (tasks,
+templates, fields, archived, changelog) caps `limit` at 100 via the shared `PaginationParamsSchema`
+/ `buildPaginationParamsV2`, even though several of these endpoints document a spec max of 500. This
+is deliberate parity with every existing v2 list tool — do NOT raise the schema max to 500 for these
+endpoints. The "rejects limit>100" test assertions are correct.
 
 ---
 
@@ -705,21 +735,30 @@ in public beta.)" to all new tool descriptions, consistent with existing `projec
   - For deletes: `destructiveOperationGuard` returns error with NO network call when `PIPEDRIVE_ENABLE_DESTRUCTIVE` unset; with env set, DELETE path is called correctly
   - Board/phase-specific: no `pagination` key in response for non-paginated list endpoints
   - Phases-specific: `board_id` absent from query → schema rejection before any handler call
-  - Tasks-specific: `done: true` (boolean) rejected by schema; `done: 1` accepted
+  - Tasks-specific: `done`/`milestone` accept `0`/`1`, coerce `true`/`false`→`1`/`0`, reject `2`; `createTask`/`updateTask` descriptions state the int-vs-bool rule (LLM-visible)
   - PermittedUsers-specific: `data` is an array of integers
 
 ---
 
 ## Sequencing
 
-The recommended implementation order, from fully independent to sequentially dependent:
+The recommended implementation order. The numbering is **not** a strict dependency chain: U5
+(`fields.ts`) and the U4/U6/U7 group (`projects.ts`) are file-disjoint and can proceed in parallel.
+Real ordering constraints are only U2-after-U1 and U7-after-U4+U6.
 
 1. **U1** (tasks read) — new files, no dependencies, smallest surface to review
 2. **U2** (tasks write) — additive to U1's files, sequence after U1 lands
 3. **U3** (boards + phases) — new files, fully disjoint from U1/U2, can start in parallel
-4. **U5** (project fields) — additive to `fields.ts`/`fields` schema only, fully disjoint from all others above
-5. **U4 + U6** (templates + archived) — additive to `projects.ts` / `projects` schema, can land together after U3
-6. **U7** (permittedUsers + changelog) — additive to same files as U4/U6, sequence after U4+U6 land
+4. **U5** (project fields) — edits only `fields.ts`/`fields` schema; disjoint from everything else, can land any time
+5. **U4 + U6** (templates + archived) — additive to `projects.ts` / `projects` schema
+6. **U7** (permittedUsers + changelog) — same files as U4/U6, sequence after U4+U6 land
+
+**PR grouping for the `projects.ts` extensions** (U4/U6/U7 all edit the same two files, so they
+cannot land in parallel):
+- **PR A**: U4 (templates) + U6 (archived)
+- **PR B**: U7 (permittedUsers + changelog)
+
+Both PRs are file-disjoint from U1-U3 and U5 but overlap each other — land PR A, then PR B.
 
 **File disjoint matrix** (summary):
 
@@ -758,9 +797,11 @@ confirmed by grep of the vendored `openapi-v2.yaml`. These paths do not exist. D
 says "Marks a project board/phase as deleted" with no explicit cascade warning. Tasks reference
 `project_id`, not `board_id`. Default: do not add cascade warning unless spec confirms one.
 
-**Q4:** The `parent_task_id` filter on `GET /tasks` has type `string` in the spec (not integer)
-to allow the string value `"null"` for root-only filtering. The Zod schema should use
-`z.string().optional()` for this filter param, not `z.number()`. Confirm at implementation.
+**Q4 (resolved):** The `parent_task_id` filter on `GET /tasks` has type `string` in the spec (not
+integer), to allow the string value `"null"` for root-only filtering — confirmed in
+`docs/api/openapi-v2.yaml` and restated in "Verified v2 shapes" above. The Zod schema uses
+`z.string().optional()` for this filter param, NOT `z.number()` (which would break the `"null"`
+root-only filter). No implementation-time confirmation needed.
 
 **Q5:** `GET /projectTemplates` is NOT tagged `Beta` in the spec (unlike tasks, boards, phases).
 Omit the beta disclaimer from template tool descriptions, consistent with the spec's tagging.
@@ -777,8 +818,9 @@ pagination for boards/phases; body field asymmetry for tasks). Direct templates 
 **High** for U4-U7: small additive units with verified spec shapes; patterns already established
 in `projects.ts` and `fields.ts`.
 
-**Medium** for the `parent_task_id` filter edge case (Q4): the string/integer ambiguity is unusual
-and may require an adjustment at implementation time. Not blocking.
+**High** for the `parent_task_id` filter (Q4 now resolved): the spec confirms `type: string`, the
+schema uses `z.string().optional()`, and the `"null"` root-only sentinel is handled. No open
+ambiguity remains.
 
 **Low risk overall:** No client-side changes required, no multipart uploads, no v1 dependencies,
 no external service calls beyond the Pipedrive v2 API.
