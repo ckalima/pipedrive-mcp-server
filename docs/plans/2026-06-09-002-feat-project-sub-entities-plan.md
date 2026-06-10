@@ -19,6 +19,14 @@ scope: large
 > R-1); added LLM-visible `done`/`milestone` description guidance (R-4); noted the intentional
 > limit-100 cap (R-9) and the tool-count growth (R-8). Feasibility review passed with zero findings.
 
+> **Revision 2 (2026-06-10):** Round-2 ce-doc-review (coherence/feasibility/adversarial; feasibility
+> again clean, all round-1 fixes verified landed). Applied 3 mechanical fixes: (1) added the
+> project-template schemas/handlers to the Output Structure `projects.ts` file-map (were omitted);
+> (2) reconciled the PR-strategy line with Sequencing — U5 (`fields.ts`) is its own PR, the
+> `projects.ts` extensions are PR A=U4+U6 then PR B=U7 (no longer bundles U5); (3) corrected the R-1
+> `listProjectTasks` description to say `id` (the tool's actual input field per `ListProjectTasksSchema`),
+> not `project_id` (which is only the internal query key).
+
 > **R2 of the #51 epic.** This is the largest of the four split issues (#67-#70). Tasks and boards
 > are standalone top-level entities (not nested under `/projects/{id}/`) and are large enough to
 > justify new files. Phases also live at the top level. All endpoints confirmed against
@@ -274,12 +282,12 @@ src/
   schemas/
     tasks.ts           # NEW - all task schemas (list, get, create, update, delete)
     boards.ts          # NEW - board + phase schemas (they share a domain)
-    projects.ts        # EDIT - add: ListArchivedProjectsSchema, GetProjectPermittedUsersSchema, GetProjectChangelogSchema
+    projects.ts        # EDIT - add: ListProjectTemplatesSchema, GetProjectTemplateSchema, ListArchivedProjectsSchema, GetProjectPermittedUsersSchema, GetProjectChangelogSchema
     fields.ts          # EDIT - add: ListProjectFieldsSchema
   tools/
     tasks.ts           # NEW - all task handlers + taskTools array
     boards.ts          # NEW - board + phase handlers + boardTools + phaseTools arrays
-    projects.ts        # EDIT - add: listArchivedProjects, getProjectPermittedUsers, getProjectChangelog handlers
+    projects.ts        # EDIT - add: listProjectTemplates, getProjectTemplate, listArchivedProjects, getProjectPermittedUsers, getProjectChangelog handlers
     fields.ts          # EDIT - add: listProjectFields handler + fieldTools entry
     index.ts           # EDIT - import + spread taskTools, boardTools, phaseTools (new files); no change for projects/fields
 
@@ -338,8 +346,9 @@ fields) edits only `fields.ts`, disjoint from everything else here. U4, U6, and 
 serialized or merged into one PR (see R-6).
 
 The recommended PR strategy: **U1+U2 as one PR** (tasks CRUD), **U3 as one PR** (boards+phases),
-and **U4+U5+U6+U7 as one PR** (smaller additions to existing files). Alternatively, all seven units
-ship as 3-4 PRs: tasks / boards-phases / projects-extensions. Decide based on review bandwidth.
+**U5 as one PR** (project fields — `fields.ts`, fully disjoint), and the `projects.ts` extensions as
+**PR A = U4+U6** then **PR B = U7** (they share `projects.ts`; see Sequencing). Decide the exact
+bundling based on review bandwidth — U5 must NOT be bundled into the `projects.ts` PRs (different file).
 
 ---
 
@@ -662,7 +671,8 @@ Project changelog:
 LLM caller, two tools that both "list a project's tasks" raise tool-selection cost and can drift.
 **Decision: keep both, but make the boundary explicit and the drift risk bounded.**
 - **Sharpen descriptions so they do not overlap.** `pipedrive_list_project_tasks`: "List tasks for
-  a project you already have the ID for — pass only `project_id`." `pipedrive_list_tasks`: "General
+  a project you already have the ID for — pass only `id` (the project ID; `ListProjectTasksSchema`
+  exposes `id`, not `project_id`)." `pipedrive_list_tasks`: "General
   task query across all projects, with optional `project_id`, `assignee_id`, done/milestone, and
   parent filters. Use for anything beyond a single project's full task list."
 - **Bound the drift.** Both call `GET /tasks` with identical response handling, so today they cannot
