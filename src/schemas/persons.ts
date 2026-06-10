@@ -132,6 +132,43 @@ export const SearchPersonsSchema = z.object({
  */
 export const DeletePersonSchema = IdParamSchema;
 
+// ─── Follower schemas (U2, #69) ───────────────────────────────────────────────
+
+/**
+ * List person followers parameters
+ */
+export const ListPersonFollowersSchema = PaginationParamsSchema.extend({
+  id: z.number().int().positive().describe("The person ID"),
+});
+
+/**
+ * Add person follower parameters
+ */
+export const AddPersonFollowerSchema = IdParamSchema.extend({
+  user_id: z.number().int().positive().describe("The ID of the user to add as a follower (required)"),
+});
+
+/**
+ * Delete person follower parameters
+ */
+export const DeletePersonFollowerSchema = IdParamSchema.extend({
+  follower_id: z.number().int().positive().describe("The ID of the follower (user) to remove"),
+});
+
+/**
+ * Person followers changelog parameters
+ */
+export const PersonFollowersChangelogSchema = PaginationParamsSchema.extend({
+  id: z.number().int().positive().describe("The person ID"),
+});
+
+// ─── Picture schema (U2, #69; read-only — no v2 upload endpoint) ──────────────
+
+/**
+ * Get person picture parameters
+ */
+export const GetPersonPictureSchema = IdParamSchema;
+
 /**
  * Type exports
  */
@@ -141,3 +178,8 @@ export type CreatePersonParams = z.infer<typeof CreatePersonSchema>;
 export type UpdatePersonParams = z.infer<typeof UpdatePersonSchema>;
 export type SearchPersonsParams = z.infer<typeof SearchPersonsSchema>;
 export type DeletePersonParams = z.infer<typeof DeletePersonSchema>;
+export type ListPersonFollowersParams = z.infer<typeof ListPersonFollowersSchema>;
+export type AddPersonFollowerParams = z.infer<typeof AddPersonFollowerSchema>;
+export type DeletePersonFollowerParams = z.infer<typeof DeletePersonFollowerSchema>;
+export type PersonFollowersChangelogParams = z.infer<typeof PersonFollowersChangelogSchema>;
+export type GetPersonPictureParams = z.infer<typeof GetPersonPictureSchema>;

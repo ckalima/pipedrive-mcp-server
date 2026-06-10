@@ -12,6 +12,11 @@ import {
   DeletePersonSchema,
   EmailInputSchema,
   PhoneInputSchema,
+  ListPersonFollowersSchema,
+  AddPersonFollowerSchema,
+  DeletePersonFollowerSchema,
+  PersonFollowersChangelogSchema,
+  GetPersonPictureSchema,
 } from '../../../src/schemas/persons.js';
 
 describe('persons schemas', () => {
@@ -286,6 +291,81 @@ describe('persons schemas', () => {
     it('should accept valid id', () => {
       const result = DeletePersonSchema.parse({ id: 456 });
       expect(result.id).toBe(456);
+    });
+  });
+
+  describe('follower schemas (U2, #69)', () => {
+    describe('ListPersonFollowersSchema', () => {
+      it('should require id', () => {
+        expect(() => ListPersonFollowersSchema.parse({})).toThrow();
+      });
+
+      it('should accept id with pagination defaults', () => {
+        const result = ListPersonFollowersSchema.parse({ id: 3 });
+        expect(result.id).toBe(3);
+        expect(result.limit).toBe(50);
+      });
+
+      it('should reject non-positive id', () => {
+        expect(() => ListPersonFollowersSchema.parse({ id: 0 })).toThrow();
+      });
+    });
+
+    describe('AddPersonFollowerSchema', () => {
+      it('should require id and user_id', () => {
+        expect(() => AddPersonFollowerSchema.parse({ id: 3 })).toThrow();
+        expect(() => AddPersonFollowerSchema.parse({ user_id: 7 })).toThrow();
+      });
+
+      it('should accept valid id and user_id', () => {
+        const result = AddPersonFollowerSchema.parse({ id: 3, user_id: 7 });
+        expect(result.id).toBe(3);
+        expect(result.user_id).toBe(7);
+      });
+
+      it('should reject non-positive user_id', () => {
+        expect(() => AddPersonFollowerSchema.parse({ id: 3, user_id: 0 })).toThrow();
+      });
+    });
+
+    describe('DeletePersonFollowerSchema', () => {
+      it('should require id and follower_id', () => {
+        expect(() => DeletePersonFollowerSchema.parse({ id: 3 })).toThrow();
+        expect(() => DeletePersonFollowerSchema.parse({ follower_id: 7 })).toThrow();
+      });
+
+      it('should accept valid id and follower_id', () => {
+        const result = DeletePersonFollowerSchema.parse({ id: 3, follower_id: 7 });
+        expect(result.id).toBe(3);
+        expect(result.follower_id).toBe(7);
+      });
+    });
+
+    describe('PersonFollowersChangelogSchema', () => {
+      it('should require id', () => {
+        expect(() => PersonFollowersChangelogSchema.parse({})).toThrow();
+      });
+
+      it('should accept id with pagination', () => {
+        const result = PersonFollowersChangelogSchema.parse({ id: 3, cursor: 'xyz' });
+        expect(result.id).toBe(3);
+        expect(result.cursor).toBe('xyz');
+      });
+    });
+  });
+
+  describe('GetPersonPictureSchema (U2, #69)', () => {
+    it('should require id', () => {
+      expect(() => GetPersonPictureSchema.parse({})).toThrow();
+    });
+
+    it('should accept valid id', () => {
+      const result = GetPersonPictureSchema.parse({ id: 42 });
+      expect(result.id).toBe(42);
+    });
+
+    it('should reject non-positive id', () => {
+      expect(() => GetPersonPictureSchema.parse({ id: 0 })).toThrow();
     });
   });
 });

@@ -10,12 +10,22 @@ import {
   UpdatePersonSchema,
   SearchPersonsSchema,
   DeletePersonSchema,
+  ListPersonFollowersSchema,
+  AddPersonFollowerSchema,
+  DeletePersonFollowerSchema,
+  PersonFollowersChangelogSchema,
+  GetPersonPictureSchema,
   type ListPersonsParams,
   type GetPersonParams,
   type CreatePersonParams,
   type UpdatePersonParams,
   type SearchPersonsParams,
   type DeletePersonParams,
+  type ListPersonFollowersParams,
+  type AddPersonFollowerParams,
+  type DeletePersonFollowerParams,
+  type PersonFollowersChangelogParams,
+  type GetPersonPictureParams,
 } from "../schemas/persons.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
@@ -225,6 +235,142 @@ export async function deletePerson(params: DeletePersonParams) {
   };
 }
 
+// ─── Follower handlers (U2, #69) ──────────────────────────────────────────────
+
+/**
+ * List followers for a person
+ */
+export async function listPersonFollowers(params: ListPersonFollowersParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>(`/persons/${params.id}/followers`, queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const data = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: createListSummary("follower", data.length, pagination.has_more),
+        data,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Add a follower to a person
+ */
+export async function addPersonFollower(params: AddPersonFollowerParams) {
+  const client = getClient();
+
+  const body = { user_id: params.user_id };
+
+  const response = await client.post<unknown>(`/persons/${params.id}/followers`, body, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: "Follower added to person",
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Get the followers changelog for a person
+ */
+export async function getPersonFollowersChangelog(params: PersonFollowersChangelogParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>(`/persons/${params.id}/followers/changelog`, queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const data = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Followers changelog for person ${params.id}`,
+        data,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Delete a person follower
+ */
+export async function deletePersonFollower(params: DeletePersonFollowerParams) {
+  const guard = destructiveOperationGuard();
+  if (guard) return guard;
+
+  const client = getClient();
+
+  const response = await client.delete<{ user_id: number }>(`/persons/${params.id}/followers/${params.follower_id}`, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Follower ${params.follower_id} removed from person ${params.id}`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+// ─── Picture handler (U2, #69; read-only — no v2 upload endpoint) ─────────────
+
+/**
+ * Get the picture for a person (read-only; the v2 API exposes no upload endpoint)
+ */
+export async function getPersonPicture(params: GetPersonPictureParams) {
+  const client = getClient();
+
+  const response = await client.get<unknown>(`/persons/${params.id}/picture`, undefined, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Picture for person ${params.id}`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
 /**
  * Tool definitions for MCP registration
  */
@@ -389,5 +535,78 @@ export const personTools = [
     },
     handler: deletePerson,
     schema: DeletePersonSchema,
+  },
+  // Follower tools (U2, #69)
+  {
+    name: "pipedrive_list_person_followers",
+    description: "List all followers for a person.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The person ID" },
+        cursor: { type: "string", description: "Cursor for pagination" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+      },
+      required: ["id"],
+    },
+    handler: listPersonFollowers,
+    schema: ListPersonFollowersSchema,
+  },
+  {
+    name: "pipedrive_add_person_follower",
+    description: "Add a follower to a person.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The person ID" },
+        user_id: { type: "number", description: "The ID of the user to add as a follower (required)" },
+      },
+      required: ["id", "user_id"],
+    },
+    handler: addPersonFollower,
+    schema: AddPersonFollowerSchema,
+  },
+  {
+    name: "pipedrive_delete_person_follower",
+    description: "Remove a follower from a person.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The person ID" },
+        follower_id: { type: "number", description: "The ID of the follower (user) to remove" },
+      },
+      required: ["id", "follower_id"],
+    },
+    handler: deletePersonFollower,
+    schema: DeletePersonFollowerSchema,
+  },
+  {
+    name: "pipedrive_get_person_followers_changelog",
+    description: "Get the followers changelog for a person.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The person ID" },
+        cursor: { type: "string", description: "Cursor for pagination" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+      },
+      required: ["id"],
+    },
+    handler: getPersonFollowersChangelog,
+    schema: PersonFollowersChangelogSchema,
+  },
+  // Picture tool (U2, #69; read-only)
+  {
+    name: "pipedrive_get_person_picture",
+    description: "Get the picture for a person (read-only; returns picture metadata and sized image URLs). Returns an error if the person has no picture.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The person ID" },
+      },
+      required: ["id"],
+    },
+    handler: getPersonPicture,
+    schema: GetPersonPictureSchema,
   },
 ];
