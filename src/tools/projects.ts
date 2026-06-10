@@ -12,6 +12,11 @@ import {
   ArchiveProjectSchema,
   SearchProjectsSchema,
   ListProjectTasksSchema,
+  ListProjectTemplatesSchema,
+  GetProjectTemplateSchema,
+  ListArchivedProjectsSchema,
+  GetProjectPermittedUsersSchema,
+  GetProjectChangelogSchema,
   type ListProjectsParams,
   type GetProjectParams,
   type CreateProjectParams,
@@ -20,6 +25,11 @@ import {
   type ArchiveProjectParams,
   type SearchProjectsParams,
   type ListProjectTasksParams,
+  type ListProjectTemplatesParams,
+  type GetProjectTemplateParams,
+  type ListArchivedProjectsParams,
+  type GetProjectPermittedUsersParams,
+  type GetProjectChangelogParams,
 } from "../schemas/projects.js";
 import {
   buildPaginationParamsV2,
@@ -271,6 +281,146 @@ export async function listProjectTasks(params: ListProjectTasksParams) {
 }
 
 /**
+ * List project templates (paginated)
+ */
+export async function listProjectTemplates(params: ListProjectTemplatesParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>("/projectTemplates", queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const templates = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: createListSummary("project template", templates.length, pagination.has_more),
+        data: templates,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Get a single project template by ID
+ */
+export async function getProjectTemplate(params: GetProjectTemplateParams) {
+  const client = getClient();
+
+  const response = await client.get<unknown>(`/projectTemplates/${params.id}`, undefined, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Project template ${params.id}`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * List archived projects with optional filtering
+ */
+export async function listArchivedProjects(params: ListArchivedProjectsParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  if (params.filter_id) queryParams.set("filter_id", String(params.filter_id));
+  if (params.phase_id) queryParams.set("phase_id", String(params.phase_id));
+  if (params.status) queryParams.set("status", params.status);
+
+  const response = await client.get<unknown[]>("/projects/archived", queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const projects = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: createListSummary("archived project", projects.length, pagination.has_more),
+        data: projects,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Get permitted users for a project.
+ * Response data is an array of integer user IDs (not objects) with no pagination.
+ */
+export async function getProjectPermittedUsers(params: GetProjectPermittedUsersParams) {
+  const client = getClient();
+
+  const response = await client.get<number[]>(`/projects/${params.id}/permittedUsers`, undefined, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const data = response.data;
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `${data.length} permitted user(s) for project ${params.id}`,
+        data,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Get project changelog (cursor paginated)
+ */
+export async function getProjectChangelog(params: GetProjectChangelogParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>(`/projects/${params.id}/changelog`, queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const entries = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: createListSummary("changelog entry", entries.length, pagination.has_more),
+        data: entries,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
  * Tool definitions for MCP registration
  */
 export const projectTools = [
@@ -396,7 +546,7 @@ export const projectTools = [
   },
   {
     name: "pipedrive_list_project_tasks",
-    description: "List tasks belonging to a project. (Requires the Projects add-on; Projects API is in public beta.)",
+    description: "List tasks for a project you already have the ID for — pass only `id` (the project ID). For broader task queries use pipedrive_list_tasks. (Projects add-on; Projects API in public beta.)",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -408,5 +558,75 @@ export const projectTools = [
     },
     handler: listProjectTasks,
     schema: ListProjectTasksSchema,
+  },
+  {
+    name: "pipedrive_list_project_templates",
+    description: "List all project templates available in Pipedrive. Returns paginated results.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items to return (1-100, default 50)" },
+      },
+    },
+    handler: listProjectTemplates,
+    schema: ListProjectTemplatesSchema,
+  },
+  {
+    name: "pipedrive_get_project_template",
+    description: "Get detailed information about a specific project template by ID.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The project template ID" },
+      },
+      required: ["id"],
+    },
+    handler: getProjectTemplate,
+    schema: GetProjectTemplateSchema,
+  },
+  {
+    name: "pipedrive_list_archived_projects",
+    description: "List archived projects from Pipedrive with optional filtering by filter, phase, or status. (Projects add-on; Projects API in public beta.)",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items to return (1-100, default 50)" },
+        filter_id: { type: "number", description: "Filter by saved filter ID" },
+        phase_id: { type: "number", description: "Filter by phase ID" },
+        status: { type: "string", description: "Filter by project status (e.g. open, completed, canceled)" },
+      },
+    },
+    handler: listArchivedProjects,
+    schema: ListArchivedProjectsSchema,
+  },
+  {
+    name: "pipedrive_get_project_permitted_users",
+    description: "Get the list of user IDs that have permission to access a project. Returns an array of integer user IDs. (Projects add-on; Projects API in public beta.)",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The project ID" },
+      },
+      required: ["id"],
+    },
+    handler: getProjectPermittedUsers,
+    schema: GetProjectPermittedUsersSchema,
+  },
+  {
+    name: "pipedrive_get_project_changelog",
+    description: "Get the changelog for a project, showing what changed, when, and by whom. Returns paginated entries with actor_user_id, new_values, and old_values. (Projects add-on; Projects API in public beta.)",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The project ID" },
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items to return (1-100, default 50)" },
+      },
+      required: ["id"],
+    },
+    handler: getProjectChangelog,
+    schema: GetProjectChangelogSchema,
   },
 ];

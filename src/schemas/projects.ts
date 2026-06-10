@@ -119,6 +119,40 @@ export const ListProjectTasksSchema = PaginationParamsSchema.extend({
 });
 
 /**
+ * List project templates parameters (v2 GET /projectTemplates)
+ */
+export const ListProjectTemplatesSchema = PaginationParamsSchema;
+
+/**
+ * Get project template parameters
+ */
+export const GetProjectTemplateSchema = IdParamSchema;
+
+/**
+ * List archived projects parameters (v2 GET /projects/archived)
+ */
+export const ListArchivedProjectsSchema = PaginationParamsSchema.extend({
+  filter_id: z.number().int().positive().optional()
+    .describe("Filter by saved filter ID"),
+  phase_id: z.number().int().positive().optional()
+    .describe("Filter by phase ID"),
+  status: z.string().optional()
+    .describe("Filter by project status (e.g. open, completed, canceled)"),
+});
+
+/**
+ * Get project permitted users parameters
+ */
+export const GetProjectPermittedUsersSchema = IdParamSchema;
+
+/**
+ * Get project changelog parameters (v2 GET /projects/{id}/changelog)
+ */
+export const GetProjectChangelogSchema = PaginationParamsSchema.extend({
+  id: z.number().int().positive().describe("Project ID"),
+});
+
+/**
  * Type exports
  */
 export type ListProjectsParams = z.infer<typeof ListProjectsSchema>;
@@ -129,3 +163,8 @@ export type DeleteProjectParams = z.infer<typeof DeleteProjectSchema>;
 export type ArchiveProjectParams = z.infer<typeof ArchiveProjectSchema>;
 export type SearchProjectsParams = z.infer<typeof SearchProjectsSchema>;
 export type ListProjectTasksParams = z.infer<typeof ListProjectTasksSchema>;
+export type ListProjectTemplatesParams = z.infer<typeof ListProjectTemplatesSchema>;
+export type GetProjectTemplateParams = z.infer<typeof GetProjectTemplateSchema>;
+export type ListArchivedProjectsParams = z.infer<typeof ListArchivedProjectsSchema>;
+export type GetProjectPermittedUsersParams = z.infer<typeof GetProjectPermittedUsersSchema>;
+export type GetProjectChangelogParams = z.infer<typeof GetProjectChangelogSchema>;

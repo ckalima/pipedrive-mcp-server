@@ -230,6 +230,65 @@ describe('fields tools', () => {
     });
   });
 
+  describe('listProjectFields', () => {
+    it('should return list of project fields with "project field" summary', async () => {
+      const fields = [
+        createFieldFixture('board', 'Board', 'projects_board'),
+        createFieldFixture('phase', 'Phase', 'projects_phase'),
+        createFieldFixture('name', 'Name', 'varchar'),
+      ];
+      mockApiSuccess(fields);
+      const { listProjectFields } = await getFieldsTools();
+
+      const result = await listProjectFields({});
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.summary).toContain('3 project fields');
+      expect(parsed.data).toHaveLength(3);
+    });
+
+    it('should call v2 /projectFields endpoint', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listProjectFields } = await getFieldsTools();
+
+      await listProjectFields({});
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('/api/v2/projectFields');
+    });
+
+    it('should include next_cursor from additional_data in pagination', async () => {
+      mockFetch({ data: [createFieldFixture('name', 'Name', 'varchar')], additional_data: paginationFixtures.v2WithMore });
+      const { listProjectFields } = await getFieldsTools();
+
+      const result = await listProjectFields({});
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
+      expect(parsed.pagination.has_more).toBe(true);
+    });
+
+    it('should forward cursor and limit in request', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listProjectFields } = await getFieldsTools();
+
+      await listProjectFields({ cursor: 'pf_cursor', limit: 25 });
+
+      const [url] = mockFn.mock.calls[0];
+      expect(url).toContain('cursor=pf_cursor');
+      expect(url).toContain('limit=25');
+    });
+
+    it('should return isError on API failure', async () => {
+      mockApiError(500, 'Internal Server Error');
+      const { listProjectFields } = await getFieldsTools();
+
+      const result = await listProjectFields({});
+
+      expect(result.isError).toBe(true);
+    });
+  });
+
   describe('getField', () => {
     it('should return single deal field from list', async () => {
       // getField paginates all fields and finds by key

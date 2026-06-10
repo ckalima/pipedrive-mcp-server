@@ -9,6 +9,7 @@ import {
   ListDealFieldsSchema,
   ListPersonFieldsSchema,
   ListProductFieldsSchema,
+  ListProjectFieldsSchema,
   GetFieldSchema,
 } from '../../../src/schemas/fields.js';
 
@@ -119,6 +120,32 @@ describe('fields schemas', () => {
 
     it('should reject limit above 100', () => {
       expect(() => ListProductFieldsSchema.parse({ limit: 101 })).toThrow();
+    });
+  });
+
+  describe('ListProjectFieldsSchema', () => {
+    it('should accept minimal params (empty object)', () => {
+      const result = ListProjectFieldsSchema.parse({});
+      expect(result.limit).toBe(50);
+    });
+
+    it('should accept cursor and limit', () => {
+      const result = ListProjectFieldsSchema.parse({ cursor: 'tok', limit: 25 });
+      expect(result.cursor).toBe('tok');
+      expect(result.limit).toBe(25);
+    });
+
+    it('should accept limit up to 100', () => {
+      const result = ListProjectFieldsSchema.parse({ limit: 100 });
+      expect(result.limit).toBe(100);
+    });
+
+    it('should reject limit above 100', () => {
+      expect(() => ListProjectFieldsSchema.parse({ limit: 101 })).toThrow();
+    });
+
+    it('should reject limit of 0', () => {
+      expect(() => ListProjectFieldsSchema.parse({ limit: 0 })).toThrow();
     });
   });
 

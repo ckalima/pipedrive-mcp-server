@@ -12,6 +12,11 @@ import {
   ArchiveProjectSchema,
   SearchProjectsSchema,
   ListProjectTasksSchema,
+  ListProjectTemplatesSchema,
+  GetProjectTemplateSchema,
+  ListArchivedProjectsSchema,
+  GetProjectPermittedUsersSchema,
+  GetProjectChangelogSchema,
 } from '../../../src/schemas/projects.js';
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
@@ -335,6 +340,138 @@ describe('projects schemas', () => {
     it('should strip the removed v1 start param', () => {
       const result = ListProjectTasksSchema.parse({ id: 1, start: 50 } as Record<string, unknown>);
       expect((result as Record<string, unknown>).start).toBeUndefined();
+    });
+  });
+
+  describe('ListProjectTemplatesSchema', () => {
+    it('should accept empty input and apply defaults', () => {
+      const result = ListProjectTemplatesSchema.parse({});
+      expect(result.limit).toBe(50);
+    });
+
+    it('should accept cursor and limit', () => {
+      const result = ListProjectTemplatesSchema.parse({ cursor: 'abc', limit: 25 });
+      expect(result.cursor).toBe('abc');
+      expect(result.limit).toBe(25);
+    });
+
+    it('should reject limit of 0', () => {
+      expect(() => ListProjectTemplatesSchema.parse({ limit: 0 })).toThrow();
+    });
+
+    it('should reject limit over 100', () => {
+      expect(() => ListProjectTemplatesSchema.parse({ limit: 101 })).toThrow();
+    });
+  });
+
+  describe('GetProjectTemplateSchema', () => {
+    it('should require id', () => {
+      expect(() => GetProjectTemplateSchema.parse({})).toThrow();
+    });
+
+    it('should accept valid positive integer id', () => {
+      const result = GetProjectTemplateSchema.parse({ id: 5 });
+      expect(result.id).toBe(5);
+    });
+
+    it('should reject id of 0', () => {
+      expect(() => GetProjectTemplateSchema.parse({ id: 0 })).toThrow();
+    });
+
+    it('should reject negative id', () => {
+      expect(() => GetProjectTemplateSchema.parse({ id: -1 })).toThrow();
+    });
+
+    it('should reject string id', () => {
+      expect(() => GetProjectTemplateSchema.parse({ id: '1' })).toThrow();
+    });
+  });
+
+  describe('ListArchivedProjectsSchema', () => {
+    it('should accept empty input and apply defaults', () => {
+      const result = ListArchivedProjectsSchema.parse({});
+      expect(result.limit).toBe(50);
+    });
+
+    it('should accept all optional filters', () => {
+      const result = ListArchivedProjectsSchema.parse({
+        cursor: 'c1',
+        limit: 10,
+        filter_id: 3,
+        phase_id: 2,
+        status: 'completed',
+      });
+      expect(result.filter_id).toBe(3);
+      expect(result.phase_id).toBe(2);
+      expect(result.status).toBe('completed');
+    });
+
+    it('should reject limit of 0', () => {
+      expect(() => ListArchivedProjectsSchema.parse({ limit: 0 })).toThrow();
+    });
+
+    it('should reject limit over 100', () => {
+      expect(() => ListArchivedProjectsSchema.parse({ limit: 101 })).toThrow();
+    });
+
+    it('should reject non-positive filter_id', () => {
+      expect(() => ListArchivedProjectsSchema.parse({ filter_id: 0 })).toThrow();
+      expect(() => ListArchivedProjectsSchema.parse({ filter_id: -1 })).toThrow();
+    });
+  });
+
+  describe('GetProjectPermittedUsersSchema', () => {
+    it('should require id', () => {
+      expect(() => GetProjectPermittedUsersSchema.parse({})).toThrow();
+    });
+
+    it('should accept valid positive integer id', () => {
+      const result = GetProjectPermittedUsersSchema.parse({ id: 7 });
+      expect(result.id).toBe(7);
+    });
+
+    it('should reject id of 0', () => {
+      expect(() => GetProjectPermittedUsersSchema.parse({ id: 0 })).toThrow();
+    });
+
+    it('should reject negative id', () => {
+      expect(() => GetProjectPermittedUsersSchema.parse({ id: -1 })).toThrow();
+    });
+
+    it('should reject string id', () => {
+      expect(() => GetProjectPermittedUsersSchema.parse({ id: '1' })).toThrow();
+    });
+  });
+
+  describe('GetProjectChangelogSchema', () => {
+    it('should require id', () => {
+      expect(() => GetProjectChangelogSchema.parse({})).toThrow();
+    });
+
+    it('should accept id with defaults', () => {
+      const result = GetProjectChangelogSchema.parse({ id: 1 });
+      expect(result.id).toBe(1);
+      expect(result.limit).toBe(50);
+    });
+
+    it('should accept id, cursor, and limit', () => {
+      const result = GetProjectChangelogSchema.parse({ id: 1, cursor: 'c1', limit: 25 });
+      expect(result.id).toBe(1);
+      expect(result.cursor).toBe('c1');
+      expect(result.limit).toBe(25);
+    });
+
+    it('should reject limit of 0', () => {
+      expect(() => GetProjectChangelogSchema.parse({ id: 1, limit: 0 })).toThrow();
+    });
+
+    it('should reject limit over 100', () => {
+      expect(() => GetProjectChangelogSchema.parse({ id: 1, limit: 101 })).toThrow();
+    });
+
+    it('should reject non-positive id', () => {
+      expect(() => GetProjectChangelogSchema.parse({ id: 0 })).toThrow();
+      expect(() => GetProjectChangelogSchema.parse({ id: -1 })).toThrow();
     });
   });
 });

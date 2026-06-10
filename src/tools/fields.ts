@@ -9,11 +9,13 @@ import {
   ListDealFieldsSchema,
   ListPersonFieldsSchema,
   ListProductFieldsSchema,
+  ListProjectFieldsSchema,
   GetFieldSchema,
   type ListOrganizationFieldsParams,
   type ListDealFieldsParams,
   type ListPersonFieldsParams,
   type ListProductFieldsParams,
+  type ListProjectFieldsParams,
   type GetFieldParams,
 } from "../schemas/fields.js";
 import {
@@ -133,6 +135,35 @@ export async function listProductFields(params: ListProductFieldsParams) {
       type: "text" as const,
       text: JSON.stringify({
         summary: createListSummary("product field", fields.length, pagination.has_more),
+        data: fields,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * List project fields
+ */
+export async function listProjectFields(params: ListProjectFieldsParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>("/projectFields", queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const fields = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: createListSummary("project field", fields.length, pagination.has_more),
         data: fields,
         pagination,
       }, null, 2),
@@ -273,6 +304,19 @@ export const fieldTools = [
     },
     handler: listProductFields,
     schema: ListProductFieldsSchema,
+  },
+  {
+    name: "pipedrive_list_project_fields",
+    description: "List all project field definitions, including custom fields. (Projects add-on; Projects API in public beta.)",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        cursor: { type: "string", description: "Cursor for pagination (from previous response)" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+      },
+    },
+    handler: listProjectFields,
+    schema: ListProjectFieldsSchema,
   },
   {
     name: "pipedrive_get_field",

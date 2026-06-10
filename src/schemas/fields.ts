@@ -35,6 +35,11 @@ export const ListProductFieldsSchema = PaginationParamsSchema.extend({
 });
 
 /**
+ * List project fields parameters
+ */
+export const ListProjectFieldsSchema = PaginationParamsSchema;
+
+/**
  * Get field by key parameters
  */
 export const GetFieldSchema = z.object({
@@ -51,4 +56,5 @@ export type ListOrganizationFieldsParams = z.infer<typeof ListOrganizationFields
 export type ListDealFieldsParams = z.infer<typeof ListDealFieldsSchema>;
 export type ListPersonFieldsParams = z.infer<typeof ListPersonFieldsSchema>;
 export type ListProductFieldsParams = z.infer<typeof ListProductFieldsSchema>;
+export type ListProjectFieldsParams = z.infer<typeof ListProjectFieldsSchema>;
 export type GetFieldParams = z.infer<typeof GetFieldSchema>;
