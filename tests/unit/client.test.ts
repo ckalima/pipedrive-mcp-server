@@ -158,3 +158,145 @@ describe('PipedriveClient routing', () => {
     });
   });
 });
+
+/**
+ * Multipart routing (U4, #69).
+ *
+ * postMultipart/putMultipart must send a FormData body WITHOUT a manual
+ * Content-Type, so the fetch/undici layer generates the multipart boundary.
+ */
+describe('PipedriveClient multipart (U4, #69)', () => {
+  beforeEach(() => {
+    setupEnvWithApiKey(VALID_API_KEY);
+  });
+
+  function makeFormData(): FormData {
+    const fd = new FormData();
+    fd.append('data', new Blob([Buffer.from('hello')]), 'hello.png');
+    return fd;
+  }
+
+  describe('postMultipart', () => {
+    it('sends x-api-token header and no api_token query param on v2', async () => {
+      const mockFn = makeFetchMock();
+      const client = new PipedriveClient();
+
+      await client.postMultipart('/products/3/images', makeFormData(), 'v2');
+
+      const [url, init] = mockFn.mock.calls[0];
+      expect(String(url)).toContain('/api/v2/products/3/images');
+      expect(String(url)).not.toContain('api_token=');
+      const headers = init?.headers as Record<string, string> | undefined;
+      expect(headers?.['x-api-token']).toBe(VALID_API_KEY);
+      expect(init?.method).toBe('POST');
+    });
+
+    it('does NOT set Content-Type: application/json (app-side omission guard)', async () => {
+      const mockFn = makeFetchMock();
+      const client = new PipedriveClient();
+
+      await client.postMultipart('/products/3/images', makeFormData(), 'v2');
+
+      const [, init] = mockFn.mock.calls[0];
+      const headers = init?.headers as Record<string, string> | undefined;
+      // The client must not set any Content-Type itself — fetch derives the
+      // multipart boundary from the FormData body automatically.
+      expect(headers?.['Content-Type']).toBeUndefined();
+      expect(headers?.['content-type']).toBeUndefined();
+    });
+
+    it('sends the FormData instance as the request body (not JSON.stringify-d)', async () => {
+      const mockFn = makeFetchMock();
+      const client = new PipedriveClient();
+
+      await client.postMultipart('/products/3/images', makeFormData(), 'v2');
+
+      const [, init] = mockFn.mock.calls[0];
+      expect(init?.body).toBeInstanceOf(FormData);
+    });
+
+    it('real-boundary: the actual outbound Content-Type starts with "multipart/form-data; boundary="', async () => {
+      // Run the exact init the client builds through the real undici Request
+      // encoder (the same machinery fetch uses) to prove the boundary is
+      // genuinely generated, not merely that we avoided overriding it.
+      let outboundContentType: string | null = null;
+      const mockFn = vi.fn(async (url: string | URL, init?: RequestInit) => {
+        const req = new Request(String(url), init);
+        outboundContentType = req.headers.get('content-type');
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers({ 'Content-Type': 'application/json' }),
+          json: async () => ({ success: true, data: {} }),
+          text: async () => '{"success":true,"data":{}}',
+          clone() { return this; },
+        } as Response;
+      });
+      vi.stubGlobal('fetch', mockFn);
+
+      const client = new PipedriveClient();
+      await client.postMultipart('/products/3/images', makeFormData(), 'v2');
+
+      expect(outboundContentType).toMatch(/^multipart\/form-data; boundary=/);
+    });
+
+    it('returns NETWORK_ERROR on fetch rejection', async () => {
+      const mockFn = vi.fn(async () => { throw new Error('boom'); });
+      vi.stubGlobal('fetch', mockFn);
+      const client = new PipedriveClient();
+
+      const res = await client.postMultipart('/products/3/images', makeFormData(), 'v2');
+
+      expect(res.success).toBe(false);
+      expect(res.error?.code).toBe('NETWORK_ERROR');
+    });
+
+    it('returns an error envelope on HTTP error (e.g. 413 Payload Too Large)', async () => {
+      const mockFn = vi.fn(async () => ({
+        ok: false,
+        status: 413,
+        statusText: 'Payload Too Large',
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+        json: async () => ({ success: false, error: 'Payload too large' }),
+        text: async () => '{"success":false,"error":"Payload too large"}',
+        clone() { return this; },
+      }) as Response);
+      vi.stubGlobal('fetch', mockFn);
+      const client = new PipedriveClient();
+
+      const res = await client.postMultipart('/products/3/images', makeFormData(), 'v2');
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBeDefined();
+    });
+  });
+
+  describe('putMultipart', () => {
+    it('uses the PUT method', async () => {
+      const mockFn = makeFetchMock();
+      const client = new PipedriveClient();
+
+      await client.putMultipart('/products/3/images', makeFormData(), 'v2');
+
+      const [url, init] = mockFn.mock.calls[0];
+      expect(String(url)).toContain('/api/v2/products/3/images');
+      expect(init?.method).toBe('PUT');
+    });
+  });
+
+  describe('shared-helper regression', () => {
+    it('request() (JSON) and postMultipart() emit the same v2 x-api-token auth', async () => {
+      const mockFn = makeFetchMock();
+      const client = new PipedriveClient();
+
+      await client.get('/products', undefined, 'v2');
+      await client.postMultipart('/products/3/images', makeFormData(), 'v2');
+
+      const jsonHeaders = mockFn.mock.calls[0][1]?.headers as Record<string, string> | undefined;
+      const multipartHeaders = mockFn.mock.calls[1][1]?.headers as Record<string, string> | undefined;
+      expect(jsonHeaders?.['x-api-token']).toBe(VALID_API_KEY);
+      expect(multipartHeaders?.['x-api-token']).toBe(VALID_API_KEY);
+    });
+  });
+});

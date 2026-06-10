@@ -48,6 +48,71 @@ export class PipedriveClient {
     return version === "v1" ? config.baseUrlV1 : config.baseUrlV2;
   }
 
+  // ─── Shared request building blocks ─────────────────────────────────────────
+  // Used by BOTH request() (JSON) and requestMultipart() (FormData) so the two
+  // transports cannot drift. The only thing that differs between them is body
+  // serialization and the Content-Type handling.
+
+  /**
+   * Builds the full request URL for an endpoint and API version (no auth applied)
+   */
+  private buildRequestUrl(config: Config, endpoint: string, version: ApiVersion): URL {
+    return new URL(`${this.getBaseUrl(config, version)}${endpoint}`);
+  }
+
+  /**
+   * Applies version-specific authentication. Single source of truth for auth:
+   * v2 uses the x-api-token header; v1 uses the ?api_token= query param.
+   */
+  private applyAuth(
+    config: Config,
+    version: ApiVersion,
+    url: URL,
+    headers: Record<string, string>
+  ): void {
+    if (version === "v2") {
+      headers["x-api-token"] = config.apiKey;
+    } else {
+      url.searchParams.set("api_token", config.apiKey);
+    }
+  }
+
+  /**
+   * Normalizes a fetch Response plus its parsed JSON body into the ApiResponse envelope
+   */
+  private parseResponse<T>(
+    response: Response,
+    body: Record<string, unknown>
+  ): ApiResponse<T> {
+    if (!response.ok) {
+      return {
+        success: false,
+        error: handleApiError(response.status, body),
+      };
+    }
+    return {
+      success: true,
+      data: body.data as T,
+      additional_data: body.additional_data as ApiResponse<T>["additional_data"],
+    };
+  }
+
+  /**
+   * Builds the standard network-error envelope (shared by the JSON and multipart paths)
+   */
+  private networkError<T>(error: unknown): ApiResponse<T> {
+    // Log to stderr (not stdout) to avoid STDIO protocol corruption
+    console.error(`[pipedrive-mcp] Network error: ${error}`);
+    return {
+      success: false,
+      error: createErrorResponse(
+        "NETWORK_ERROR",
+        error instanceof Error ? error.message : "Unknown network error",
+        "Check your internet connection and try again"
+      ),
+    };
+  }
+
   /**
    * Makes a GET request to the Pipedrive API
    */
@@ -103,7 +168,31 @@ export class PipedriveClient {
   }
 
   /**
-   * Core request method
+   * Makes a multipart/form-data POST request to the Pipedrive API.
+   * Use for file uploads (e.g. product images). The body is a FormData instance.
+   */
+  async postMultipart<T>(
+    endpoint: string,
+    formData: FormData,
+    version: ApiVersion
+  ): Promise<ApiResponse<T>> {
+    return this.requestMultipart<T>("POST", endpoint, formData, version);
+  }
+
+  /**
+   * Makes a multipart/form-data PUT request to the Pipedrive API.
+   * Use for file updates (e.g. product images). The body is a FormData instance.
+   */
+  async putMultipart<T>(
+    endpoint: string,
+    formData: FormData,
+    version: ApiVersion
+  ): Promise<ApiResponse<T>> {
+    return this.requestMultipart<T>("PUT", endpoint, formData, version);
+  }
+
+  /**
+   * Core request method (JSON body)
    */
   private async request<T>(
     method: string,
@@ -114,20 +203,15 @@ export class PipedriveClient {
   ): Promise<ApiResponse<T>> {
     const config = this.ensureInitialized();
 
-    const baseUrl = this.getBaseUrl(config, version);
-    const url = new URL(`${baseUrl}${endpoint}`);
+    const url = this.buildRequestUrl(config, endpoint, version);
 
     // Initialize headers early so auth header can be set before URL params
     const headers: Record<string, string> = {
       "Accept": "application/json",
     };
 
-    // v2 uses x-api-token header; v1 uses ?api_token= query param
-    if (version === "v2") {
-      headers["x-api-token"] = config.apiKey;
-    } else {
-      url.searchParams.set("api_token", config.apiKey);
-    }
+    // Auth (v2 header / v1 query param) — shared with requestMultipart()
+    this.applyAuth(config, version, url, headers);
 
     // Add additional query parameters
     if (params) {
@@ -153,33 +237,57 @@ export class PipedriveClient {
 
       const responseData = await response.json() as Record<string, unknown>;
 
-      if (!response.ok) {
-        return {
-          success: false,
-          error: handleApiError(response.status, responseData),
-        };
-      }
-
-      // Pipedrive API wraps data differently in v1 vs v2
-      // v1: { success: true, data: [...] }
-      // v2: { success: true, data: [...] }
-      // Both use similar structure but v2 may have different pagination
-
-      return {
-        success: true,
-        data: responseData.data as T,
-        additional_data: responseData.additional_data as ApiResponse<T>["additional_data"],
-      };
+      return this.parseResponse<T>(response, responseData);
     } catch (error) {
-      console.error(`[pipedrive-mcp] Network error: ${error}`);
-      return {
-        success: false,
-        error: createErrorResponse(
-          "NETWORK_ERROR",
-          error instanceof Error ? error.message : "Unknown network error",
-          "Check your internet connection and try again"
-        ),
-      };
+      return this.networkError<T>(error);
+    }
+  }
+
+  /**
+   * Core request method for multipart/form-data bodies.
+   *
+   * Shares URL construction, auth, response parsing, and error handling with
+   * request() via the private helpers. The ONLY differences are the FormData
+   * body and the deliberate omission of a manual Content-Type header.
+   */
+  private async requestMultipart<T>(
+    method: string,
+    endpoint: string,
+    formData: FormData,
+    version: ApiVersion
+  ): Promise<ApiResponse<T>> {
+    const config = this.ensureInitialized();
+
+    const url = this.buildRequestUrl(config, endpoint, version);
+
+    const headers: Record<string, string> = {
+      "Accept": "application/json",
+    };
+
+    // Auth (v2 header / v1 query param) — shared with request()
+    this.applyAuth(config, version, url, headers);
+
+    // CRITICAL: do NOT set Content-Type. When the body is a FormData instance,
+    // fetch (Node.js 18+ undici) generates `multipart/form-data; boundary=…`
+    // automatically. A manual Content-Type omits/overrides the boundary and
+    // corrupts the request (silent 400 from the API).
+
+    try {
+      // Log to stderr (not stdout) to avoid STDIO protocol corruption
+      console.error(`[pipedrive-mcp] ${method} ${endpoint} (multipart)`);
+
+      const response = await fetch(url.toString(), {
+        method,
+        headers,
+        body: formData,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+
+      const responseData = await response.json() as Record<string, unknown>;
+
+      return this.parseResponse<T>(response, responseData);
+    } catch (error) {
+      return this.networkError<T>(error);
     }
   }
 
