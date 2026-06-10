@@ -12,6 +12,8 @@ scope: large
 # feat: deal sub-resources
 
 > **Revision (2026-06-10):** Incorporated ce-doc-review feedback - resolved the empty-body convert POST via the shipped `archiveProject` precedent (dropped the unimplementable `undefined` fallback); added a polling/terminal-status contract to U5; committed U4 to the schema alias and Sequencing to a single 4-slice order; corrected the stale #67/#69 merge ordering (#69 already shipped, #67 rebases onto `main`); plus minor hardening (discount UUID-keyed delete summary, installments `deal_ids` encoding verification, U3 dependency tightened to U1).
+>
+> **Revision 2 (2026-06-10, round-2 review):** Gated `convert_deal_to_lead` behind `destructiveOperationGuard()` -- a successful conversion marks the source deal as deleted per spec (openapi-v2.yaml:5910), so it is destructive; corrected the installments `deal_ids` encoding to the OpenAPI default repeated-key form (`deal_ids=1&deal_ids=2&...`, not comma-joined); completed the U5 polling contract with a bounded poll budget + purge/404 handling; propagated R-2's UUID-keyed delete summary into the U2 body; and aligned the U5 status test assertion with the Approach summary.
 
 ## Problem Frame
 
@@ -36,7 +38,7 @@ Without these tools, AI agents using the MCP server cannot manage product pricin
 - Handlers in `src/tools/deals.ts` (appended to `dealTools` array).
 - Unit tests in `tests/unit/schemas/deals.test.ts` (appended).
 - Integration tests split across logically-named files under `tests/integration/tools/` (new files, see each U below).
-- `PIPEDRIVE_ENABLE_DESTRUCTIVE` guard on delete operations (delete deal-product, delete discount, delete installment).
+- `PIPEDRIVE_ENABLE_DESTRUCTIVE` guard on delete operations (delete deal-product, delete discount, delete installment) **and on convert-deal-to-lead** (a successful conversion marks the source deal as deleted -- see U5).
 
 ### Out of scope
 
@@ -256,7 +258,7 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 - List handler: `client.get<unknown[]>(`/deals/${params.id}/discounts`, undefined, "v2")`. No pagination - the endpoint has no cursor. Return `createListSummary("discount", data.length, false)`.
 - Add handler: POSTs body with `description`, `amount`, `type`. Returns `{ summary: "Discount added to deal", data }`.
 - Update handler: builds optional body; PATCHes `/deals/${id}/discounts/${discount_id}`.
-- Delete handler: `destructiveOperationGuard()` first.
+- Delete handler: `destructiveOperationGuard()` first. Return the spec response data verbatim, but build the `summary` from the UUID the caller passed -- `Discount ${discount_id} deleted from deal ${id}` -- NOT the integer `id` in the response (which is not a reusable discount identifier; see R-2). Add an inline comment noting the UUID/integer mismatch.
 
 **Patterns to follow:** `addProductVariation` / `deleteProductVariation` in `src/tools/products.ts` for the mutation+delete shape. Note that the list handler here does NOT use `buildPaginationParamsV2` because the spec has no pagination for this endpoint.
 
@@ -270,7 +272,7 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 - `listDealDiscounts`: calls GET `/deals/1/discounts`; returns summary + data array; returns `isError` on API failure.
 - `addDealDiscount`: posts `description`, `amount`, `type`; returns created discount; returns `isError` on failure.
 - `updateDealDiscount`: only supplied fields in body; patches correct path; UUID discount_id forwarded correctly.
-- `deleteDealDiscount`: guard blocks with no fetch when env unset; deletes correct path; `isError` on API failure.
+- `deleteDealDiscount`: guard blocks with no fetch when env unset; deletes correct path; summary references the UUID passed (`Discount <uuid> deleted from deal <id>`), not the integer `id` in the response; `isError` on API failure.
 
 **Verification:** `npm run build` + `npm test` green.
 
@@ -296,7 +298,7 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 
 **Approach:**
 - Schema: `ListDealInstallmentsSchema` extends `PaginationParamsSchema` (for cursor/limit) with required `deal_ids: z.array(z.number().int().positive()).min(1).max(100)` plus optional `sort_by` (id/billing_date/deal_id) and `sort_direction`. Note: no `id` path param since this is a collection endpoint. `AddDealInstallmentSchema` extends `IdParamSchema` with required `description` (string), `amount` (number, positive), `billing_date` (string, YYYY-MM-DD). `UpdateDealInstallmentSchema` extends `IdParamSchema` with required `installment_id` (integer) and all optional body fields. `DeleteDealInstallmentSchema` is `IdParamSchema` + `installment_id` (integer).
-- List handler: `buildPaginationParamsV2(params.cursor, params.limit)` then `queryParams.set("deal_ids", params.deal_ids.join(","))` plus optional sort params. Endpoint is `/deals/installments` (no `{id}` segment). **Verify the `deal_ids` query encoding** against the `style`/`explode` setting for this parameter in `openapi-v2.yaml` before coding -- the comma-joined `deal_ids=1,2,3` form is an assumption. Because U3 cannot be exercised end-to-end without a Growth+ account, mocked tests assert whatever the handler emits, so a wrong path or encoding passes CI and only fails against a live tenant. Do a one-time manual smoke test against a Growth+ sandbox before closing #67.
+- List handler: `buildPaginationParamsV2(params.cursor, params.limit)` then append `deal_ids` as **repeated query keys** -- `params.deal_ids.forEach(d => queryParams.append("deal_ids", String(d)))`, producing `deal_ids=1&deal_ids=2&deal_ids=3` -- plus optional sort params. Endpoint is `/deals/installments` (no `{id}` segment). **Encoding rationale:** the `deal_ids` parameter at `openapi-v2.yaml:5603-5610` declares no `style`/`explode`, so it inherits the OpenAPI default `style: form, explode: true` (repeated keys). Do NOT use `.join(",")` -- the only comma-join (`explode: false`) declaration in the spec is at line 3610-3611 and belongs to a different endpoint. Because U3 cannot be exercised end-to-end without a Growth+ account, mocked tests assert whatever the handler emits, so confirm the encoding with a one-time manual smoke test against a Growth+ sandbox before closing #67.
 - Add handler: POSTs to `/deals/${params.id}/installments`. Descriptions in the tool entry should note Growth+ restriction.
 - Delete handler: `destructiveOperationGuard()` first.
 - Spec discrepancy with issue body: the issue lists this as `/deals/{id}/installments` (implying a per-deal list), but the spec's GET is at `/deals/installments` (collection-level, requires `deal_ids` array). The spec takes precedence. Plan accordingly.
@@ -310,7 +312,7 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 - `DeleteDealInstallmentSchema` requires integer `installment_id` (not string).
 
 **Test scenarios (integration):**
-- `listDealInstallments`: sends `deal_ids=1,2,3` as query param; forwards cursor and sort params when provided; returns `{ summary, data, pagination }`; `isError` on failure.
+- `listDealInstallments`: sends `deal_ids` as repeated query keys (`deal_ids=1&deal_ids=2&deal_ids=3`), NOT comma-joined; forwards cursor and sort params when provided; returns `{ summary, data, pagination }`; `isError` on failure.
 - `addDealInstallment`: posts to `/deals/1/installments` with all three required fields; optional fields absent when not provided; returns created installment.
 - `updateDealInstallment`: patches `/deals/1/installments/7`; only supplied fields in body.
 - `deleteDealInstallment`: guard blocks without fetch when env unset; deletes correct path; `isError` on failure.
@@ -356,8 +358,8 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 **Goal:** Expose the async deal-to-lead conversion flow: trigger the conversion (POST, returns `conversion_id`) and poll the status (GET, returns `status` + optional `lead_id`).
 
 **Requirements:**
-- `pipedrive_convert_deal_to_lead` - POST `/deals/{id}/convert/lead`, no body. Returns `{ conversion_id }`. Tool description must tell the agent the conversion is async and it must poll `pipedrive_get_deal_conversion_status` with the returned `conversion_id` until a terminal status.
-- `pipedrive_get_deal_conversion_status` - GET `/deals/{id}/convert/status/{conversion_id}`. Returns `{ status, lead_id?, conversion_id }`. Tool description must enumerate the status contract so the agent knows when to stop: `completed` (terminal; carries `lead_id`), `failed`/`rejected` (terminal; stop polling, no lead produced), `not_started`/`running` (in-progress; re-poll). Only `completed` carries `lead_id`, and the spec notes conversion status is purged after a few days, so an agent that stops early or waits too long loses the `lead_id` permanently.
+- `pipedrive_convert_deal_to_lead` - POST `/deals/{id}/convert/lead`, no body. Returns `{ conversion_id }`. **Destructive: a successful conversion marks the source deal as deleted (spec, `openapi-v2.yaml:5910`), so this tool is gated by `destructiveOperationGuard()` exactly like the delete tools.** Tool description must state the deal-deletion side-effect AND tell the agent the conversion is async -- it must poll `pipedrive_get_deal_conversion_status` with the returned `conversion_id` until a terminal status.
+- `pipedrive_get_deal_conversion_status` - GET `/deals/{id}/convert/status/{conversion_id}`. Returns `{ status, lead_id?, conversion_id }`. Tool description must enumerate the status contract so the agent knows when to stop: `completed` (terminal; carries `lead_id`), `failed`/`rejected` (terminal; stop polling, no lead produced), `not_started`/`running` (in-progress; re-poll). Only `completed` carries `lead_id`, and the spec notes conversion status is purged after a few days, so an agent that stops early or waits too long loses the `lead_id` permanently. The description must also give the agent a **bounded poll budget** (e.g. up to ~6 attempts with short backoff, not an unbounded loop) and state that a `NOT_FOUND`/404 returned after the conversion previously existed means the status was purged -- a terminal "stop polling" signal, not a transient error to retry.
 
 **Dependencies:** U1 (file stable to append).
 
@@ -370,8 +372,8 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 **Approach:**
 - Schema: `ConvertDealToLeadSchema` is simply `IdParamSchema` (just `id`). `GetDealConversionStatusSchema` extends `IdParamSchema` with `conversion_id: z.string().uuid()`.
 - Handler `convertDealToLead`: `client.post<{ conversion_id: string }>(`/deals/${params.id}/convert/lead`, {}, "v2")`. Returns `{ summary: "Deal conversion initiated; poll get_deal_conversion_status with conversion_id until a terminal status", data }` surfacing `conversion_id` prominently.
-- Handler `getDealConversionStatus`: `client.get<{ status: string; lead_id?: string; conversion_id: string }>(`/deals/${params.id}/convert/status/${params.conversion_id}`, undefined, "v2")`. Build the summary from the status so the agent knows whether to keep polling: terminal `completed` -> `"Conversion completed; lead_id: <lead_id>"`; terminal `failed`/`rejected` -> `"Conversion <status>; no lead produced, stop polling"`; in-progress `not_started`/`running` -> `"Conversion <status>; re-poll"`.
-- No destructive guard needed (POST to convert is not a delete; GET status is read-only).
+- Handler `getDealConversionStatus`: `client.get<{ status: string; lead_id?: string; conversion_id: string }>(`/deals/${params.id}/convert/status/${params.conversion_id}`, undefined, "v2")`. Build the summary from the status so the agent knows whether to keep polling: terminal `completed` -> `"Conversion completed; lead_id: <lead_id>"`; terminal `failed`/`rejected` -> `"Conversion <status>; no lead produced, stop polling"`; in-progress `not_started`/`running` -> `"Conversion <status>; re-poll"`. The `mcpErrorResult` path already surfaces a `NOT_FOUND` on a purged conversion; rely on the tool description (above) to tell the agent that a 404 after a prior valid status is a terminal "purged, stop polling" signal.
+- `convertDealToLead` is gated by `destructiveOperationGuard()` (call it first; if it returns truthy, return that immediately with no network call) because a successful conversion marks the source deal as deleted (`openapi-v2.yaml:5910`). Mirror the delete-handler guard pattern from `deleteProductVariation`. `getDealConversionStatus` is read-only and ungated.
 - No pagination needed.
 - **Empty body is settled, not an open risk:** `convert/lead` takes no request body, so pass `{}` (an empty object) exactly as the shipped `archiveProject` handler does (`client.post(`/projects/${params.id}/archive`, {}, "v2")`, `src/tools/projects.ts:194-207`, integration-tested). `client.post`'s `body` param is non-optional (`Record<string, unknown>`, `src/client.ts:65`), so passing `undefined` is a type error -- `{}` is the correct and only call shape.
 
@@ -382,8 +384,8 @@ The products entity (`src/tools/products.ts`, `src/schemas/products.ts`) is the 
 - `GetDealConversionStatusSchema` requires `id` and `conversion_id`; rejects `conversion_id` that is not a valid UUID string; rejects missing `id`.
 
 **Test scenarios (integration):**
-- `convertDealToLead`: POSTs to `/deals/1/convert/lead` with empty body; returns `{ summary, data: { conversion_id } }` on success; `isError: true` on API failure (e.g., 404).
-- `getDealConversionStatus`: GETs `/deals/1/convert/status/4b40248b-945a-4802-b996-60fdff8c5c69`; returns `{ summary: "Conversion status: completed", data }` on success; `isError` on failure; status `"running"` also returned correctly.
+- `convertDealToLead`: guard blocks with no fetch when `PIPEDRIVE_ENABLE_DESTRUCTIVE` unset; when set, POSTs to `/deals/1/convert/lead` with empty body and returns `{ summary, data: { conversion_id } }` on success; `isError: true` on API failure (e.g., 404).
+- `getDealConversionStatus`: GETs `/deals/1/convert/status/4b40248b-945a-4802-b996-60fdff8c5c69`; on success returns a status-derived summary matching the Approach (terminal `completed` -> `"Conversion completed; lead_id: <lead_id>"`); `isError` on failure; in-progress status `"running"` returns the `"Conversion running; re-poll"` summary.
 
 **Verification:** `npm run build` + `npm test` green.
 
