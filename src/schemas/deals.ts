@@ -153,6 +153,36 @@ export const SearchDealsSchema = z.object({
  */
 export const DeleteDealSchema = IdParamSchema;
 
+// ─── Follower schemas (U1, #69) ───────────────────────────────────────────────
+
+/**
+ * List deal followers parameters
+ */
+export const ListDealFollowersSchema = PaginationParamsSchema.extend({
+  id: z.number().int().positive().describe("The deal ID"),
+});
+
+/**
+ * Add deal follower parameters
+ */
+export const AddDealFollowerSchema = IdParamSchema.extend({
+  user_id: z.number().int().positive().describe("The ID of the user to add as a follower (required)"),
+});
+
+/**
+ * Delete deal follower parameters
+ */
+export const DeleteDealFollowerSchema = IdParamSchema.extend({
+  follower_id: z.number().int().positive().describe("The ID of the follower (user) to remove"),
+});
+
+/**
+ * Deal followers changelog parameters
+ */
+export const DealFollowersChangelogSchema = PaginationParamsSchema.extend({
+  id: z.number().int().positive().describe("The deal ID"),
+});
+
 /**
  * Type exports for use in tool implementations
  */
@@ -162,3 +192,7 @@ export type CreateDealParams = z.infer<typeof CreateDealSchema>;
 export type UpdateDealParams = z.infer<typeof UpdateDealSchema>;
 export type SearchDealsParams = z.infer<typeof SearchDealsSchema>;
 export type DeleteDealParams = z.infer<typeof DeleteDealSchema>;
+export type ListDealFollowersParams = z.infer<typeof ListDealFollowersSchema>;
+export type AddDealFollowerParams = z.infer<typeof AddDealFollowerSchema>;
+export type DeleteDealFollowerParams = z.infer<typeof DeleteDealFollowerSchema>;
+export type DealFollowersChangelogParams = z.infer<typeof DealFollowersChangelogSchema>;

@@ -10,12 +10,20 @@ import {
   UpdateDealSchema,
   SearchDealsSchema,
   DeleteDealSchema,
+  ListDealFollowersSchema,
+  AddDealFollowerSchema,
+  DeleteDealFollowerSchema,
+  DealFollowersChangelogSchema,
   type ListDealsParams,
   type GetDealParams,
   type CreateDealParams,
   type UpdateDealParams,
   type SearchDealsParams,
   type DeleteDealParams,
+  type ListDealFollowersParams,
+  type AddDealFollowerParams,
+  type DeleteDealFollowerParams,
+  type DealFollowersChangelogParams,
 } from "../schemas/deals.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
@@ -242,6 +250,117 @@ export async function deleteDeal(params: DeleteDealParams) {
   };
 }
 
+// ─── Follower handlers (U1, #69) ──────────────────────────────────────────────
+
+/**
+ * List followers for a deal
+ */
+export async function listDealFollowers(params: ListDealFollowersParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>(`/deals/${params.id}/followers`, queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const data = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: createListSummary("follower", data.length, pagination.has_more),
+        data,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Add a follower to a deal
+ */
+export async function addDealFollower(params: AddDealFollowerParams) {
+  const client = getClient();
+
+  const body = { user_id: params.user_id };
+
+  const response = await client.post<unknown>(`/deals/${params.id}/followers`, body, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: "Follower added to deal",
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Get the followers changelog for a deal
+ */
+export async function getDealFollowersChangelog(params: DealFollowersChangelogParams) {
+  const client = getClient();
+
+  const queryParams = buildPaginationParamsV2(params.cursor, params.limit);
+
+  const response = await client.get<unknown[]>(`/deals/${params.id}/followers/changelog`, queryParams, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  const data = response.data;
+  const pagination = extractPaginationV2(response);
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Followers changelog for deal ${params.id}`,
+        data,
+        pagination,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Delete a deal follower
+ */
+export async function deleteDealFollower(params: DeleteDealFollowerParams) {
+  const guard = destructiveOperationGuard();
+  if (guard) return guard;
+
+  const client = getClient();
+
+  const response = await client.delete<{ user_id: number }>(`/deals/${params.id}/followers/${params.follower_id}`, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Follower ${params.follower_id} removed from deal ${params.id}`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
 /**
  * Tool definitions for MCP registration
  */
@@ -375,5 +494,64 @@ export const dealTools = [
     },
     handler: deleteDeal,
     schema: DeleteDealSchema,
+  },
+  // Follower tools (U1, #69)
+  {
+    name: "pipedrive_list_deal_followers",
+    description: "List all followers for a deal.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The deal ID" },
+        cursor: { type: "string", description: "Cursor for pagination" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+      },
+      required: ["id"],
+    },
+    handler: listDealFollowers,
+    schema: ListDealFollowersSchema,
+  },
+  {
+    name: "pipedrive_add_deal_follower",
+    description: "Add a follower to a deal.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The deal ID" },
+        user_id: { type: "number", description: "The ID of the user to add as a follower (required)" },
+      },
+      required: ["id", "user_id"],
+    },
+    handler: addDealFollower,
+    schema: AddDealFollowerSchema,
+  },
+  {
+    name: "pipedrive_delete_deal_follower",
+    description: "Remove a follower from a deal.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The deal ID" },
+        follower_id: { type: "number", description: "The ID of the follower (user) to remove" },
+      },
+      required: ["id", "follower_id"],
+    },
+    handler: deleteDealFollower,
+    schema: DeleteDealFollowerSchema,
+  },
+  {
+    name: "pipedrive_get_deal_followers_changelog",
+    description: "Get the followers changelog for a deal.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The deal ID" },
+        cursor: { type: "string", description: "Cursor for pagination" },
+        limit: { type: "number", description: "Number of items (1-100)" },
+      },
+      required: ["id"],
+    },
+    handler: getDealFollowersChangelog,
+    schema: DealFollowersChangelogSchema,
   },
 ];

@@ -10,6 +10,10 @@ import {
   UpdateDealSchema,
   SearchDealsSchema,
   DeleteDealSchema,
+  ListDealFollowersSchema,
+  AddDealFollowerSchema,
+  DeleteDealFollowerSchema,
+  DealFollowersChangelogSchema,
 } from '../../../src/schemas/deals.js';
 
 describe('deals schemas', () => {
@@ -323,6 +327,76 @@ describe('deals schemas', () => {
 
     it('should reject non-positive id', () => {
       expect(() => DeleteDealSchema.parse({ id: 0 })).toThrow();
+    });
+  });
+
+  describe('follower schemas (U1, #69)', () => {
+    describe('ListDealFollowersSchema', () => {
+      it('should require id', () => {
+        expect(() => ListDealFollowersSchema.parse({})).toThrow();
+      });
+
+      it('should accept id with pagination defaults', () => {
+        const result = ListDealFollowersSchema.parse({ id: 3 });
+        expect(result.id).toBe(3);
+        expect(result.limit).toBe(50);
+      });
+
+      it('should accept cursor and limit', () => {
+        const result = ListDealFollowersSchema.parse({ id: 3, cursor: 'abc', limit: 25 });
+        expect(result.cursor).toBe('abc');
+        expect(result.limit).toBe(25);
+      });
+
+      it('should reject non-positive id', () => {
+        expect(() => ListDealFollowersSchema.parse({ id: 0 })).toThrow();
+      });
+    });
+
+    describe('AddDealFollowerSchema', () => {
+      it('should require id and user_id', () => {
+        expect(() => AddDealFollowerSchema.parse({ id: 3 })).toThrow();
+        expect(() => AddDealFollowerSchema.parse({ user_id: 7 })).toThrow();
+      });
+
+      it('should accept valid id and user_id', () => {
+        const result = AddDealFollowerSchema.parse({ id: 3, user_id: 7 });
+        expect(result.id).toBe(3);
+        expect(result.user_id).toBe(7);
+      });
+
+      it('should reject non-positive user_id', () => {
+        expect(() => AddDealFollowerSchema.parse({ id: 3, user_id: 0 })).toThrow();
+      });
+    });
+
+    describe('DeleteDealFollowerSchema', () => {
+      it('should require id and follower_id', () => {
+        expect(() => DeleteDealFollowerSchema.parse({ id: 3 })).toThrow();
+        expect(() => DeleteDealFollowerSchema.parse({ follower_id: 7 })).toThrow();
+      });
+
+      it('should accept valid id and follower_id', () => {
+        const result = DeleteDealFollowerSchema.parse({ id: 3, follower_id: 7 });
+        expect(result.id).toBe(3);
+        expect(result.follower_id).toBe(7);
+      });
+
+      it('should reject non-positive follower_id', () => {
+        expect(() => DeleteDealFollowerSchema.parse({ id: 3, follower_id: -1 })).toThrow();
+      });
+    });
+
+    describe('DealFollowersChangelogSchema', () => {
+      it('should require id', () => {
+        expect(() => DealFollowersChangelogSchema.parse({})).toThrow();
+      });
+
+      it('should accept id with pagination', () => {
+        const result = DealFollowersChangelogSchema.parse({ id: 3, cursor: 'xyz' });
+        expect(result.id).toBe(3);
+        expect(result.cursor).toBe('xyz');
+      });
     });
   });
 });
