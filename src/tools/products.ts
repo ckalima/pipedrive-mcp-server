@@ -2,6 +2,7 @@
  * Product-related MCP tools for Pipedrive
  */
 
+import { readFile } from "node:fs/promises";
 import { getClient } from "../client.js";
 import {
   ListProductsSchema,
@@ -20,6 +21,8 @@ import {
   ProductFollowersChangelogSchema,
   GetProductImageSchema,
   DeleteProductImageSchema,
+  UploadProductImageSchema,
+  UpdateProductImageSchema,
   type ListProductsParams,
   type GetProductParams,
   type SearchProductsParams,
@@ -36,10 +39,63 @@ import {
   type ProductFollowersChangelogParams,
   type GetProductImageParams,
   type DeleteProductImageParams,
+  type UploadProductImageParams,
+  type UpdateProductImageParams,
 } from "../schemas/products.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
-import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
+import { mcpErrorResult, mcpErrorFromCode, destructiveOperationGuard, type McpToolErrorResult } from "../utils/errors.js";
 import { createListSummary } from "../utils/formatting.js";
+
+/** Maps a lowercase file extension to an image MIME type for multipart uploads. */
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+};
+
+/** Infers the image MIME type from an explicit value or the file_name extension. */
+function inferImageMimeType(fileName: string, explicit?: string): string {
+  if (explicit) return explicit;
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  return IMAGE_MIME_BY_EXT[ext] ?? "application/octet-stream";
+}
+
+/**
+ * Resolves the hybrid file_path/base64_data input into a FormData with the image
+ * bytes under the `data` field. Returns an MCP error result if a file_path read
+ * fails (never throws).
+ */
+async function buildImageFormData(
+  params: UploadProductImageParams
+): Promise<{ formData: FormData } | { error: McpToolErrorResult }> {
+  let buffer: Buffer;
+
+  if (params.file_path) {
+    try {
+      buffer = await readFile(params.file_path);
+    } catch (error) {
+      return {
+        error: mcpErrorFromCode(
+          "VALIDATION_ERROR",
+          `Could not read file at "${params.file_path}": ${error instanceof Error ? error.message : "unknown error"}`,
+          "Verify the path exists and is readable by the server process, or pass base64_data instead."
+        ),
+      };
+    }
+  } else {
+    buffer = Buffer.from(params.base64_data!, "base64");
+  }
+
+  const mimeType = inferImageMimeType(params.file_name, params.mime_type);
+  // Wrap in a fresh Uint8Array so the BlobPart type resolves to ArrayBuffer-backed
+  // bytes (Node's Buffer is typed over ArrayBufferLike, which Blob rejects).
+  const blob = new Blob([new Uint8Array(buffer)], { type: mimeType });
+  const formData = new FormData();
+  formData.append("data", blob, params.file_name);
+  return { formData };
+}
 
 // ─── U1: Read handlers ────────────────────────────────────────────────────────
 
@@ -525,6 +581,60 @@ export async function deleteProductImage(params: DeleteProductImageParams) {
   };
 }
 
+// ─── Product image upload/update handlers (#69 U5) ────────────────────────────
+
+/**
+ * Upload an image for a product (multipart/form-data)
+ */
+export async function uploadProductImage(params: UploadProductImageParams) {
+  const client = getClient();
+
+  const built = await buildImageFormData(params);
+  if ("error" in built) return built.error;
+
+  const response = await client.postMultipart<unknown>(`/products/${params.id}/images`, built.formData, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Image uploaded for product ${params.id}`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Update (replace) the image of a product (multipart/form-data)
+ */
+export async function updateProductImage(params: UpdateProductImageParams) {
+  const client = getClient();
+
+  const built = await buildImageFormData(params);
+  if ("error" in built) return built.error;
+
+  const response = await client.putMultipart<unknown>(`/products/${params.id}/images`, built.formData, "v2");
+
+  if (!response.success || !response.data) {
+    return mcpErrorResult(response);
+  }
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: JSON.stringify({
+        summary: `Image updated for product ${params.id}`,
+        data: response.data,
+      }, null, 2),
+    }],
+  };
+}
+
 // ─── Tool definitions for MCP registration ───────────────────────────────────
 
 export const productTools = [
@@ -853,5 +963,40 @@ export const productTools = [
     },
     handler: deleteProductImage,
     schema: DeleteProductImageSchema,
+  },
+  // Product image upload/update tools (#69 U5)
+  {
+    name: "pipedrive_upload_product_image",
+    description: "Upload an image for a product. Provide the image via EITHER file_path (the server reads the file — use when the caller shares the server's filesystem) OR base64_data (transport-safe). Exactly one is required. Supports png, jpeg, gif, and webp.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+        file_path: { type: "string", description: "Path the server reads via fs.readFile. Mutually exclusive with base64_data." },
+        base64_data: { type: "string", description: "Base64-encoded image bytes (transport-safe). Mutually exclusive with file_path." },
+        file_name: { type: "string", description: "Original filename including extension (e.g. product.png)" },
+        mime_type: { type: "string", enum: ["image/png", "image/jpeg", "image/gif", "image/webp"], description: "MIME type. Inferred from file_name if omitted." },
+      },
+      required: ["id", "file_name"],
+    },
+    handler: uploadProductImage,
+    schema: UploadProductImageSchema,
+  },
+  {
+    name: "pipedrive_update_product_image",
+    description: "Update (replace) the image of a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "The product ID" },
+        file_path: { type: "string", description: "Path the server reads via fs.readFile. Mutually exclusive with base64_data." },
+        base64_data: { type: "string", description: "Base64-encoded image bytes (transport-safe). Mutually exclusive with file_path." },
+        file_name: { type: "string", description: "Original filename including extension (e.g. product.png)" },
+        mime_type: { type: "string", enum: ["image/png", "image/jpeg", "image/gif", "image/webp"], description: "MIME type. Inferred from file_name if omitted." },
+      },
+      required: ["id", "file_name"],
+    },
+    handler: updateProductImage,
+    schema: UpdateProductImageSchema,
   },
 ];

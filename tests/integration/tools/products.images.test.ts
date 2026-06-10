@@ -3,11 +3,19 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { setupValidEnv } from '../../helpers/mockEnv.js';
 import {
   mockApiSuccess,
   mockApiError,
 } from '../../helpers/mockFetch.js';
+
+// Mock only readFile from node:fs/promises (preserve all other real exports) so
+// the file_path upload branch can be driven deterministically without touching disk.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, readFile: vi.fn() };
+});
 
 const imageFixture = {
   id: 42,
@@ -19,6 +27,16 @@ const imageFixture = {
   name: 'product-123.jpg',
 };
 
+const uploadResult = {
+  id: 42,
+  product_id: 123,
+  company_id: '1',
+  add_time: '2024-01-01T00:00:00Z',
+};
+
+// "hello" base64-encoded
+const HELLO_B64 = Buffer.from('hello').toString('base64');
+
 // Dynamic import to avoid module caching issues with mocks
 async function getProductsTools() {
   return import('../../../src/tools/products.js');
@@ -28,6 +46,7 @@ describe('product image tools (U6)', () => {
   beforeEach(() => {
     setupValidEnv();
     vi.unstubAllGlobals();
+    vi.mocked(readFile).mockReset();
   });
 
   describe('getProductImage', () => {
@@ -147,6 +166,107 @@ describe('product image tools (U6)', () => {
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.data.id).toBe(42);
+    });
+  });
+
+  describe('uploadProductImage (#69 U5)', () => {
+    it('should POST multipart FormData to /api/v2/products/{id}/images (base64 mode)', async () => {
+      const mockFn = mockApiSuccess(uploadResult);
+      const { uploadProductImage } = await getProductsTools();
+
+      await uploadProductImage({ id: 123, base64_data: HELLO_B64, file_name: 'p.png' });
+
+      const [url, options] = mockFn.mock.calls[0];
+      expect(url).toContain('/api/v2/products/123/images');
+      expect(options.method).toBe('POST');
+      expect(options.body).toBeInstanceOf(FormData);
+    });
+
+    it('should append the bytes under the "data" field and not set Content-Type: application/json', async () => {
+      const mockFn = mockApiSuccess(uploadResult);
+      const { uploadProductImage } = await getProductsTools();
+
+      await uploadProductImage({ id: 123, base64_data: HELLO_B64, file_name: 'p.png' });
+
+      const [, options] = mockFn.mock.calls[0];
+      const fd = options.body as FormData;
+      expect(fd.has('data')).toBe(true);
+      const headers = options.headers as Record<string, string>;
+      expect(headers['Content-Type']).toBeUndefined();
+      expect(headers['content-type']).toBeUndefined();
+    });
+
+    it('should return summary containing "uploaded"', async () => {
+      mockApiSuccess(uploadResult);
+      const { uploadProductImage } = await getProductsTools();
+
+      const result = await uploadProductImage({ id: 123, base64_data: HELLO_B64, file_name: 'p.png' });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.summary).toContain('uploaded');
+      expect(parsed.summary).toContain('123');
+    });
+
+    it('should read the file server-side in file_path mode (bytes never passed as base64)', async () => {
+      vi.mocked(readFile).mockResolvedValue(Buffer.from('hello'));
+      const mockFn = mockApiSuccess(uploadResult);
+      const { uploadProductImage } = await getProductsTools();
+
+      await uploadProductImage({ id: 123, file_path: '/tmp/p.png', file_name: 'p.png' });
+
+      expect(vi.mocked(readFile)).toHaveBeenCalledWith('/tmp/p.png');
+      const [url, options] = mockFn.mock.calls[0];
+      expect(url).toContain('/api/v2/products/123/images');
+      expect(options.method).toBe('POST');
+      expect(options.body).toBeInstanceOf(FormData);
+      // No base64 string should appear anywhere in the outbound URL
+      expect(url).not.toContain(HELLO_B64);
+    });
+
+    it('should return isError and make NO fetch call when file_path read fails', async () => {
+      vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const { uploadProductImage } = await getProductsTools();
+
+      const result = await uploadProductImage({ id: 123, file_path: '/nope/missing.png', file_name: 'p.png' });
+
+      expect(result.isError).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('should return isError on API failure', async () => {
+      mockApiError(413, 'Payload too large');
+      const { uploadProductImage } = await getProductsTools();
+
+      const result = await uploadProductImage({ id: 123, base64_data: HELLO_B64, file_name: 'p.png' });
+
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  describe('updateProductImage (#69 U5)', () => {
+    it('should PUT multipart FormData to /api/v2/products/{id}/images', async () => {
+      const mockFn = mockApiSuccess(uploadResult);
+      const { updateProductImage } = await getProductsTools();
+
+      await updateProductImage({ id: 123, base64_data: HELLO_B64, file_name: 'p.png' });
+
+      const [url, options] = mockFn.mock.calls[0];
+      expect(url).toContain('/api/v2/products/123/images');
+      expect(options.method).toBe('PUT');
+      expect(options.body).toBeInstanceOf(FormData);
+    });
+
+    it('should return summary containing "updated"', async () => {
+      mockApiSuccess(uploadResult);
+      const { updateProductImage } = await getProductsTools();
+
+      const result = await updateProductImage({ id: 123, base64_data: HELLO_B64, file_name: 'p.png' });
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.summary).toContain('updated');
+      expect(parsed.summary).toContain('123');
     });
   });
 });

@@ -225,13 +225,50 @@ export const ProductFollowersChangelogSchema = PaginationParamsSchema.extend({
   id: z.number().int().positive().describe("The product ID"),
 });
 
-// ─── U6: Product image schemas (get + delete; multipart upload/update deferred) ───
+// ─── U6: Product image schemas (get + delete) ─────────────────────────────────
 
 /** Get product image parameters */
 export const GetProductImageSchema = IdParamSchema;
 
 /** Delete product image parameters */
 export const DeleteProductImageSchema = IdParamSchema;
+
+// ─── Product image upload/update schemas (#69 U5) ─────────────────────────────
+
+/**
+ * Upper bound on the base64 string length (~5 MB decoded). Bounds the synchronous
+ * `Buffer.from(..., "base64")` allocation so an oversized/malicious input cannot
+ * force a huge allocation (OOM). Tune once Pipedrive's real image-size limit is
+ * confirmed.
+ */
+export const MAX_IMAGE_B64_LEN = 6_900_000;
+
+/**
+ * Upload product image parameters.
+ *
+ * Hybrid input: provide EITHER `file_path` (the server reads the bytes via
+ * `fs.readFile` — use when the caller shares the server's filesystem) OR
+ * `base64_data` (transport-safe over STDIO). Exactly one is required.
+ */
+export const UploadProductImageSchema = IdParamSchema.extend({
+  file_path: z.string().min(1).optional()
+    .describe("Path the SERVER reads via fs.readFile (use when the caller shares the server filesystem). Mutually exclusive with base64_data."),
+  base64_data: z.string().min(1).max(MAX_IMAGE_B64_LEN).optional()
+    .describe("Base64-encoded image bytes (transport-safe fallback). Mutually exclusive with file_path."),
+  file_name: z.string().min(1).max(255)
+    .refine((n) => !/[/\\\r\n\0]/.test(n), "file_name must not contain path separators or control characters")
+    .describe("Original filename including extension (e.g. product.png)"),
+  mime_type: z.string().regex(/^image\/(png|jpeg|gif|webp)$/).optional()
+    .describe("MIME type (image/png, image/jpeg, image/gif, image/webp). Inferred from file_name if omitted."),
+}).refine(
+  (v) => (v.file_path == null) !== (v.base64_data == null),
+  { message: "Provide exactly one of file_path or base64_data" },
+);
+
+/**
+ * Update product image parameters (identical shape to upload).
+ */
+export const UpdateProductImageSchema = UploadProductImageSchema;
 
 // ─── Type exports ─────────────────────────────────────────────────────────────
 
@@ -251,3 +288,5 @@ export type DeleteProductFollowerParams = z.infer<typeof DeleteProductFollowerSc
 export type ProductFollowersChangelogParams = z.infer<typeof ProductFollowersChangelogSchema>;
 export type GetProductImageParams = z.infer<typeof GetProductImageSchema>;
 export type DeleteProductImageParams = z.infer<typeof DeleteProductImageSchema>;
+export type UploadProductImageParams = z.infer<typeof UploadProductImageSchema>;
+export type UpdateProductImageParams = z.infer<typeof UpdateProductImageSchema>;
