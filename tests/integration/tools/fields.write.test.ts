@@ -23,9 +23,10 @@ const entities = [
   { name: 'deal', endpoint: 'dealFields', create: 'createDealField', update: 'updateDealField', del: 'deleteDealField', updateOptions: 'updateDealFieldOptions', deleteOptions: 'deleteDealFieldOptions' },
   { name: 'person', endpoint: 'personFields', create: 'createPersonField', update: 'updatePersonField', del: 'deletePersonField', updateOptions: 'updatePersonFieldOptions', deleteOptions: 'deletePersonFieldOptions' },
   { name: 'organization', endpoint: 'organizationFields', create: 'createOrganizationField', update: 'updateOrganizationField', del: 'deleteOrganizationField', updateOptions: 'updateOrganizationFieldOptions', deleteOptions: 'deleteOrganizationFieldOptions' },
+  { name: 'product', endpoint: 'productFields', create: 'createProductField', update: 'updateProductField', del: 'deleteProductField', updateOptions: 'updateProductFieldOptions', deleteOptions: 'deleteProductFieldOptions' },
 ] as const;
 
-describe('field write tools (U3)', () => {
+describe('field write tools (U3 deal/person/org, U4 product)', () => {
   beforeEach(() => {
     setupValidEnv();
     vi.unstubAllGlobals();
@@ -154,4 +155,25 @@ describe('field write tools (U3)', () => {
       });
     });
   }
+
+  // U4: product field update accepts only field_name + ui_visibility (narrower model)
+  describe('product field update narrow model', () => {
+    it('forwards only field_name and ui_visibility', async () => {
+      const mockFn = mockApiSuccess({ field_code: HASH });
+      const mod = await getFieldsTools();
+
+      await mod.updateProductField({
+        field_code: HASH,
+        field_name: 'SKU',
+        ui_visibility: { add_visible_flag: true },
+      });
+
+      const body = JSON.parse(mockFn.mock.calls[0][1].body);
+      expect(body.field_name).toBe('SKU');
+      expect(body.ui_visibility).toEqual({ add_visible_flag: true });
+      expect(body.description).toBeUndefined();
+      expect(body.important_fields).toBeUndefined();
+      expect(body.required_fields).toBeUndefined();
+    });
+  });
 });

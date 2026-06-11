@@ -22,6 +22,11 @@ import {
   DeleteOrganizationFieldSchema,
   UpdateOrganizationFieldOptionsSchema,
   DeleteOrganizationFieldOptionsSchema,
+  CreateProductFieldSchema,
+  UpdateProductFieldSchema,
+  DeleteProductFieldSchema,
+  UpdateProductFieldOptionsSchema,
+  DeleteProductFieldOptionsSchema,
 } from '../../../src/schemas/fields.js';
 
 /** A realistic server-generated 40-character field_code hash. */
@@ -101,6 +106,14 @@ const entities = [
     Delete: DeleteOrganizationFieldSchema,
     UpdateOptions: UpdateOrganizationFieldOptionsSchema,
     DeleteOptions: DeleteOrganizationFieldOptionsSchema,
+  },
+  {
+    name: 'product',
+    Create: CreateProductFieldSchema,
+    Update: UpdateProductFieldSchema,
+    Delete: DeleteProductFieldSchema,
+    UpdateOptions: UpdateProductFieldOptionsSchema,
+    DeleteOptions: DeleteProductFieldOptionsSchema,
   },
 ] as const;
 
@@ -279,5 +292,47 @@ describe('per-entity ui_visibility differences', () => {
     expect(deal.description).toBe('hi');
     const person = CreatePersonFieldSchema.parse({ field_name: 'F', field_type: 'varchar', description: 'hi' }) as Record<string, unknown>;
     expect(person.description).toBeUndefined();
+  });
+});
+
+describe('product field schema specifics (U4 — narrower model)', () => {
+  it('CreateProductFieldSchema strips description / important_fields / required_fields', () => {
+    const r = CreateProductFieldSchema.parse({
+      field_name: 'SKU',
+      field_type: 'varchar',
+      description: 'leak',
+      important_fields: { enabled: true },
+      required_fields: { enabled: true },
+    }) as Record<string, unknown>;
+    expect(r.description).toBeUndefined();
+    expect(r.important_fields).toBeUndefined();
+    expect(r.required_fields).toBeUndefined();
+  });
+
+  it('product ui_visibility keeps only the two flags', () => {
+    const r = CreateProductFieldSchema.parse({
+      field_name: 'SKU',
+      field_type: 'varchar',
+      ui_visibility: { add_visible_flag: true, details_visible_flag: false, show_in_pipelines: { show_in_all: true } },
+    }) as { ui_visibility: Record<string, unknown> };
+    expect(r.ui_visibility.add_visible_flag).toBe(true);
+    expect(r.ui_visibility.details_visible_flag).toBe(false);
+    expect(r.ui_visibility.show_in_pipelines).toBeUndefined();
+  });
+
+  it('UpdateProductFieldSchema accepts only field_name and ui_visibility', () => {
+    const r = UpdateProductFieldSchema.parse({
+      field_code: HASH,
+      field_name: 'New',
+      ui_visibility: { add_visible_flag: false },
+      description: 'leak',
+      important_fields: { enabled: true },
+      required_fields: { enabled: true },
+    }) as Record<string, unknown>;
+    expect(r.field_name).toBe('New');
+    expect(r.ui_visibility).toEqual({ add_visible_flag: false });
+    expect(r.description).toBeUndefined();
+    expect(r.important_fields).toBeUndefined();
+    expect(r.required_fields).toBeUndefined();
   });
 });

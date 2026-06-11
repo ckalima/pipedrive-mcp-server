@@ -281,6 +281,48 @@ export const DeleteOrganizationFieldOptionsSchema = z.object({
     .describe("IDs of the options to delete (at least one). Atomic: fails if any ID does not exist."),
 });
 
+// ─── U4: Product field write schemas ──────────────────────────────────────────
+// Product fields use a NARROWER model than other entities: ui_visibility has only
+// add_visible_flag/details_visible_flag, and there is NO description,
+// important_fields, or required_fields. These schemas are enumerated explicitly
+// (NOT derived from the deal schemas) so those fields cannot leak in.
+
+/** Product-field UI visibility (the simplest model: two flags only). */
+export const ProductUiVisibilitySchema = z.object({
+  add_visible_flag: z.boolean().optional(),
+  details_visible_flag: z.boolean().optional(),
+});
+
+export const CreateProductFieldSchema = z.object({
+  field_name: z.string().min(1).max(255).describe("Field name (required, 1-255 chars)"),
+  field_type: FieldTypeSchema.describe("Field type (required). Use 'enum' or 'set' for option fields."),
+  options: z.array(FieldOptionInputSchema).optional()
+    .describe("Field options (required for enum and set field types)"),
+  ui_visibility: ProductUiVisibilitySchema.optional()
+    .describe("UI visibility settings (add_visible_flag, details_visible_flag)"),
+}).refine(optionsPresentForEnumSet, ENUM_SET_OPTIONS_REFINE);
+
+export const UpdateProductFieldSchema = z.object({
+  field_code: FieldCodeSchema,
+  field_name: z.string().min(1).max(255).optional().describe("New field name"),
+  ui_visibility: ProductUiVisibilitySchema.optional()
+    .describe("UI visibility settings (add_visible_flag, details_visible_flag)"),
+});
+
+export const DeleteProductFieldSchema = z.object({ field_code: FieldCodeSchema });
+
+export const UpdateProductFieldOptionsSchema = z.object({
+  field_code: FieldCodeSchema,
+  options: z.array(OptionUpdateInputSchema).min(1)
+    .describe("Options to update (at least one). Atomic: fails if any option ID does not exist."),
+});
+
+export const DeleteProductFieldOptionsSchema = z.object({
+  field_code: FieldCodeSchema,
+  option_ids: z.array(z.number().int().positive()).min(1)
+    .describe("IDs of the options to delete (at least one). Atomic: fails if any ID does not exist."),
+});
+
 /**
  * Type exports
  */
@@ -308,3 +350,9 @@ export type UpdateOrganizationFieldParams = z.infer<typeof UpdateOrganizationFie
 export type DeleteOrganizationFieldParams = z.infer<typeof DeleteOrganizationFieldSchema>;
 export type UpdateOrganizationFieldOptionsParams = z.infer<typeof UpdateOrganizationFieldOptionsSchema>;
 export type DeleteOrganizationFieldOptionsParams = z.infer<typeof DeleteOrganizationFieldOptionsSchema>;
+
+export type CreateProductFieldParams = z.infer<typeof CreateProductFieldSchema>;
+export type UpdateProductFieldParams = z.infer<typeof UpdateProductFieldSchema>;
+export type DeleteProductFieldParams = z.infer<typeof DeleteProductFieldSchema>;
+export type UpdateProductFieldOptionsParams = z.infer<typeof UpdateProductFieldOptionsSchema>;
+export type DeleteProductFieldOptionsParams = z.infer<typeof DeleteProductFieldOptionsSchema>;

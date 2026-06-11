@@ -26,6 +26,11 @@ import {
   DeleteOrganizationFieldSchema,
   UpdateOrganizationFieldOptionsSchema,
   DeleteOrganizationFieldOptionsSchema,
+  CreateProductFieldSchema,
+  UpdateProductFieldSchema,
+  DeleteProductFieldSchema,
+  UpdateProductFieldOptionsSchema,
+  DeleteProductFieldOptionsSchema,
   type ListOrganizationFieldsParams,
   type ListDealFieldsParams,
   type ListPersonFieldsParams,
@@ -47,6 +52,11 @@ import {
   type DeleteOrganizationFieldParams,
   type UpdateOrganizationFieldOptionsParams,
   type DeleteOrganizationFieldOptionsParams,
+  type CreateProductFieldParams,
+  type UpdateProductFieldParams,
+  type DeleteProductFieldParams,
+  type UpdateProductFieldOptionsParams,
+  type DeleteProductFieldOptionsParams,
 } from "../schemas/fields.js";
 import {
   buildPaginationParamsV2,
@@ -472,6 +482,56 @@ export async function deleteOrganizationFieldOptions(params: DeleteOrganizationF
   return fieldWriteResult(`Organization field ${params.field_code} options deleted`, response.data);
 }
 
+// ─── U4: Product field write handlers ─────────────────────────────────────────
+// Product fields use the same handler shape as U3, but the narrower product
+// schema (no description / important_fields / required_fields) is enforced at the
+// Zod layer, so the shared body builders only ever copy product-valid keys.
+
+/** Create a product custom field. */
+export async function createProductField(params: CreateProductFieldParams) {
+  const client = getClient();
+  const response = await client.post<unknown>("/productFields", buildFieldCreateBody(params), "v2");
+  if (!response.success || !response.data) return mcpErrorResult(response);
+  return fieldWriteResult("Product field created", response.data);
+}
+
+/** Update a product custom field by field_code (only field_name and ui_visibility are accepted). */
+export async function updateProductField(params: UpdateProductFieldParams) {
+  const client = getClient();
+  const response = await client.patch<unknown>(`/productFields/${params.field_code}`, buildFieldUpdateBody(params), "v2");
+  if (!response.success || !response.data) return mcpErrorResult(response);
+  return fieldWriteResult(`Product field ${params.field_code} updated`, response.data);
+}
+
+/** Delete a product custom field by field_code. */
+export async function deleteProductField(params: DeleteProductFieldParams) {
+  const guard = destructiveOperationGuard();
+  if (guard) return guard;
+  const client = getClient();
+  const response = await client.delete<unknown>(`/productFields/${params.field_code}`, "v2");
+  if (!response.success || !response.data) return mcpErrorResult(response);
+  return fieldWriteResult(`Product field ${params.field_code} deleted`, response.data);
+}
+
+/** Bulk-update option labels of a product enum/set field. */
+export async function updateProductFieldOptions(params: UpdateProductFieldOptionsParams) {
+  const client = getClient();
+  const response = await client.patch<unknown>(`/productFields/${params.field_code}/options`, params.options, "v2");
+  if (!response.success || !response.data) return mcpErrorResult(response);
+  return fieldWriteResult(`Product field ${params.field_code} options updated`, response.data);
+}
+
+/** Bulk-delete options of a product enum/set field (atomic; fails if any ID is missing). */
+export async function deleteProductFieldOptions(params: DeleteProductFieldOptionsParams) {
+  const guard = destructiveOperationGuard();
+  if (guard) return guard;
+  const client = getClient();
+  const body = params.option_ids.map((id) => ({ id }));
+  const response = await client.delete<unknown>(`/productFields/${params.field_code}/options`, "v2", body);
+  if (!response.success || !response.data) return mcpErrorResult(response);
+  return fieldWriteResult(`Product field ${params.field_code} options deleted`, response.data);
+}
+
 // ─── Shared inputSchema fragments for field write tools ───────────────────────
 
 const FIELD_TYPE_PROP = {
@@ -510,6 +570,7 @@ const OPTION_IDS_PROP = {
 const UI_VISIBILITY_DEAL = { type: "object", description: "UI visibility: add_visible_flag, details_visible_flag, projects_detail_visible_flag, show_in_pipelines{show_in_all, pipeline_ids}." } as const;
 const UI_VISIBILITY_PERSON = { type: "object", description: "UI visibility: add_visible_flag, details_visible_flag, show_in_add_deal_dialog{show, order}." } as const;
 const UI_VISIBILITY_ORG = { type: "object", description: "UI visibility: add_visible_flag, details_visible_flag, show_in_add_deal_dialog{show, order}, show_in_add_person_dialog{show, order}." } as const;
+const UI_VISIBILITY_PRODUCT = { type: "object", description: "UI visibility (product fields use a simpler model): add_visible_flag, details_visible_flag." } as const;
 const IMPORTANT_FIELDS_PROP = { type: "object", description: "Important-field highlighting: enabled, stage_ids (always references DEAL stages, even on person/org fields)." } as const;
 const REQUIRED_FIELDS_DEAL = { type: "object", description: "Required-field config: enabled, stage_ids (deal stages), statuses (per-pipeline won/lost map)." } as const;
 const REQUIRED_FIELDS_SIMPLE = { type: "object", description: "Required-field config: enabled (person/org fields support only this flag)." } as const;
@@ -815,5 +876,70 @@ export const fieldTools = [
     },
     handler: deleteOrganizationFieldOptions,
     schema: DeleteOrganizationFieldOptionsSchema,
+  },
+  // ── U4: Product field write tools ──
+  {
+    name: "pipedrive_create_product_field",
+    description: "Create a product custom field. field_name and field_type are required. For enum/set types, options is required. Product fields use a simpler model: no description, important_fields, or required_fields. The response data.field_code is the 40-char hash to keep for later updates.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        field_name: { type: "string", description: "Field name (required, 1-255 chars)" },
+        field_type: FIELD_TYPE_PROP,
+        options: FIELD_OPTIONS_PROP,
+        ui_visibility: UI_VISIBILITY_PRODUCT,
+      },
+      required: ["field_name", "field_type"],
+    },
+    handler: createProductField,
+    schema: CreateProductFieldSchema,
+  },
+  {
+    name: "pipedrive_update_product_field",
+    description: "Update a product custom field by field_code. Only field_name and ui_visibility can be changed (product fields have no description/important_fields/required_fields).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        field_code: FIELD_CODE_PROP,
+        field_name: { type: "string", description: "New field name (1-255 chars)" },
+        ui_visibility: UI_VISIBILITY_PRODUCT,
+      },
+      required: ["field_code"],
+    },
+    handler: updateProductField,
+    schema: UpdateProductFieldSchema,
+  },
+  {
+    name: "pipedrive_delete_product_field",
+    description: "Delete a product custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    inputSchema: {
+      type: "object" as const,
+      properties: { field_code: FIELD_CODE_PROP },
+      required: ["field_code"],
+    },
+    handler: deleteProductField,
+    schema: DeleteProductFieldSchema,
+  },
+  {
+    name: "pipedrive_update_product_field_options",
+    description: "Bulk-update option labels of a product enum/set field. Atomic: the whole request fails if any option ID does not exist.",
+    inputSchema: {
+      type: "object" as const,
+      properties: { field_code: FIELD_CODE_PROP, options: OPTIONS_UPDATE_PROP },
+      required: ["field_code", "options"],
+    },
+    handler: updateProductFieldOptions,
+    schema: UpdateProductFieldOptionsSchema,
+  },
+  {
+    name: "pipedrive_delete_product_field_options",
+    description: "Bulk-delete options of a product enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    inputSchema: {
+      type: "object" as const,
+      properties: { field_code: FIELD_CODE_PROP, option_ids: OPTION_IDS_PROP },
+      required: ["field_code", "option_ids"],
+    },
+    handler: deleteProductFieldOptions,
+    schema: DeleteProductFieldOptionsSchema,
   },
 ];
