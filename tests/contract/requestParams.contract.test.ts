@@ -109,6 +109,27 @@ describe("request-params contract (v2)", () => {
 
       expect(() => assertQueryConformsToSpec("getDeals", capturedUrl(mockFn))).not.toThrow();
     });
+
+    // Products were deferred from the contract harness at ship time (#50 → #75).
+    // Revert-proof: FAILS if a non-v2 param (e.g. a re-added `start`/`first_char`)
+    // or an out-of-enum `sort_by` ever lands on the getProducts list query.
+    it("getProducts list query conforms", async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listProducts } = await import("../../src/tools/products.js");
+
+      await listProducts({
+        limit: 50,
+        owner_id: 1,
+        ids: "1,2,3",
+        filter_id: 7,
+        sort_by: "update_time",
+        sort_direction: "asc",
+        updated_since: "2024-01-01T00:00:00Z",
+        custom_fields: "abc1234567890abc1234567890abc1234567890a",
+      });
+
+      expect(() => assertQueryConformsToSpec("getProducts", capturedUrl(mockFn))).not.toThrow();
+    });
   });
 
   describe("search endpoints", () => {
@@ -173,6 +194,25 @@ describe("request-params contract (v2)", () => {
       });
 
       expect(() => assertQueryConformsToSpec("searchProjects", capturedUrl(mockFn))).not.toThrow();
+    });
+
+    // Revert-proof: FAILS if `fields` carries a token outside [code, custom_fields,
+    // name] or `include_fields` outside [product.price] — both are enum-constrained
+    // on searchProducts, unlike the looser person/deal search field lists.
+    it("searchProducts query conforms (fields/include_fields in enum)", async () => {
+      const mockFn = mockApiSuccess({ items: [] });
+      const { searchProducts } = await import("../../src/tools/products.js");
+
+      await searchProducts({
+        term: "widget",
+        fields: "name,code",
+        exact_match: true,
+        include_fields: "product.price",
+        limit: 25,
+        cursor: "cur1",
+      });
+
+      expect(() => assertQueryConformsToSpec("searchProducts", capturedUrl(mockFn))).not.toThrow();
     });
   });
 

@@ -152,11 +152,15 @@ function requestBodySchema(operationId: string): SchemaNode {
   return schema;
 }
 
-/** Allowed top-level body property names for a POST/PATCH operation. */
+/**
+ * Allowed top-level body property names for a POST/PATCH operation. Merges
+ * `allOf` branches via `collectProperties` so composed schemas (e.g. addProduct/
+ * updateProduct, which compose their body from several `allOf` fragments rather
+ * than a single flat `properties` map) expose every allowed key, not [].
+ */
 export function requestBodyProps(operationId: string): Set<string> {
   const schema = requestBodySchema(operationId);
-  const props = schema.properties ?? {};
-  return new Set(Object.keys(props));
+  return new Set(Object.keys(collectProperties(schema)));
 }
 
 /**
@@ -166,7 +170,7 @@ export function requestBodyProps(operationId: string): Set<string> {
  */
 export function requestBodyPropType(operationId: string, prop: string): string | undefined {
   const schema = requestBodySchema(operationId);
-  const propSchema = resolveRef(schema.properties?.[prop]);
+  const propSchema = resolveRef(collectProperties(schema)[prop]);
   return propSchema?.type;
 }
 
@@ -285,6 +289,75 @@ export function assertBodyConformsToSpec(operationId: string, body: unknown): vo
       );
     }
   }
+}
+
+/**
+ * Throws if `body` violates a v2 operation whose request body is a top-level
+ * JSON *array* — the field-option bulk verbs (updateDealFieldOptions PATCH,
+ * deleteDealFieldOptions and its person/org/product siblings: body-bearing
+ * DELETE) send an array payload, which `assertBodyConformsToSpec` rejects by
+ * design. Asserts:
+ *  - the spec really declares an array body (guards against pointing this at an
+ *    object-body op by mistake),
+ *  - the captured body is an array,
+ *  - every element is an object whose keys are all allowed `items` properties
+ *    and whose values match each property's spec `type`.
+ *
+ * Element-level checking reuses the same name+type discipline as
+ * `assertBodyConformsToSpec`, so a stray key (e.g. reverting deleteDealFieldOptions
+ * to send `{ option_id }` instead of `{ id }`) or a wrong runtime type fails here.
+ *
+ * Scope: this validates element *shape* only. It does not enforce a minimum
+ * length (the v2 spec declares no `minItems` for these bodies), so an empty array
+ * passes — callers asserting "at least one element was sent" must check that
+ * themselves. It also skips item key-name checks when the `items` schema declares
+ * no `properties` (a free-form `{ type: object }`), since there is nothing to
+ * constrain against.
+ */
+export function assertArrayBodyConformsToSpec(operationId: string, body: unknown): void {
+  const schema = requestBodySchema(operationId);
+  if (schema.type !== "array") {
+    throw new Error(
+      `OpenAPI contract [${operationId}]: expected a top-level array request body, but the v2 ` +
+        `spec declares type "${schema.type ?? "(none)"}". Use assertBodyConformsToSpec instead.`,
+    );
+  }
+  if (!Array.isArray(body)) {
+    throw new Error(
+      `OpenAPI contract [${operationId}]: outbound body is not a JSON array (got ${typeof body}).`,
+    );
+  }
+
+  const itemSchema = resolveRef(schema.items) ?? {};
+  const allowed = new Set(Object.keys(itemSchema.properties ?? {}));
+
+  body.forEach((item, i) => {
+    if (!isPlainObject(item)) {
+      const actual = Array.isArray(item) ? "array" : typeof item;
+      throw new Error(
+        `OpenAPI contract [${operationId}]: array element [${i}] is not a JSON object (got ${actual}).`,
+      );
+    }
+    const record = item as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      if (allowed.size > 0 && !allowed.has(key)) {
+        throw new Error(
+          `OpenAPI contract [${operationId}]: array element [${i}] has key "${key}" which is NOT an ` +
+            `allowed v2 item property. Allowed: [${[...allowed].sort().join(", ")}].`,
+        );
+      }
+      const value = record[key];
+      if (value === undefined || value === null) continue;
+      const specType = resolveRef(itemSchema.properties?.[key])?.type;
+      if (!valueMatchesSpecType(value, specType)) {
+        const actual = Array.isArray(value) ? "array" : typeof value;
+        throw new Error(
+          `OpenAPI contract [${operationId}]: array element [${i}] key "${key}" has runtime type ` +
+            `"${actual}" but the v2 spec declares type "${specType}".`,
+        );
+      }
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

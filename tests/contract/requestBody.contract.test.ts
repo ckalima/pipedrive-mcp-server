@@ -214,4 +214,49 @@ describe("request-body contract (v2)", () => {
       expect(() => assertBodyConformsToSpec("updateProject", capturedBody(mockFn))).not.toThrow();
     });
   });
+
+  describe("products", () => {
+    // Products were deferred from the contract harness at ship time (#50 → #75).
+    // Revert-proof: FAILS if `prices` is sent as a scalar/object instead of an
+    // array, or `custom_fields` as a non-object — the spec declares `prices: array`,
+    // `custom_fields: object`.
+    it("addProduct body conforms (prices array, custom_fields object)", async () => {
+      const mockFn = mockApiSuccess({ id: 1, name: "Widget" });
+      const { createProduct } = await import("../../src/tools/products.js");
+
+      await createProduct({
+        name: "Widget",
+        code: "W-1",
+        description: "A widget",
+        unit: "each",
+        tax: 10,
+        category: 5,
+        owner_id: 3,
+        is_linkable: true,
+        visible_to: 7,
+        prices: [{ currency: "USD", price: 100, cost: 40 }],
+        custom_fields: { abc1234567890abc1234567890abc1234567890a: "x" },
+        billing_frequency: "monthly",
+        billing_frequency_cycles: 12,
+      });
+
+      expect(() => assertBodyConformsToSpec("addProduct", capturedBody(mockFn))).not.toThrow();
+    });
+
+    it("updateProduct body conforms (prices array, custom_fields object)", async () => {
+      const mockFn = mockApiSuccess({ id: 1, name: "Widget" });
+      const { updateProduct } = await import("../../src/tools/products.js");
+
+      await updateProduct({
+        id: 1,
+        name: "Widget v2",
+        code: "W-2",
+        tax: 12,
+        prices: [{ currency: "EUR", price: 90 }],
+        custom_fields: { abc1234567890abc1234567890abc1234567890a: "y" },
+      });
+
+      expect(() => assertBodyConformsToSpec("updateProduct", capturedBody(mockFn))).not.toThrow();
+    });
+  });
 });
