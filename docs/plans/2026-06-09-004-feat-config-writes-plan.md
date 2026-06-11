@@ -27,6 +27,15 @@ scope: large
 > list (no `description`); (7) corrected the pipeline rename spec citation; (8) rebuilt the
 > Requirements Traceability table with one row per granular R-ID.
 
+> **Revision (2026-06-10, round 2):** Incorporated round-2 ce-doc-review feedback. (a) U0 now also
+> widens the **private `request()`** body type — the round-1 client fix would not compile otherwise;
+> (b) corrected the pipeline/stage update claim — the v2 spec sets no `minProperties`, so an
+> `{id}`-only update is a valid no-op (enforce non-empty client-side via `.refine()` if a no-op call
+> should be rejected); (c) added a shared `FieldCodeSchema` that rejects path separators in
+> `field_code`; (d) acknowledged the CRM-wide blast radius of the ungated PATCH options sub-verbs and
+> the all-or-nothing semantics of delete-options. Also corrected the Problem Frame inversion count
+> (one, not two).
+
 ## Problem Frame
 
 The MCP server exposes read-only access to pipeline/stage/field configuration. There is no way
@@ -42,9 +51,9 @@ the field-options sub-verbs require request-body shapes the current client canno
 existing read or write handler is otherwise modified.
 
 **Critical correctness risk:** the v2 API renamed several boolean fields from their v1 names, and
-two of those renames invert the semantic meaning of the boolean. Any schema or handler that uses
-the v1 name silently sends or reads the wrong field. Every schema and test in this plan must use
-the v2 names exclusively.
+one of those renames (`active` → `is_deleted`) inverts the semantic meaning of the boolean. Any
+schema or handler that uses the v1 name silently sends or reads the wrong field. Every schema and
+test in this plan must use the v2 names exclusively.
 
 ---
 
@@ -174,7 +183,7 @@ exact body-schema line.
 | Operation | Method | Path | Required body fields | Response `data` shape |
 |-----------|--------|------|---------------------|-----------------------|
 | Create | POST | `/pipelines` | `name` (string) | pipeline object |
-| Update | PATCH | `/pipelines/{id}` | at least one of: `name`, `is_deal_probability_enabled` | pipeline object |
+| Update | PATCH | `/pipelines/{id}` | none required (spec sets no `minProperties`); any subset of `name`, `is_deal_probability_enabled` | pipeline object |
 | Delete | DELETE | `/pipelines/{id}` | none | `{ id: integer }` |
 
 Pipeline object response fields (lines 17911-17939):
@@ -189,7 +198,7 @@ a separate block further down the same path — `is_deal_probability_enabled` ap
 | Operation | Method | Path | Required body fields | Response `data` shape |
 |-----------|--------|------|---------------------|-----------------------|
 | Create | POST | `/stages` | `name` (string), `pipeline_id` (integer) | stage object |
-| Update | PATCH | `/stages/{id}` | at least one of the optional fields | stage object |
+| Update | PATCH | `/stages/{id}` | none required (spec sets no `minProperties`); any subset of the optional fields | stage object |
 | Delete | DELETE | `/stages/{id}` | none | `{ id: integer }` |
 
 Stage object response fields (lines 17469-17500):
@@ -202,7 +211,8 @@ object itself, NOT the pipeline-level `is_deal_probability_enabled` rename — s
 below.
 
 Update body fields (lines 17764-17781): `name`, `pipeline_id`, `deal_probability`,
-`is_deal_rot_enabled`, `days_to_rotten` — all optional (at least one required).
+`is_deal_rot_enabled`, `days_to_rotten` — all optional; the spec sets no `minProperties`, so an
+`{id}`-only body is a valid no-op (unlike field updates, which carry `minProperties: 1`).
 
 #### Deal fields (`/dealFields`, spec line 5981)
 
@@ -300,14 +310,17 @@ so the delete-options sub-verbs can send a body on a DELETE request.
 **Dependencies:** None. Hard dependency of U3 and U4 options sub-verbs.
 
 **Files:**
-- `src/client.ts` — widen `patch`/`post` body parameter type; add a body-bearing delete path
+- `src/client.ts` — widen the `patch`/`post`/`request` body parameter types; add a body-bearing delete path
 - `tests/integration/` — client-level tests for the new body shapes (or exercised via the U3 options handler tests)
 
 **Approach:**
-- Widen the `body` parameter on `patch<T>` and `post<T>` from `Record<string, unknown>` to
-  `Record<string, unknown> | unknown[]` (the underlying `request()` already `JSON.stringify`s the
-  body and a non-empty array is truthy for the `if (body)` Content-Type guard, so serialization is
-  correct at runtime — only the type signature needs widening).
+- Widen the `body` parameter on `patch<T>` and `post<T>` **and on the private `request<T>()` method
+  they delegate to** from `Record<string, unknown>` to `Record<string, unknown> | unknown[]`.
+  `request()`'s `body` param (currently `Record<string, unknown> | undefined` in `src/client.ts`)
+  must become `Record<string, unknown> | unknown[] | undefined`, or `tsc` rejects forwarding an
+  array through it under `strict` — the public-method widening alone does not compile. The runtime
+  `JSON.stringify(body)` and `if (body)` Content-Type logic is unchanged (a non-empty array is
+  truthy and serializes correctly); only the type signatures widen.
 - Add a body-bearing DELETE. The current `delete<T>(endpoint, version)` passes `undefined` for the
   body. Add an optional body parameter (e.g., `delete<T>(endpoint, version, body?: Record<string, unknown> | unknown[])`)
   and thread it through `request("DELETE", endpoint, body, …)`. Keep the existing two-arg call
@@ -345,7 +358,7 @@ and the corresponding schemas to `src/schemas/pipelines.ts`.
 
 **Approach:**
 - `CreatePipelineSchema`: `z.object({ name: z.string().min(1), is_deal_probability_enabled: z.boolean().optional() }).strict()` — `.strict()` so `active`/`is_deleted`/`deal_probability` are rejected, not silently dropped
-- `UpdatePipelineSchema`: `IdParamSchema.extend({ name: z.string().min(1).optional(), is_deal_probability_enabled: z.boolean().optional() }).strict()` — caller provides at least one field; the API rejects empty bodies
+- `UpdatePipelineSchema`: `IdParamSchema.extend({ name: z.string().min(1).optional(), is_deal_probability_enabled: z.boolean().optional() }).strict()` — the v2 spec sets no `minProperties`, so an `{id}`-only body is a valid no-op (not an API error); add a `.refine()` requiring at least one updatable field if a no-op call should be rejected client-side
 - `DeletePipelineSchema`: `IdParamSchema`
 - Handler `createPipeline`: build body with required `name`, conditionally add `is_deal_probability_enabled`. POST to `/pipelines`, version `"v2"`. Return `{ summary: "Pipeline created", data }`.
 - Handler `updatePipeline`: build sparse body from optional fields. PATCH to `/pipelines/${id}`. Return `{ summary: "Pipeline ${id} updated", data }`.
@@ -433,6 +446,7 @@ these files; implement U3 after U0 (and after U1/U2 to keep PRs small).
 **Approach — schemas:**
 - Shared `FieldTypeSchema`: `z.enum(["varchar", "text", "double", "phone", "date", "daterange", "time", "timerange", "set", "enum", "varchar_auto", "address", "monetary", "org", "people", "user"])` — the write-allowed subset per the spec
 - Shared `FieldOptionInputSchema`: `z.object({ label: z.string().min(1) }).strict()`
+- Shared `FieldCodeSchema`: `z.string().min(1).regex(/^[^/]+$/, "field_code must not contain '/'")` — `field_code` is interpolated into the request path (`/dealFields/${field_code}`), so rejecting path separators closes path-segment injection across all eight new URL sites. It deliberately does NOT hard-enforce the 40-char hex hash format, since built-in (non-custom) fields may use human-readable keys at the same endpoints. **All `field_code` params below use `FieldCodeSchema`.**
 - **Explicit sub-object shapes (no `.passthrough()`):** the spec fully enumerates `ui_visibility`,
   `important_fields`, and `required_fields` per entity, so define explicit Zod objects with the
   spec's keys and default strip behaviour (or `.strict()` to reject unknowns). This closes the hole
@@ -442,10 +456,10 @@ these files; implement U3 after U0 (and after U1/U2 to keep PRs small).
   references **deal** stages even on person/org fields — call this out in the tool description);
   `required_fields`: deal has `{ enabled, stage_ids?, statuses? }`, person/org have `{ enabled }`.
 - `CreateDealFieldSchema`: `z.object({ field_name: z.string().min(1).max(255), field_type: FieldTypeSchema, options: z.array(FieldOptionInputSchema).optional(), ui_visibility: DealUiVisibilitySchema.optional(), important_fields: ImportantFieldsSchema.optional(), required_fields: DealRequiredFieldsSchema.optional(), description: z.string().nullable().optional() }).superRefine((v, ctx) => { if ((v.field_type === "enum" || v.field_type === "set") && (!v.options || v.options.length === 0)) ctx.addIssue({ code: "custom", path: ["options"], message: "options is required for enum/set field types" }); })`
-- `UpdateDealFieldSchema`: `z.object({ field_code: z.string().min(1), field_name: z.string().min(1).max(255).optional(), ui_visibility: ..optional, important_fields: ..optional, required_fields: ..optional, description: ..nullable.optional })` — `field_type` and `field_code` cannot be changed
-- `DeleteDealFieldSchema`: `z.object({ field_code: z.string().min(1) })`
-- `UpdateDealFieldOptionsSchema`: `z.object({ field_code: z.string().min(1), options: z.array(z.object({ id: z.number().int().positive(), label: z.string().min(1).max(255) }).strict()).min(1) })`
-- `DeleteDealFieldOptionsSchema`: `z.object({ field_code: z.string().min(1), option_ids: z.array(z.number().int().positive()).min(1) })`
+- `UpdateDealFieldSchema`: `z.object({ field_code: FieldCodeSchema, field_name: z.string().min(1).max(255).optional(), ui_visibility: ..optional, important_fields: ..optional, required_fields: ..optional, description: ..nullable.optional })` — `field_type` and `field_code` cannot be changed
+- `DeleteDealFieldSchema`: `z.object({ field_code: FieldCodeSchema })`
+- `UpdateDealFieldOptionsSchema`: `z.object({ field_code: FieldCodeSchema, options: z.array(z.object({ id: z.number().int().positive(), label: z.string().min(1).max(255) }).strict()).min(1) })`
+- `DeleteDealFieldOptionsSchema`: `z.object({ field_code: FieldCodeSchema, option_ids: z.array(z.number().int().positive()).min(1) })`
 - Person and org schemas follow the same pattern with entity-appropriate `ui_visibility`/
   `required_fields` shapes. Document the per-entity differences in JSDoc.
 
@@ -454,17 +468,22 @@ these files; implement U3 after U0 (and after U1/U2 to keep PRs small).
 - `updateDealField(params)`: build sparse body from optional fields. PATCH to `/dealFields/${params.field_code}`. Return `{ summary: "Deal field ${field_code} updated", data }`.
 - `deleteDealField(params)`: `destructiveOperationGuard()` first. DELETE `/dealFields/${params.field_code}`. Return `{ summary: "Deal field ${field_code} deleted", data }`.
 - `updateDealFieldOptions(params)`: PATCH body is the array directly (not nested): `client.patch("/dealFields/${field_code}/options", params.options, "v2")` (relies on U0's array-body widening). Return `{ summary: "Deal field ${field_code} options updated", data }`.
-- `deleteDealFieldOptions(params)`: **`destructiveOperationGuard()` first** (bulk option deletion is data-destructive). Body is array `params.option_ids.map(id => ({ id }))`. `client.delete("/dealFields/${field_code}/options", "v2", body)` (relies on U0's body-bearing DELETE).
+- `deleteDealFieldOptions(params)`: **`destructiveOperationGuard()` first** (bulk option deletion is data-destructive). Body is array `params.option_ids.map(id => ({ id }))`. `client.delete("/dealFields/${field_code}/options", "v2", body)` (relies on U0's body-bearing DELETE). Note: the endpoint is all-or-nothing — if any `option_id` does not exist the whole batch fails; surface this caveat in the tool description.
 - Repeat the same five handlers for `personField` and `organizationField`, substituting endpoint paths `/personFields/{field_code}` and `/organizationFields/{field_code}`.
 
 **Guard policy (explicit):** all `deleteXxxField` **and** `deleteXxxFieldOptions` handlers call
 `destructiveOperationGuard()` as their first statement. The PATCH `updateXxxFieldOptions`
 sub-verbs are NOT gated — consistent with the project convention that the guard covers destructive
 DELETE operations, and with every existing update handler being ungated (see FYI note below).
+Acknowledged: a bulk `updateXxxFieldOptions` PATCH relabels an option used across all CRM records
+for that field, so its blast radius is wider than a single-record update; the ungated decision
+follows project convention and can be revisited (add the guard to the four update-options handlers)
+if a guarded variant is wanted later, with no schema change required.
 
 **Test scenarios:**
 - Schema: `CreateDealFieldSchema` rejects missing `field_name`; rejects missing `field_type`; rejects unsupported `field_type` (e.g., `"picture"`); `.superRefine` triggers when `field_type` is `enum`/`set` and `options` is absent; accepts all optional fields omitted for non-enum types
 - Schema: explicit sub-object shapes reject an unknown/v1-named key inside `ui_visibility` (no `.passthrough()` leak)
+- Schema: `FieldCodeSchema` rejects a `field_code` containing `/` (path-separator guard), accepts a 40-char hex hash and a plain built-in key
 - **field_code round-trip (integration):** `createDealField` returns `data.field_code` (40-char hash); feed that exact value to `updateDealField` / `deleteDealField` and assert the PATCH/DELETE path uses it — proves the create→update workflow
 - Integration: `createDealField` uses POST `/api/v2/dealFields`; body contains `field_name` and `field_type`; `options` passed when provided
 - Integration: `updateDealField` uses PATCH `/api/v2/dealFields/{field_code}`; body does not contain `field_type`
@@ -500,8 +519,8 @@ implement after U3 lands to avoid conflicts).
 **Approach:**
 - `CreateProductFieldSchema`: explicitly enumerated (do NOT derive from `CreateDealFieldSchema`) —
   `z.object({ field_name: z.string().min(1).max(255), field_type: FieldTypeSchema, options: z.array(FieldOptionInputSchema).optional(), ui_visibility: ProductUiVisibilitySchema.optional() }).superRefine(...enum/set options check...)`. `ProductUiVisibilitySchema` has only `add_visible_flag` and `details_visible_flag`. **No** `description`, `important_fields`, or `required_fields` — these are absent from the product field model by design (spec).
-- `UpdateProductFieldSchema`: `z.object({ field_code: z.string().min(1), field_name: z.string().min(1).max(255).optional(), ui_visibility: ProductUiVisibilitySchema.optional() })` — the v2 spec for product field update accepts ONLY these two fields (spec line 15879).
-- `DeleteProductFieldSchema`: `z.object({ field_code: z.string().min(1) })`
+- `UpdateProductFieldSchema`: `z.object({ field_code: FieldCodeSchema, field_name: z.string().min(1).max(255).optional(), ui_visibility: ProductUiVisibilitySchema.optional() })` — the v2 spec for product field update accepts ONLY these two fields (spec line 15879).
+- `DeleteProductFieldSchema`: `z.object({ field_code: FieldCodeSchema })`
 - Options schemas: same shape as deal/person/org options schemas
 - Handlers follow the same five-handler pattern from U3, with `/productFields/{field_code}` paths
 - **Guard policy:** `deleteProductField` and `deleteProductFieldOptions` both call
@@ -540,9 +559,10 @@ the boolean meaning is inverted. Mitigations:
 Field PATCH/DELETE/options operations use the 40-character `field_code` hash in the path (e.g.,
 `/dealFields/946947d1…`), returned by the create call and in read/list responses — NOT the human
 field name and NOT an integer `id`. The existing `IdParamSchema` (`z.number().int().positive()`)
-must NOT be used for field write schemas; each defines its own `field_code: z.string().min(1)`.
-A create→update round-trip integration test (U3/U4) proves the workflow. Passing the field name
-yields a 404.
+must NOT be used for field write schemas; each defines its own `field_code: FieldCodeSchema`.
+`FieldCodeSchema` also rejects path separators (`/`) so an attacker- or mistake-supplied value
+cannot redirect the interpolated request path to a different endpoint. A create→update round-trip
+integration test (U3/U4) proves the workflow. Passing the field name yields a 404.
 
 ### R-3 (MEDIUM): `enum`/`set` fields require `options` in create body
 
