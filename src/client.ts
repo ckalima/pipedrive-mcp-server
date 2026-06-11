@@ -125,22 +125,29 @@ export class PipedriveClient {
   }
 
   /**
-   * Makes a POST request to the Pipedrive API
+   * Makes a POST request to the Pipedrive API.
+   *
+   * The body accepts either an object or a top-level array. A few v2 endpoints
+   * (e.g. the field-options sub-verbs) take a JSON array as their request body.
    */
   async post<T>(
     endpoint: string,
-    body: Record<string, unknown>,
+    body: Record<string, unknown> | unknown[],
     version: ApiVersion
   ): Promise<ApiResponse<T>> {
     return this.request<T>("POST", endpoint, undefined, body, version);
   }
 
   /**
-   * Makes a PATCH request to the Pipedrive API
+   * Makes a PATCH request to the Pipedrive API.
+   *
+   * The body accepts either an object or a top-level array. The field-options
+   * bulk-update sub-verbs (`PATCH /{entity}Fields/{field_code}/options`) send a
+   * top-level `[{ id, label }]` array.
    */
   async patch<T>(
     endpoint: string,
-    body: Record<string, unknown>,
+    body: Record<string, unknown> | unknown[],
     version: ApiVersion
   ): Promise<ApiResponse<T>> {
     return this.request<T>("PATCH", endpoint, undefined, body, version);
@@ -158,13 +165,18 @@ export class PipedriveClient {
   }
 
   /**
-   * Makes a DELETE request to the Pipedrive API
+   * Makes a DELETE request to the Pipedrive API.
+   *
+   * An optional request body may be supplied — the field-options bulk-delete
+   * sub-verbs (`DELETE /{entity}Fields/{field_code}/options`) require a
+   * top-level `[{ id }]` array body. Existing two-arg callers send no body.
    */
   async delete<T>(
     endpoint: string,
-    version: ApiVersion
+    version: ApiVersion,
+    body?: Record<string, unknown> | unknown[]
   ): Promise<ApiResponse<T>> {
-    return this.request<T>("DELETE", endpoint, undefined, undefined, version);
+    return this.request<T>("DELETE", endpoint, undefined, body, version);
   }
 
   /**
@@ -198,7 +210,7 @@ export class PipedriveClient {
     method: string,
     endpoint: string,
     params: URLSearchParams | undefined,
-    body: Record<string, unknown> | undefined,
+    body: Record<string, unknown> | unknown[] | undefined,
     version: ApiVersion
   ): Promise<ApiResponse<T>> {
     const config = this.ensureInitialized();

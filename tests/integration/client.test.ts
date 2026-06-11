@@ -261,6 +261,56 @@ describe('PipedriveClient', () => {
     });
   });
 
+  // U0: top-level array request bodies + body-bearing DELETE for field-options sub-verbs
+  describe('array request bodies (U0)', () => {
+    it('PATCH sends a top-level JSON array body', async () => {
+      const mockFn = mockApiSuccess([{ id: 1, label: 'Renamed' }]);
+      const client = new PipedriveClient();
+
+      await client.patch('/dealFields/abc/options', [{ id: 1, label: 'Renamed' }], 'v2');
+
+      const [, options] = mockFn.mock.calls[0];
+      expect(options.method).toBe('PATCH');
+      expect(options.headers['Content-Type']).toBe('application/json');
+      expect(JSON.parse(options.body)).toEqual([{ id: 1, label: 'Renamed' }]);
+    });
+
+    it('POST sends a top-level JSON array body', async () => {
+      const mockFn = mockApiSuccess([{ id: 1 }]);
+      const client = new PipedriveClient();
+
+      await client.post('/dealFields/abc/options', [{ id: 1 }], 'v2');
+
+      const [, options] = mockFn.mock.calls[0];
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body)).toEqual([{ id: 1 }]);
+    });
+
+    it('DELETE sends a top-level JSON array body when one is supplied', async () => {
+      const mockFn = mockApiSuccess([{ id: 1, label: 'Removed' }]);
+      const client = new PipedriveClient();
+
+      await client.delete('/dealFields/abc/options', 'v2', [{ id: 1 }]);
+
+      const [, options] = mockFn.mock.calls[0];
+      expect(options.method).toBe('DELETE');
+      expect(options.headers['Content-Type']).toBe('application/json');
+      expect(JSON.parse(options.body)).toEqual([{ id: 1 }]);
+    });
+
+    it('two-arg DELETE still sends no body (no regression)', async () => {
+      const mockFn = mockApiSuccess({ id: 1 });
+      const client = new PipedriveClient();
+
+      await client.delete('/deals/1', 'v2');
+
+      const [, options] = mockFn.mock.calls[0];
+      expect(options.method).toBe('DELETE');
+      expect(options.body).toBeUndefined();
+      expect(options.headers['Content-Type']).toBeUndefined();
+    });
+  });
+
   describe('error handling', () => {
     it('should handle 400 Bad Request', async () => {
       mockApiError(400, 'Invalid parameter value');
