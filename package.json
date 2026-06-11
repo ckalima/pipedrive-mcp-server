@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
+    "smoke:installments": "tsx scripts/smoke-installments.ts",
     "lint": "eslint src/",
     "prepublishOnly": "npm run build"
   },
