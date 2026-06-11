@@ -74,14 +74,18 @@ export const FieldOptionInputSchema = z.object({
  * in list/read responses. It is NOT the human field name and NOT an integer id;
  * passing the field name yields a 404.
  *
- * It is interpolated into the request path (`/dealFields/${field_code}`), so path
- * separators are rejected to prevent an injected value from redirecting the
- * request to a different endpoint. The 40-char hex format is deliberately NOT
- * hard-enforced: built-in (non-custom) fields may use human-readable keys at the
- * same endpoints.
+ * It is interpolated into the request path (`/dealFields/${field_code}`), so the
+ * value is restricted to a strict allowlist to prevent it from redirecting the
+ * request to a different endpoint. A blocklist of just `/` is NOT sufficient:
+ * `new URL()` normalizes backslashes to `/`, collapses `..` dot-segments, and
+ * truncates the path at `?`/`#`, so values like `..`, `a\b`, or `abc?x=1` would
+ * still mangle the resolved path. The allowlist `[A-Za-z0-9_-]` admits the
+ * 40-char hex hash and snake_case built-in keys (e.g. `title`, `org_id`) while
+ * excluding every URL-significant character. The 40-char hex format is
+ * deliberately NOT hard-enforced: built-in (non-custom) fields use readable keys.
  */
 export const FieldCodeSchema = z.string().min(1)
-  .regex(/^[^/]+$/, "field_code must not contain '/'")
+  .regex(/^[A-Za-z0-9_-]+$/, "field_code may only contain letters, digits, '_' and '-'")
   .describe("The field_code (40-char hash for custom fields) from the field create/list response");
 
 // Shared option-list shapes for the bulk options sub-verbs.

@@ -69,9 +69,22 @@ describe('field write schemas — shared building blocks', () => {
       expect(FieldCodeSchema.parse('title')).toBe('title');
     });
 
+    it('accepts hyphen and underscore (some built-in keys use them)', () => {
+      expect(FieldCodeSchema.parse('add_time')).toBe('add_time');
+      expect(FieldCodeSchema.parse('a-b_c')).toBe('a-b_c');
+    });
+
     it('rejects a field_code containing a path separator', () => {
       expect(() => FieldCodeSchema.parse('abc/../deals')).toThrow();
       expect(() => FieldCodeSchema.parse('a/b')).toThrow();
+    });
+
+    it('rejects URL-significant chars that new URL() would normalize into path redirection', () => {
+      // backslash (rewritten to '/'), dot-segments, query/fragment, percent-encoding,
+      // whitespace and control chars all survived the old `/^[^/]+$/` blocklist.
+      for (const hostile of ['..', '.', 'a\\b', '..\\..\\pipelines\\7', 'abc?x=1', 'abc#f', '%2e%2e', '%2F', 'a b', 'a\tb', 'a\nb', 'a\0b', 'a:b']) {
+        expect(() => FieldCodeSchema.parse(hostile)).toThrow();
+      }
     });
 
     it('rejects an empty field_code', () => {
