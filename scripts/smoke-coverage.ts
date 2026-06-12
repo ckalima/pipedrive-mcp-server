@@ -559,6 +559,30 @@ async function c3_dealSubResources(stamp: number): Promise<void> {
   if (!record("create_deal", !dealRes.isError && dealId != null, dealRes.isError ? shortErr(dealRes) : `deal_id=${dealId}`)) return;
   const dealTrack = track(`deal ${dealId}`, "pipedrive_delete_deal", { id: dealId });
 
+  // Single-item GETs against the throwaway records. Section A's "get first"
+  // probes SKIP on an empty account, so these are the only live runs of the
+  // get-by-id handlers for deals/products (and notes/activities below).
+  await probeGet(`get_deal(${dealId})`, "pipedrive_get_deal", { id: dealId });
+  await probeGet(`get_product(${productId})`, "pipedrive_get_product", { id: productId });
+
+  // v1 note round-trip linked to the deal (create → get → delete).
+  const noteRes = await call("pipedrive_create_note", { content: `Smoke note ${stamp}`, deal_id: dealId });
+  const noteId = idOf(noteRes);
+  if (record("create_note (v1, deal-linked)", !noteRes.isError && noteId != null, noteRes.isError ? shortErr(noteRes) : `note_id=${noteId}`)) {
+    const noteTrack = track(`note ${noteId}`, "pipedrive_delete_note", { id: noteId });
+    await probeGet(`get_note(${noteId})`, "pipedrive_get_note", { id: noteId });
+    await deleteProbe(`note ${noteId}`, "pipedrive_delete_note", { id: noteId }, noteTrack);
+  }
+
+  // Activity round-trip linked to the deal (create → get → delete).
+  const actRes = await call("pipedrive_create_activity", { subject: `Smoke activity ${stamp}`, type: "task", deal_id: dealId });
+  const activityId = idOf(actRes);
+  if (record("create_activity (deal-linked)", !actRes.isError && activityId != null, actRes.isError ? shortErr(actRes) : `activity_id=${activityId}`)) {
+    const actTrack = track(`activity ${activityId}`, "pipedrive_delete_activity", { id: activityId });
+    await probeGet(`get_activity(${activityId})`, "pipedrive_get_activity", { id: activityId });
+    await deleteProbe(`activity ${activityId}`, "pipedrive_delete_activity", { id: activityId }, actTrack);
+  }
+
   const addProd = await call("pipedrive_add_deal_product", { id: dealId, product_id: productId, item_price: 100, quantity: 2 });
   const attachmentId = idOf(addProd);
   record("add_deal_product", !addProd.isError && attachmentId != null, addProd.isError ? shortErr(addProd) : `product_attachment_id=${attachmentId}`);
@@ -641,7 +665,12 @@ async function c4_convertDealToLead(stamp: number): Promise<void> {
   if (lastStatus === "completed") {
     // A completed conversion consumes (deletes) the source deal; clean up the produced lead instead.
     dealTrack.done = true;
-    if (typeof leadId === "string") track(`converted lead ${leadId}`, "pipedrive_delete_lead", { id: leadId });
+    if (typeof leadId === "string") {
+      track(`converted lead ${leadId}`, "pipedrive_delete_lead", { id: leadId });
+      // Only live chance to exercise get_lead: leads can't be created directly
+      // by this harness, and Section A's "get first" probe skips when empty.
+      await probeGet(`get_lead(${leadId})`, "pipedrive_get_lead", { id: leadId });
+    }
   }
 }
 
@@ -716,6 +745,7 @@ async function c6_variationsAndFollowers(stamp: number): Promise<void> {
     const personId = idOf(person);
     if (personId != null) {
       const t = track(`follower person ${personId}`, "pipedrive_delete_person", { id: personId });
+      await probeGet(`get_person(${personId})`, "pipedrive_get_person", { id: personId });
       await followerRoundTrip("person", personId, userId, "pipedrive_add_person_follower", "pipedrive_list_person_followers", "pipedrive_delete_person_follower");
       await deleteProbe(`follower person ${personId}`, "pipedrive_delete_person", { id: personId }, t);
     }
@@ -724,6 +754,7 @@ async function c6_variationsAndFollowers(stamp: number): Promise<void> {
     const orgId = idOf(org);
     if (orgId != null) {
       const t = track(`follower org ${orgId}`, "pipedrive_delete_organization", { id: orgId });
+      await probeGet(`get_organization(${orgId})`, "pipedrive_get_organization", { id: orgId });
       await followerRoundTrip("organization", orgId, userId, "pipedrive_add_organization_follower", "pipedrive_list_organization_followers", "pipedrive_delete_organization_follower");
       await deleteProbe(`follower org ${orgId}`, "pipedrive_delete_organization", { id: orgId }, t);
     }
@@ -810,6 +841,7 @@ async function c7_projectsTasksBoardsPhases(stamp: number): Promise<void> {
       const updBody = parseBody(updTask);
       const flagApplied = !updTask.isError && updBody?.data?.is_done === true;
       record("update_task (is_done:true applied on the wire, #81)", flagApplied, updTask.isError ? shortErr(updTask) : `is_done=${JSON.stringify(updBody?.data?.is_done)}`);
+      await probeGet(`get_task(${taskId})`, "pipedrive_get_task", { id: taskId });
     }
 
     await probeList(`project_tasks(project=${projectId})`, "pipedrive_list_project_tasks", { id: projectId });
