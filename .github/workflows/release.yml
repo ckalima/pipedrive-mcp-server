@@ -26,6 +26,12 @@ jobs:
   publish:
     name: Publish to npm (provenance)
     runs-on: ubuntu-latest
+    # Only run on a tag push, or a workflow_dispatch from the trusted main branch.
+    # The id-token:write/contents:write below are job-level, so they are live during
+    # the un-gated npm ci / npm run build steps; this gate stops a workflow_dispatch
+    # against an arbitrary (attacker-controlled) branch from executing build code while
+    # an OIDC id-token is mintable. Dispatch is a main-branch dry-run only.
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
     # Least privilege, scoped to this job only so a future job in this workflow
     # cannot inherit token-minting (id-token) or release-writing (contents) rights.
     permissions:
@@ -63,8 +69,9 @@ jobs:
         # Runs on dispatch too, so a dry-run catches an empty/dist-less tarball.
         run: |
           test -f dist/index.js
-          FILES=$(npm pack --dry-run --json | jq '.[0].files | length')
-          npm pack --dry-run --json | jq -e '.[0].files[] | select(.path == "dist/index.js")' >/dev/null \
+          PACK=$(npm pack --dry-run --json)
+          FILES=$(echo "$PACK" | jq '.[0].files | length')
+          echo "$PACK" | jq -e '.[0].files[] | select(.path == "dist/index.js")' >/dev/null \
             || { echo "::error::tarball is missing dist/index.js (dist not built?)"; exit 1; }
           echo "tarball file count: $FILES"
           # Sanity floor: a real tarball is many files, not the 3-file empty case
@@ -101,6 +108,7 @@ jobs:
           awk -v ver="$VER" '
             $0 ~ "^## \\[" ver "\\]" { flag=1; print; next }
             /^## \[/ && flag { flag=0 }
+            /^\[[0-9]/ && flag { flag=0 }
             flag { print }
           ' CHANGELOG.md > RELEASE_NOTES.md
           if [ ! -s RELEASE_NOTES.md ]; then
