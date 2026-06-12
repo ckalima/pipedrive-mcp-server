@@ -74,6 +74,17 @@ describe('mail tools', () => {
       expect(parsed.pagination.next_cursor).toBe('50');
       expect(parsed.pagination).not.toHaveProperty('next_start');
     });
+
+    it('treats a v1 empty { data: null } response as 0 emails, not an "Unknown API error"', async () => {
+      // Pipedrive v1 returns { success: true, data: null } for an empty collection.
+      mockFetch({ data: null, additional_data: { pagination: { more_items_in_collection: false } } });
+      const { getPersonEmails } = await getMailTools();
+      const result = await getPersonEmails({ id: 1 });
+      expect(result.isError).toBeFalsy();
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.summary).toContain('0 email');
+      expect(parsed.data).toEqual([]);
+    });
   });
 
   describe('getDealEmails', () => {
@@ -106,6 +117,16 @@ describe('mail tools', () => {
       expect(parsed.pagination.has_more).toBe(true);
       expect(parsed.pagination.next_cursor).toBe('50');
       expect(parsed.pagination).not.toHaveProperty('next_start');
+    });
+
+    it('treats a v1 empty { data: null } response as 0 emails, not an "Unknown API error"', async () => {
+      mockFetch({ data: null, additional_data: { pagination: { more_items_in_collection: false } } });
+      const { getDealEmails } = await getMailTools();
+      const result = await getDealEmails({ id: 1 });
+      expect(result.isError).toBeFalsy();
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.summary).toContain('0 email');
+      expect(parsed.data).toEqual([]);
     });
   });
 
@@ -160,6 +181,16 @@ describe('mail tools', () => {
       expect(parsed.pagination.has_more).toBe(true);
       expect(parsed.pagination.next_cursor).toBe('50');
       expect(parsed.pagination).not.toHaveProperty('next_start');
+    });
+
+    it('treats a v1 empty { data: null } folder as 0 threads, not an "Unknown API error"', async () => {
+      mockFetch({ data: null, additional_data: { pagination: { more_items_in_collection: false } } });
+      const { listMailThreads } = await getMailTools();
+      const result = await listMailThreads({ folder: 'inbox' });
+      expect(result.isError).toBeFalsy();
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.summary).toContain('0 mail thread');
+      expect(parsed.data).toEqual([]);
     });
   });
 

@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setupValidEnv } from '../../helpers/mockEnv.js';
 import {
+  mockFetch,
   mockApiSuccess,
   mockApiError,
   fixtures,
@@ -55,6 +56,19 @@ describe('users tools', () => {
 
       expect(result.content[0].text).toContain('INVALID_API_KEY');
       expect(result.isError).toBe(true);
+    });
+
+    it('treats a v1 empty { data: null } response as 0 users, not an "Unknown API error"', async () => {
+      // Pipedrive v1 returns { success: true, data: null } for an empty collection.
+      mockFetch({ data: null });
+      const { listUsers } = await getUsersTools();
+
+      const result = await listUsers({});
+
+      expect(result.isError).toBeFalsy();
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.summary).toContain('0 user');
+      expect(parsed.data).toEqual([]);
     });
   });
 

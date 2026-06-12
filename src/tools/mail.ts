@@ -34,11 +34,14 @@ export async function getPersonEmails(params: GetPersonEmailsParams) {
     "v1"
   );
 
-  if (!response.success || !response.data) {
+  // v1 returns { success: true, data: null } for an empty collection, so guard
+  // on success only and coerce null -> [] (mirrors listNotes). Treating null as
+  // an error here surfaced a bogus "Unknown API error" for an empty mailbox.
+  if (!response.success) {
     return mcpErrorResult(response);
   }
 
-  const messages = response.data;
+  const messages = response.data || [];
   const pagination = extractPaginationV1(response);
 
   return {
@@ -67,11 +70,14 @@ export async function getDealEmails(params: GetDealEmailsParams) {
     "v1"
   );
 
-  if (!response.success || !response.data) {
+  // v1 returns { success: true, data: null } for an empty collection, so guard
+  // on success only and coerce null -> [] (mirrors listNotes). Treating null as
+  // an error here surfaced a bogus "Unknown API error" for an empty mailbox.
+  if (!response.success) {
     return mcpErrorResult(response);
   }
 
-  const messages = response.data;
+  const messages = response.data || [];
   const pagination = extractPaginationV1(response);
 
   return {
@@ -101,11 +107,14 @@ export async function listMailThreads(params: ListMailThreadsParams) {
     "v1"
   );
 
-  if (!response.success || !response.data) {
+  // v1 returns { success: true, data: null } for an empty folder, so guard on
+  // success only and coerce null -> [] (mirrors listNotes), rather than turning
+  // an empty inbox into a bogus "Unknown API error".
+  if (!response.success) {
     return mcpErrorResult(response);
   }
 
-  const threads = response.data;
+  const threads = response.data || [];
   const pagination = extractPaginationV1(response);
 
   return {

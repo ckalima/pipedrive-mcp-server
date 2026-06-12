@@ -25,11 +25,13 @@ export async function listUsers(_params: ListUsersParams) {
     "v1"
   );
 
-  if (!response.success || !response.data) {
+  // v1 returns { success: true, data: null } for an empty collection, so guard
+  // on success only and coerce null -> [] (mirrors listNotes).
+  if (!response.success) {
     return mcpErrorResult(response);
   }
 
-  const users = response.data;
+  const users = response.data || [];
 
   return {
     content: [{
