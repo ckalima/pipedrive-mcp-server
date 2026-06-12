@@ -28,13 +28,21 @@ Add to your `.mcp.json` file:
   "mcpServers": {
     "pipedrive": {
       "command": "npx",
-      "args": ["-y", "pipedrive-mcp-server"],
+      "args": ["-y", "@ckalima/pipedrive-mcp-server"],
       "env": {
         "PIPEDRIVE_API_KEY": "your-40-character-api-key"
       }
     }
   }
 }
+```
+
+> **Package name:** the supported package is the scoped **`@ckalima/pipedrive-mcp-server`**. If you arrived from an older snippet that referenced the unscoped `pipedrive-mcp-server`, update your config to the scoped name above — the unscoped name is a different, unrelated package.
+
+You can also start it directly to verify your setup:
+
+```bash
+npx -y @ckalima/pipedrive-mcp-server
 ```
 
 Or set the environment variable:
