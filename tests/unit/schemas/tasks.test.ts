@@ -116,46 +116,52 @@ describe('tasks schemas', () => {
       expect(result.title.length).toBe(255);
     });
 
-    it('done accepts 0 and 1', () => {
-      expect(CreateTaskSchema.parse({ title: 'T', project_id: 1, done: 0 }).done).toBe(0);
-      expect(CreateTaskSchema.parse({ title: 'T', project_id: 1, done: 1 }).done).toBe(1);
+    it('is_done accepts booleans', () => {
+      expect(CreateTaskSchema.parse({ title: 'T', project_id: 1, is_done: true }).is_done).toBe(true);
+      expect(CreateTaskSchema.parse({ title: 'T', project_id: 1, is_done: false }).is_done).toBe(false);
     });
 
-    it('done coerces true to 1', () => {
-      const result = CreateTaskSchema.parse({ title: 'T', project_id: 1, done: true });
-      expect(result.done).toBe(1);
+    it('is_done coerces legacy int 1 to true', () => {
+      const result = CreateTaskSchema.parse({ title: 'T', project_id: 1, is_done: 1 });
+      expect(result.is_done).toBe(true);
     });
 
-    it('done coerces false to 0', () => {
-      const result = CreateTaskSchema.parse({ title: 'T', project_id: 1, done: false });
-      expect(result.done).toBe(0);
+    it('is_done coerces legacy int 0 to false', () => {
+      const result = CreateTaskSchema.parse({ title: 'T', project_id: 1, is_done: 0 });
+      expect(result.is_done).toBe(false);
     });
 
-    it('done rejects value 2', () => {
-      expect(() => CreateTaskSchema.parse({ title: 'T', project_id: 1, done: 2 })).toThrow();
+    it('is_done rejects value 2', () => {
+      expect(() => CreateTaskSchema.parse({ title: 'T', project_id: 1, is_done: 2 })).toThrow();
     });
 
-    it('done rejects non-coercible string', () => {
-      expect(() => CreateTaskSchema.parse({ title: 'T', project_id: 1, done: 'yes' })).toThrow();
+    it('is_done rejects non-coercible string', () => {
+      expect(() => CreateTaskSchema.parse({ title: 'T', project_id: 1, is_done: 'yes' })).toThrow();
     });
 
-    it('milestone accepts 0 and 1', () => {
-      expect(CreateTaskSchema.parse({ title: 'T', project_id: 1, milestone: 0 }).milestone).toBe(0);
-      expect(CreateTaskSchema.parse({ title: 'T', project_id: 1, milestone: 1 }).milestone).toBe(1);
+    it('is_milestone accepts booleans', () => {
+      expect(CreateTaskSchema.parse({ title: 'T', project_id: 1, is_milestone: true }).is_milestone).toBe(true);
+      expect(CreateTaskSchema.parse({ title: 'T', project_id: 1, is_milestone: false }).is_milestone).toBe(false);
     });
 
-    it('milestone coerces true to 1', () => {
-      const result = CreateTaskSchema.parse({ title: 'T', project_id: 1, milestone: true });
-      expect(result.milestone).toBe(1);
+    it('is_milestone coerces legacy ints 0/1 to booleans', () => {
+      expect(CreateTaskSchema.parse({ title: 'T', project_id: 1, is_milestone: 1 }).is_milestone).toBe(true);
+      expect(CreateTaskSchema.parse({ title: 'T', project_id: 1, is_milestone: 0 }).is_milestone).toBe(false);
     });
 
-    it('milestone coerces false to 0', () => {
-      const result = CreateTaskSchema.parse({ title: 'T', project_id: 1, milestone: false });
-      expect(result.milestone).toBe(0);
+    it('is_milestone rejects value 2', () => {
+      expect(() => CreateTaskSchema.parse({ title: 'T', project_id: 1, is_milestone: 2 })).toThrow();
     });
 
-    it('milestone rejects value 2', () => {
-      expect(() => CreateTaskSchema.parse({ title: 'T', project_id: 1, milestone: 2 })).toThrow();
+    // The live v2 API silently ignores the spec-documented done/milestone int
+    // write fields (issue #81) — the schema must reject them loudly so the
+    // mistake cannot reach the wire as a silent no-op.
+    it('REJECTS the legacy done key (strict)', () => {
+      expect(() => CreateTaskSchema.parse({ title: 'T', project_id: 1, done: 1 })).toThrow();
+    });
+
+    it('REJECTS the legacy milestone key (strict)', () => {
+      expect(() => CreateTaskSchema.parse({ title: 'T', project_id: 1, milestone: 1 })).toThrow();
     });
 
     it('assignee_ids rejects more than 10 items', () => {
@@ -183,8 +189,8 @@ describe('tasks schemas', () => {
         project_id: 5,
         parent_task_id: 10,
         description: 'A description',
-        done: 0,
-        milestone: 1,
+        is_done: false,
+        is_milestone: true,
         due_date: '2026-12-31',
         start_date: '2026-06-01',
         assignee_id: 3,
@@ -193,8 +199,8 @@ describe('tasks schemas', () => {
       });
       expect(result.parent_task_id).toBe(10);
       expect(result.description).toBe('A description');
-      expect(result.done).toBe(0);
-      expect(result.milestone).toBe(1);
+      expect(result.is_done).toBe(false);
+      expect(result.is_milestone).toBe(true);
       expect(result.due_date).toBe('2026-12-31');
       expect(result.start_date).toBe('2026-06-01');
       expect(result.assignee_id).toBe(3);
@@ -228,29 +234,34 @@ describe('tasks schemas', () => {
       const result = UpdateTaskSchema.parse({
         id: 7,
         title: 'Updated Title',
-        done: 1,
-        milestone: 0,
+        is_done: true,
+        is_milestone: false,
         priority: 5,
       });
       expect(result.id).toBe(7);
       expect(result.title).toBe('Updated Title');
-      expect(result.done).toBe(1);
-      expect(result.milestone).toBe(0);
+      expect(result.is_done).toBe(true);
+      expect(result.is_milestone).toBe(false);
       expect(result.priority).toBe(5);
     });
 
-    it('done coerces true to 1 on update', () => {
-      const result = UpdateTaskSchema.parse({ id: 1, done: true });
-      expect(result.done).toBe(1);
+    it('is_done coerces legacy int 1 to true on update', () => {
+      const result = UpdateTaskSchema.parse({ id: 1, is_done: 1 });
+      expect(result.is_done).toBe(true);
     });
 
-    it('done coerces false to 0 on update', () => {
-      const result = UpdateTaskSchema.parse({ id: 1, done: false });
-      expect(result.done).toBe(0);
+    it('is_done coerces legacy int 0 to false on update', () => {
+      const result = UpdateTaskSchema.parse({ id: 1, is_done: 0 });
+      expect(result.is_done).toBe(false);
     });
 
-    it('rejects done=2 on update', () => {
-      expect(() => UpdateTaskSchema.parse({ id: 1, done: 2 })).toThrow();
+    it('rejects is_done=2 on update', () => {
+      expect(() => UpdateTaskSchema.parse({ id: 1, is_done: 2 })).toThrow();
+    });
+
+    it('REJECTS the legacy done/milestone keys on update (strict, issue #81)', () => {
+      expect(() => UpdateTaskSchema.parse({ id: 1, done: 1 })).toThrow();
+      expect(() => UpdateTaskSchema.parse({ id: 1, milestone: 1 })).toThrow();
     });
   });
 

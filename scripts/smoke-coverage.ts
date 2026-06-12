@@ -740,7 +740,13 @@ async function c6_variationsAndFollowers(stamp: number): Promise<void> {
   }
 }
 
-/** add (user_id) → list → delete (follower_id). The add/delete param asymmetry is intentional. */
+/**
+ * remove auto-follower → add (user_id) → list → delete (follower_id).
+ * The creating user auto-follows every entity they create, so on a single-user
+ * sandbox a direct add would always fail with "already following" — removing
+ * the auto-follow first makes the add a genuine add. The add/delete param
+ * asymmetry (user_id vs follower_id) is intentional.
+ */
 async function followerRoundTrip(
   entity: string,
   entityId: number | string,
@@ -749,11 +755,13 @@ async function followerRoundTrip(
   listTool: string,
   delTool: string,
 ): Promise<void> {
-  const add = await call(addTool, { id: entityId, user_id: userId });
-  if (planGated(add)) {
-    block(`add_${entity}_follower`, shortErr(add));
+  const preDel = await call(delTool, { id: entityId, follower_id: userId });
+  if (planGated(preDel)) {
+    block(`add_${entity}_follower`, shortErr(preDel));
     return;
   }
+  record(`delete_${entity}_follower (auto-follow removal)`, !preDel.isError, preDel.isError ? shortErr(preDel) : `removed auto-follower ${userId}`);
+  const add = await call(addTool, { id: entityId, user_id: userId });
   record(`add_${entity}_follower (user_id)`, !add.isError, add.isError ? shortErr(add) : `added user ${userId}`);
   await probeList(`${entity}_followers(${entityId})`, listTool, { id: entityId });
   const del = await call(delTool, { id: entityId, follower_id: userId });
@@ -792,12 +800,16 @@ async function c7_projectsTasksBoardsPhases(stamp: number): Promise<void> {
   if (record("create_project (title/board_id/phase_id)", !projRes.isError && projectId != null, projRes.isError ? shortErr(projRes) : `project_id=${projectId}`)) {
     projectTrack = track(`project ${projectId}`, "pipedrive_delete_project", { id: projectId });
 
-    const taskRes = await call("pipedrive_create_task", { title: `Smoke task ${stamp}`, project_id: projectId, done: false, milestone: false });
+    const taskRes = await call("pipedrive_create_task", { title: `Smoke task ${stamp}`, project_id: projectId, is_done: false, is_milestone: false });
     const taskId = idOf(taskRes);
-    if (record("create_task (done/milestone write as int 0|1 via preprocess)", !taskRes.isError && taskId != null, taskRes.isError ? shortErr(taskRes) : `task_id=${taskId}`)) {
+    if (record("create_task (boolean is_done/is_milestone, #81)", !taskRes.isError && taskId != null, taskRes.isError ? shortErr(taskRes) : `task_id=${taskId}`)) {
       taskTrack = track(`task ${taskId}`, "pipedrive_delete_task", { id: taskId });
-      const updTask = await call("pipedrive_update_task", { id: taskId, done: true });
-      record("update_task (done:true → 1)", !updTask.isError, updTask.isError ? shortErr(updTask) : "marked done");
+      const updTask = await call("pipedrive_update_task", { id: taskId, is_done: true });
+      // Assert the flag actually flipped — a bare 200 proved nothing in #81
+      // (the API silently ignored the old done field next to other params).
+      const updBody = parseBody(updTask);
+      const flagApplied = !updTask.isError && updBody?.data?.is_done === true;
+      record("update_task (is_done:true applied on the wire, #81)", flagApplied, updTask.isError ? shortErr(updTask) : `is_done=${JSON.stringify(updBody?.data?.is_done)}`);
     }
 
     await probeList(`project_tasks(project=${projectId})`, "pipedrive_list_project_tasks", { id: projectId });

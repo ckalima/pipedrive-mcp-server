@@ -338,8 +338,8 @@ describe('tasks tools', () => {
       const [, options] = mockFn.mock.calls[0];
       const body = JSON.parse(options.body);
       expect(body.description).toBeUndefined();
-      expect(body.done).toBeUndefined();
-      expect(body.milestone).toBeUndefined();
+      expect(body.is_done).toBeUndefined();
+      expect(body.is_milestone).toBeUndefined();
       expect(body.due_date).toBeUndefined();
       expect(body.start_date).toBeUndefined();
       expect(body.assignee_id).toBeUndefined();
@@ -356,8 +356,8 @@ describe('tasks tools', () => {
         title: 'Full Task',
         project_id: 10,
         description: 'A description',
-        done: 0,
-        milestone: 1,
+        is_done: false,
+        is_milestone: true,
         due_date: '2026-12-31',
         start_date: '2026-06-01',
         assignee_id: 3,
@@ -369,8 +369,9 @@ describe('tasks tools', () => {
       const [, options] = mockFn.mock.calls[0];
       const body = JSON.parse(options.body);
       expect(body.description).toBe('A description');
-      expect(body.done).toBe(0);
-      expect(body.milestone).toBe(1);
+      // booleans on the wire — the live v2 API ignores int done/milestone (issue #81)
+      expect(body.is_done).toBe(false);
+      expect(body.is_milestone).toBe(true);
       expect(body.due_date).toBe('2026-12-31');
       expect(body.start_date).toBe('2026-06-01');
       expect(body.assignee_id).toBe(3);
@@ -430,14 +431,14 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess(task);
       const { updateTask } = await getTasksTools();
 
-      await updateTask({ id: 7, title: 'New Title', done: 1 });
+      await updateTask({ id: 7, title: 'New Title', is_done: true });
 
       const [, options] = mockFn.mock.calls[0];
       const body = JSON.parse(options.body);
       expect(body.title).toBe('New Title');
-      expect(body.done).toBe(1);
+      expect(body.is_done).toBe(true);
       expect(body.description).toBeUndefined();
-      expect(body.milestone).toBeUndefined();
+      expect(body.is_milestone).toBeUndefined();
     });
 
     it('returns summary "{id} updated"', async () => {

@@ -33,16 +33,18 @@ export const GetTaskSchema = IdParamSchema;
 // ─── U2: Write schemas ────────────────────────────────────────────────────────
 
 /**
- * Helper: coerces boolean true/false to int 1/0, preserves 0/1, rejects other values.
- * Used for the done/milestone fields which are int 0|1 in the API (not boolean).
+ * Helper: accepts boolean, coerces legacy int 1/0 to true/false, rejects other
+ * values. The live v2 API only recognizes boolean `is_done`/`is_milestone` in
+ * task write bodies; the spec-documented `done`/`milestone` int 0|1 fields are
+ * silently ignored on the wire (issue #81, verified live 2026-06-12).
  */
-const DoneOrMilestoneSchema = z.preprocess(
+const TaskFlagSchema = z.preprocess(
   (val) => {
-    if (val === true) return 1;
-    if (val === false) return 0;
+    if (val === 1) return true;
+    if (val === 0) return false;
     return val;
   },
-  z.union([z.literal(0), z.literal(1)])
+  z.boolean()
 ).optional();
 
 /**
@@ -57,10 +59,10 @@ export const CreateTaskSchema = z.object({
     .describe("ID of the parent task (null for root-level task)"),
   description: z.string().nullable().optional()
     .describe("Task description"),
-  done: DoneOrMilestoneSchema
-    .describe("Mark task as done: use 0 (not done) or 1 (done). Note: the GET response returns is_done (boolean), but this write field uses integer 0/1."),
-  milestone: DoneOrMilestoneSchema
-    .describe("Mark task as milestone: use 0 (no) or 1 (yes). Note: the GET response returns is_milestone (boolean), but this write field uses integer 0/1."),
+  is_done: TaskFlagSchema
+    .describe("Mark task as done (boolean true/false). Same field name and type as the GET response."),
+  is_milestone: TaskFlagSchema
+    .describe("Mark task as milestone (boolean true/false). A milestone task must have a due_date. Same field name and type as the GET response."),
   due_date: z.string().nullable().optional()
     .describe("Task due date (YYYY-MM-DD format)"),
   start_date: z.string().nullable().optional()
@@ -71,7 +73,7 @@ export const CreateTaskSchema = z.object({
     .describe("Array of assignee user IDs (max 10)"),
   priority: z.number().int().min(0).nullable().optional()
     .describe("Task priority (integer >= 0, or null to unset)"),
-});
+}).strict();
 
 /**
  * Update task parameters
@@ -85,10 +87,10 @@ export const UpdateTaskSchema = IdParamSchema.extend({
     .describe("ID of the parent task (null to make root-level)"),
   description: z.string().nullable().optional()
     .describe("Task description"),
-  done: DoneOrMilestoneSchema
-    .describe("Mark task as done: use 0 (not done) or 1 (done). Note: the GET response returns is_done (boolean), but this write field uses integer 0/1."),
-  milestone: DoneOrMilestoneSchema
-    .describe("Mark task as milestone: use 0 (no) or 1 (yes). Note: the GET response returns is_milestone (boolean), but this write field uses integer 0/1."),
+  is_done: TaskFlagSchema
+    .describe("Mark task as done (boolean true/false). Same field name and type as the GET response."),
+  is_milestone: TaskFlagSchema
+    .describe("Mark task as milestone (boolean true/false). A milestone task must have a due_date. Same field name and type as the GET response."),
   due_date: z.string().nullable().optional()
     .describe("Task due date (YYYY-MM-DD format)"),
   start_date: z.string().nullable().optional()
@@ -99,7 +101,7 @@ export const UpdateTaskSchema = IdParamSchema.extend({
     .describe("Array of assignee user IDs (max 10)"),
   priority: z.number().int().min(0).nullable().optional()
     .describe("Task priority (integer >= 0, or null to unset)"),
-});
+}).strict();
 
 /**
  * Delete task parameters

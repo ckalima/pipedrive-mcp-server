@@ -85,8 +85,9 @@ export async function getTask(params: GetTaskParams) {
 
 /**
  * Create a new task. title and project_id are required.
- * Note: use 0/1 for done and milestone (not true/false); the GET response
- * returns is_done/is_milestone as booleans, but the write fields use int 0/1.
+ * Write fields are boolean is_done/is_milestone, same as the GET response.
+ * The spec-documented done/milestone int 0|1 fields are silently ignored by
+ * the live v2 API (issue #81).
  */
 export async function createTask(params: CreateTaskParams) {
   const client = getClient();
@@ -98,8 +99,8 @@ export async function createTask(params: CreateTaskParams) {
 
   if (params.parent_task_id !== undefined) body.parent_task_id = params.parent_task_id;
   if (params.description !== undefined) body.description = params.description;
-  if (params.done !== undefined) body.done = params.done;
-  if (params.milestone !== undefined) body.milestone = params.milestone;
+  if (params.is_done !== undefined) body.is_done = params.is_done;
+  if (params.is_milestone !== undefined) body.is_milestone = params.is_milestone;
   if (params.due_date !== undefined) body.due_date = params.due_date;
   if (params.start_date !== undefined) body.start_date = params.start_date;
   if (params.assignee_id !== undefined) body.assignee_id = params.assignee_id;
@@ -125,8 +126,9 @@ export async function createTask(params: CreateTaskParams) {
 
 /**
  * Update an existing task. Only id is required; all other fields are optional.
- * Note: use 0/1 for done and milestone (not true/false); the GET response
- * returns is_done/is_milestone as booleans, but the write fields use int 0/1.
+ * Write fields are boolean is_done/is_milestone, same as the GET response.
+ * The spec-documented done/milestone int 0|1 fields are silently ignored by
+ * the live v2 API (issue #81).
  */
 export async function updateTask(params: UpdateTaskParams) {
   const client = getClient();
@@ -138,8 +140,8 @@ export async function updateTask(params: UpdateTaskParams) {
   if (updateFields.project_id !== undefined) body.project_id = updateFields.project_id;
   if (updateFields.parent_task_id !== undefined) body.parent_task_id = updateFields.parent_task_id;
   if (updateFields.description !== undefined) body.description = updateFields.description;
-  if (updateFields.done !== undefined) body.done = updateFields.done;
-  if (updateFields.milestone !== undefined) body.milestone = updateFields.milestone;
+  if (updateFields.is_done !== undefined) body.is_done = updateFields.is_done;
+  if (updateFields.is_milestone !== undefined) body.is_milestone = updateFields.is_milestone;
   if (updateFields.due_date !== undefined) body.due_date = updateFields.due_date;
   if (updateFields.start_date !== undefined) body.start_date = updateFields.start_date;
   if (updateFields.assignee_id !== undefined) body.assignee_id = updateFields.assignee_id;
@@ -228,7 +230,7 @@ export const taskTools = [
   // U2: Write tools
   {
     name: "pipedrive_create_task",
-    description: "Create a new task in a project. title and project_id are required. Use 0 or 1 for done/milestone (not true/false) — the GET response returns is_done/is_milestone as booleans, but the create/update fields use integer 0/1. (Projects add-on; Projects API in public beta.)",
+    description: "Create a new task in a project. title and project_id are required. Use boolean is_done/is_milestone (same field names as the GET response); a milestone task must have a due_date. (Projects add-on; Projects API in public beta.)",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -236,8 +238,8 @@ export const taskTools = [
         project_id: { type: "number", description: "ID of the project this task belongs to (required)" },
         parent_task_id: { type: "number", description: "ID of the parent task (null for root-level)" },
         description: { type: "string", description: "Task description" },
-        done: { type: "number", enum: [0, 1], description: "Mark as done: 0 (not done) or 1 (done)" },
-        milestone: { type: "number", enum: [0, 1], description: "Mark as milestone: 0 (no) or 1 (yes)" },
+        is_done: { type: "boolean", description: "Mark as done (true/false)" },
+        is_milestone: { type: "boolean", description: "Mark as milestone (true/false); a milestone task must have a due_date" },
         due_date: { type: "string", description: "Task due date (YYYY-MM-DD)" },
         start_date: { type: "string", description: "Task start date (YYYY-MM-DD)" },
         assignee_id: { type: "number", description: "Assignee user ID" },
@@ -255,7 +257,7 @@ export const taskTools = [
   },
   {
     name: "pipedrive_update_task",
-    description: "Update an existing task. Only id is required; all other fields are optional. Use 0 or 1 for done/milestone (not true/false) — the GET response returns is_done/is_milestone as booleans, but the update fields use integer 0/1. (Projects add-on; Projects API in public beta.)",
+    description: "Update an existing task. Only id is required; all other fields are optional. Use boolean is_done/is_milestone (same field names as the GET response); a milestone task must have a due_date. (Projects add-on; Projects API in public beta.)",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -264,8 +266,8 @@ export const taskTools = [
         project_id: { type: "number", description: "ID of the project this task belongs to" },
         parent_task_id: { type: "number", description: "ID of the parent task (null to make root-level)" },
         description: { type: "string", description: "Task description" },
-        done: { type: "number", enum: [0, 1], description: "Mark as done: 0 (not done) or 1 (done)" },
-        milestone: { type: "number", enum: [0, 1], description: "Mark as milestone: 0 (no) or 1 (yes)" },
+        is_done: { type: "boolean", description: "Mark as done (true/false)" },
+        is_milestone: { type: "boolean", description: "Mark as milestone (true/false); a milestone task must have a due_date" },
         due_date: { type: "string", description: "Task due date (YYYY-MM-DD)" },
         start_date: { type: "string", description: "Task start date (YYYY-MM-DD)" },
         assignee_id: { type: "number", description: "Assignee user ID" },
