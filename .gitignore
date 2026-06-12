@@ -30,3 +30,10 @@ coverage/
 .claude/prioritize-cache.md
 .claude/menehune/
 .claude/worktrees/
+
+# Internal process docs live in ckalima/pipedrive-mcp-internal (private)
+docs/plans/
+docs/brainstorms/
+docs/residual-review-findings/
+docs/SESSION-HANDOFF.md
+.claude/backlog-reference.md
