@@ -83,14 +83,30 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_LOGLEVEL: warn
-        run: npm publish --provenance --access public
+        run: |
+          VER=${GITHUB_REF_NAME#v}
+          if npm publish --provenance --access public; then
+            echo "published @ckalima/pipedrive-mcp-server@$VER"
+          elif npm view "@ckalima/pipedrive-mcp-server@$VER" version >/dev/null 2>&1; then
+            # Re-run of an already-published immutable version: the artifact exists,
+            # so this is not a failure — fall through to the provenance assertion
+            # and (re-)create the GitHub Release rather than 403-ing the whole job.
+            echo "::notice::version $VER already published; continuing to verification"
+          else
+            echo "::error::npm publish failed and $VER is not on the registry"
+            exit 1
+          fi
 
       - name: Assert publish carries provenance
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         run: |
           VER=${GITHUB_REF_NAME#v}
           for i in 1 2 3 4 5; do
-            ATT=$(npm view "@ckalima/pipedrive-mcp-server@$VER" --json 2>/dev/null | jq -r '.dist.attestations.url // empty')
+            # Capture npm view separately: a not-yet-propagated version exits 1
+            # (E404), which under `bash -eo pipefail` would otherwise abort this
+            # whole step on attempt 1 and defeat the retry loop it lives in.
+            RAW=$(npm view "@ckalima/pipedrive-mcp-server@$VER" --json 2>/dev/null || true)
+            ATT=$(printf '%s' "$RAW" | jq -r '.dist.attestations.url // empty' 2>/dev/null || true)
             if [ -n "$ATT" ]; then
               echo "provenance attestation present: $ATT"
               exit 0
@@ -106,7 +122,7 @@ jobs:
         run: |
           VER=${GITHUB_REF_NAME#v}
           awk -v ver="$VER" '
-            $0 ~ "^## \\[" ver "\\]" { flag=1; print; next }
+            index($0, "## [" ver "]") == 1 { flag=1; print; next }
             /^## \[/ && flag { flag=0 }
             /^\[[0-9]/ && flag { flag=0 }
             flag { print }
@@ -118,6 +134,7 @@ jobs:
           cat RELEASE_NOTES.md
 
       - name: Create GitHub Release
+        id: release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         # Non-blocking: the npm publish above is the irreversible success
         # criterion. A release-notes hiccup must not fail an already-published,
@@ -128,3 +145,10 @@ jobs:
           name: ${{ github.ref_name }}
           body_path: RELEASE_NOTES.md
           # TODO(#85): attach .mcpb once gen-docs produces a fresh in-sync bundle in CI.
+
+      - name: Warn if the GitHub Release was not created
+        # The npm publish above already succeeded (immutable). A release-notes or
+        # API hiccup must not red the run, but a silently-missing release should be
+        # visible so it can be created by hand.
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && steps.release.outcome == 'failure'
+        run: echo "::warning::GitHub Release for $GITHUB_REF_NAME was not created (npm publish succeeded). Create it manually from CHANGELOG.md."
