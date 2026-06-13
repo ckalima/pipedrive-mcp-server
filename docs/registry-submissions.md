@@ -86,28 +86,21 @@ Update this table as each listing goes live.
 The official registry feeds client-side discovery (Claude Desktop, Cursor, VS Code). It hosts
 **metadata only** — the package itself lives on npm.
 
-**Prerequisite — the published npm tarball must contain `mcpName`.** The registry verifies
-ownership by fetching the published package's `package.json` and checking that `mcpName`
-matches `server.json`'s `name`. Version **2.0.0 was already published to npm without `mcpName`**,
-so you cannot verify against it. Ship a patch release that includes the field first:
+**Prerequisite — already met (no patch release needed).** The registry verifies ownership by
+fetching the published package's `package.json` and checking that `mcpName` matches
+`server.json`'s `name`. The published **`2.0.0` tarball already carries**
+`mcpName: io.github.ckalima/pipedrive-mcp-server`, which matches `server.json`, so ownership
+verifies against `2.0.0` directly. Confirm any time:
 
 ```bash
-# In the repo root, with the merged registry-blitz changes:
-# 1. Bump the version (patch) so a fresh tarball carrying mcpName goes out.
-npm version patch --no-git-tag-version          # 2.0.0 -> 2.0.1
-
-# 2. Re-sync generated artifacts to the new version (README table + bundle/manifest.json).
-npm run gen:docs
-
-# 3. Bump server.json to match: set both top-level "version" and packages[0].version to 2.0.1.
-#    (edit server.json by hand or with your tool of choice)
-
-# 4. Build and publish to npm (provenance is configured via the release workflow).
-npm run build
-npm publish --access public
+npm view @ckalima/pipedrive-mcp-server mcpName    # -> io.github.ckalima/pipedrive-mcp-server
 ```
 
-Then install the publisher CLI and publish the registry entry:
+> Historical note: an earlier draft of this runbook assumed `2.0.0` had shipped without
+> `mcpName` and told you to publish a `2.0.1` first. That was wrong — `2.0.0` was never published
+> until the field was already in `package.json`, so the patch-release dance is unnecessary.
+
+Install the publisher CLI and publish the registry entry:
 
 ```bash
 # Install mcp-publisher (macOS/Linux)
