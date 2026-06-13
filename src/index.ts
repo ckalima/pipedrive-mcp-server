@@ -7,7 +7,7 @@
  * Enables Claude Code to query, create, and update CRM data.
  *
  * Usage:
- *   npx pipedrive-mcp-server
+ *   npx -y @ckalima/pipedrive-mcp-server
  *
  * Environment:
  *   PIPEDRIVE_API_KEY - Your Pipedrive API key (required)
@@ -31,7 +31,7 @@ import { mcpErrorFromCode } from "./utils/errors.js";
 
 // Server metadata
 const SERVER_NAME = "pipedrive-mcp-server";
-const SERVER_VERSION = "1.0.0";
+const SERVER_VERSION = "2.0.0";
 
 /**
  * Dispatcher for CallToolRequest — extracted so tests can import and invoke it directly
