@@ -293,6 +293,7 @@ export const taskTools = [
       },
       required: ["id"],
     },
+    destructive: true,
     handler: deleteTask,
     schema: DeleteTaskSchema,
   },

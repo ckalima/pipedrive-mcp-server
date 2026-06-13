@@ -512,6 +512,7 @@ export const projectTools = [
       },
       required: ["id"],
     },
+    destructive: true,
     handler: deleteProject,
     schema: DeleteProjectSchema,
   },

@@ -399,6 +399,7 @@ export const activityTools = [
       },
       required: ["id"],
     },
+    destructive: true,
     handler: deleteActivity,
     schema: DeleteActivitySchema,
   },

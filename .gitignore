@@ -4,6 +4,12 @@ node_modules/
 # Build output
 dist/
 
+# MCPB bundle: manifest.json is generated + tracked (see npm run gen:docs);
+# the compiled server/ tree and packed .mcpb are rebuilt by npm run bundle:mcpb.
+bundle/server/
+*.mcpb
+!bundle/manifest.json
+
 # Environment
 .env
 .env.local

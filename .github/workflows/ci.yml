@@ -29,3 +29,13 @@ jobs:
       - run: npm run lint
 
       - run: npm test
+
+      # Docs drift gate: regenerate README tool table + MCPB manifest from the live
+      # registry and fail if they differ from what's committed. Pinned to a single
+      # Node leg (the generator output is platform-independent, so one run suffices).
+      - name: Check generated docs are up to date
+        if: matrix.node-version == 20
+        run: |
+          npm run gen:docs
+          git diff --exit-code -- README.md bundle/manifest.json \
+            || { echo "::error::README.md or bundle/manifest.json is out of date. Run 'npm run gen:docs' and commit the result."; exit 1; }

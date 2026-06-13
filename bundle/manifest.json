@@ -1,9 +1,9 @@
 {
   "manifest_version": "0.3",
-  "name": "pipedrive-mcp",
+  "name": "pipedrive-mcp-server",
   "display_name": "Pipedrive CRM",
   "version": "1.0.0",
-  "description": "Query, create, and update Pipedrive CRM data - deals, contacts, organizations, activities, and more.",
+  "description": "MCP server for Pipedrive CRM integration with Claude Code",
   "author": {
     "name": "Chris Kalima",
     "url": "https://github.com/ckalima/pipedrive-mcp-server"
@@ -18,7 +18,9 @@
     "entry_point": "server/index.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/server/index.js"],
+      "args": [
+        "${__dirname}/server/index.js"
+      ],
       "env": {
         "PIPEDRIVE_API_KEY": "${user_config.api_key}"
       }
@@ -34,49 +36,632 @@
     }
   },
   "tools": [
-    { "name": "pipedrive_list_deals", "description": "List and filter deals" },
-    { "name": "pipedrive_get_deal", "description": "Get deal details" },
-    { "name": "pipedrive_create_deal", "description": "Create a new deal" },
-    { "name": "pipedrive_update_deal", "description": "Update an existing deal" },
-    { "name": "pipedrive_delete_deal", "description": "Delete a deal" },
-    { "name": "pipedrive_search_deals", "description": "Search deals by term" },
-    { "name": "pipedrive_list_persons", "description": "List and filter contacts" },
-    { "name": "pipedrive_get_person", "description": "Get contact details" },
-    { "name": "pipedrive_create_person", "description": "Create a new contact" },
-    { "name": "pipedrive_update_person", "description": "Update a contact" },
-    { "name": "pipedrive_delete_person", "description": "Delete a contact" },
-    { "name": "pipedrive_search_persons", "description": "Search contacts by term" },
-    { "name": "pipedrive_list_organizations", "description": "List organizations" },
-    { "name": "pipedrive_get_organization", "description": "Get organization details" },
-    { "name": "pipedrive_create_organization", "description": "Create an organization" },
-    { "name": "pipedrive_update_organization", "description": "Update an organization" },
-    { "name": "pipedrive_delete_organization", "description": "Delete an organization" },
-    { "name": "pipedrive_search_organizations", "description": "Search organizations" },
-    { "name": "pipedrive_list_activities", "description": "List activities" },
-    { "name": "pipedrive_get_activity", "description": "Get activity details" },
-    { "name": "pipedrive_create_activity", "description": "Create an activity" },
-    { "name": "pipedrive_update_activity", "description": "Update an activity" },
-    { "name": "pipedrive_delete_activity", "description": "Delete an activity" },
-    { "name": "pipedrive_list_notes", "description": "List notes" },
-    { "name": "pipedrive_get_note", "description": "Get note details" },
-    { "name": "pipedrive_create_note", "description": "Create a note" },
-    { "name": "pipedrive_update_note", "description": "Update a note" },
-    { "name": "pipedrive_delete_note", "description": "Delete a note" },
-    { "name": "pipedrive_list_pipelines", "description": "List pipelines" },
-    { "name": "pipedrive_list_stages", "description": "List stages in a pipeline" },
-    { "name": "pipedrive_get_stage", "description": "Get stage details" },
-    { "name": "pipedrive_list_deal_fields", "description": "List deal custom fields" },
-    { "name": "pipedrive_list_person_fields", "description": "List contact custom fields" },
-    { "name": "pipedrive_list_organization_fields", "description": "List organization custom fields" },
-    { "name": "pipedrive_get_field", "description": "Get custom field details" },
-    { "name": "pipedrive_list_users", "description": "List Pipedrive users" },
-    { "name": "pipedrive_get_user", "description": "Get user details" },
-    { "name": "pipedrive_get_current_user", "description": "Get current authenticated user" },
-    { "name": "pipedrive_list_mail_threads", "description": "List email threads" },
-    { "name": "pipedrive_get_mail_thread", "description": "Get email thread details" },
-    { "name": "pipedrive_get_mail_message", "description": "Get email message details" },
-    { "name": "pipedrive_get_deal_emails", "description": "Get emails linked to a deal" },
-    { "name": "pipedrive_get_person_emails", "description": "Get emails linked to a contact" }
+    {
+      "name": "pipedrive_list_deals",
+      "description": "List deals from Pipedrive with optional filtering by owner, person, organization, pipeline, stage, or status. Returns paginated results."
+    },
+    {
+      "name": "pipedrive_get_deal",
+      "description": "Get detailed information about a specific deal by ID, including all standard and custom fields."
+    },
+    {
+      "name": "pipedrive_create_deal",
+      "description": "Create a new deal in Pipedrive. Only title is required; all other fields are optional."
+    },
+    {
+      "name": "pipedrive_update_deal",
+      "description": "Update an existing deal in Pipedrive. Specify the deal ID and any fields to update."
+    },
+    {
+      "name": "pipedrive_search_deals",
+      "description": "Search for deals by text in title. Supports fuzzy matching by default."
+    },
+    {
+      "name": "pipedrive_delete_deal",
+      "description": "Delete a deal. The deal will be marked as deleted and permanently removed after 30 days."
+    },
+    {
+      "name": "pipedrive_list_deal_followers",
+      "description": "List all followers for a deal."
+    },
+    {
+      "name": "pipedrive_add_deal_follower",
+      "description": "Add a follower to a deal."
+    },
+    {
+      "name": "pipedrive_delete_deal_follower",
+      "description": "Remove a follower from a deal."
+    },
+    {
+      "name": "pipedrive_get_deal_followers_changelog",
+      "description": "Get the followers changelog for a deal."
+    },
+    {
+      "name": "pipedrive_list_deal_products",
+      "description": "List line-item products attached to a deal. Returns paginated results."
+    },
+    {
+      "name": "pipedrive_add_deal_product",
+      "description": "Attach a single product as a line item to a deal."
+    },
+    {
+      "name": "pipedrive_update_deal_product",
+      "description": "Update a line-item product attached to a deal. All body fields optional."
+    },
+    {
+      "name": "pipedrive_delete_deal_product",
+      "description": "Remove a line-item product from a deal."
+    },
+    {
+      "name": "pipedrive_bulk_add_deal_products",
+      "description": "Bulk-add up to 100 line-item products to a deal in one request."
+    },
+    {
+      "name": "pipedrive_list_deal_discounts",
+      "description": "List all additional discounts applied to a deal."
+    },
+    {
+      "name": "pipedrive_add_deal_discount",
+      "description": "Add an additional discount to a deal."
+    },
+    {
+      "name": "pipedrive_update_deal_discount",
+      "description": "Update an additional discount on a deal. All fields except IDs are optional."
+    },
+    {
+      "name": "pipedrive_delete_deal_discount",
+      "description": "Delete an additional discount from a deal."
+    },
+    {
+      "name": "pipedrive_list_deal_installments",
+      "description": "List installments across one or more deals. Requires deal_ids. Growth+ plan required."
+    },
+    {
+      "name": "pipedrive_add_deal_installment",
+      "description": "Add an installment (payment schedule entry) to a deal. Growth+ plan required; the deal must have at least one one-time product and no recurring products."
+    },
+    {
+      "name": "pipedrive_update_deal_installment",
+      "description": "Update an installment on a deal. Growth+ plan required; all body fields optional."
+    },
+    {
+      "name": "pipedrive_delete_deal_installment",
+      "description": "Delete an installment from a deal. Growth+ plan required."
+    },
+    {
+      "name": "pipedrive_list_archived_deals",
+      "description": "List archived deals with the same filtering as the active deals list (owner, person, organization, pipeline, stage, status). Returns paginated results."
+    },
+    {
+      "name": "pipedrive_convert_deal_to_lead",
+      "description": "Convert a deal to a lead (async job). DESTRUCTIVE: a successful conversion marks the source deal as deleted. Returns a conversion_id; the conversion runs asynchronously, so you MUST poll pipedrive_get_deal_conversion_status with the conversion_id until a terminal status. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_get_deal_conversion_status",
+      "description": "Get the status of a deal-to-lead conversion job. Status contract: 'completed' (terminal, carries lead_id), 'failed'/'rejected' (terminal, stop polling, no lead produced), 'not_started'/'running' (in-progress, re-poll). Only 'completed' carries lead_id, and conversion status is purged after a few days, so a 404 returned after a prior valid status means the status was purged (terminal stop-polling signal, not a transient error). Use a bounded poll budget (e.g. up to ~6 attempts with short backoff), not an unbounded loop."
+    },
+    {
+      "name": "pipedrive_list_persons",
+      "description": "List persons (contacts) from Pipedrive with optional filtering by owner, organization, or first letter of name."
+    },
+    {
+      "name": "pipedrive_get_person",
+      "description": "Get detailed information about a specific person by ID."
+    },
+    {
+      "name": "pipedrive_create_person",
+      "description": "Create a new person (contact) in Pipedrive. Only name is required."
+    },
+    {
+      "name": "pipedrive_update_person",
+      "description": "Update an existing person in Pipedrive."
+    },
+    {
+      "name": "pipedrive_search_persons",
+      "description": "Search for persons by name, email, or phone number."
+    },
+    {
+      "name": "pipedrive_delete_person",
+      "description": "Delete a person. The person will be marked as deleted and permanently removed after 30 days."
+    },
+    {
+      "name": "pipedrive_list_person_followers",
+      "description": "List all followers for a person."
+    },
+    {
+      "name": "pipedrive_add_person_follower",
+      "description": "Add a follower to a person."
+    },
+    {
+      "name": "pipedrive_delete_person_follower",
+      "description": "Remove a follower from a person."
+    },
+    {
+      "name": "pipedrive_get_person_followers_changelog",
+      "description": "Get the followers changelog for a person."
+    },
+    {
+      "name": "pipedrive_get_person_picture",
+      "description": "Get the picture for a person (read-only; returns picture metadata and sized image URLs). Returns an error if the person has no picture."
+    },
+    {
+      "name": "pipedrive_list_activities",
+      "description": "List activities from Pipedrive with optional filtering by owner, deal, person, organization, type, or completion status."
+    },
+    {
+      "name": "pipedrive_get_activity",
+      "description": "Get detailed information about a specific activity by ID."
+    },
+    {
+      "name": "pipedrive_create_activity",
+      "description": "Create a new activity in Pipedrive. Subject and type are required."
+    },
+    {
+      "name": "pipedrive_update_activity",
+      "description": "Update an existing activity in Pipedrive. Use this to mark activities as done."
+    },
+    {
+      "name": "pipedrive_delete_activity",
+      "description": "Delete an activity."
+    },
+    {
+      "name": "pipedrive_list_notes",
+      "description": "List notes from Pipedrive with optional filtering by deal, person, organization, or lead."
+    },
+    {
+      "name": "pipedrive_get_note",
+      "description": "Get detailed information about a specific note by ID."
+    },
+    {
+      "name": "pipedrive_create_note",
+      "description": "Create a new note in Pipedrive. Content is required. Link to a deal, person, organization, or lead."
+    },
+    {
+      "name": "pipedrive_update_note",
+      "description": "Update an existing note in Pipedrive."
+    },
+    {
+      "name": "pipedrive_delete_note",
+      "description": "Delete a note."
+    },
+    {
+      "name": "pipedrive_list_leads",
+      "description": "List active (non-archived) leads from Pipedrive with optional filtering by owner, person, or organization."
+    },
+    {
+      "name": "pipedrive_list_archived_leads",
+      "description": "List archived leads from Pipedrive with optional filtering by owner, person, or organization."
+    },
+    {
+      "name": "pipedrive_get_lead",
+      "description": "Get detailed information about a specific lead by UUID."
+    },
+    {
+      "name": "pipedrive_create_lead",
+      "description": "Create a new lead in Pipedrive. Title is required; link to at least one of person_id or organization_id."
+    },
+    {
+      "name": "pipedrive_update_lead",
+      "description": "Update an existing lead in Pipedrive."
+    },
+    {
+      "name": "pipedrive_search_leads",
+      "description": "Search for leads in Pipedrive by title or associated contacts."
+    },
+    {
+      "name": "pipedrive_delete_lead",
+      "description": "Delete a lead. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true environment variable."
+    },
+    {
+      "name": "pipedrive_convert_lead_to_deal",
+      "description": "Convert a lead into a deal (Pipedrive v2). The conversion runs asynchronously; this tool polls until it completes (typically under 5s) and returns the new deal ID. If it is still running after ~30s, it returns the conversion_id and status for manual follow-up."
+    },
+    {
+      "name": "pipedrive_get_lead_conversion_status",
+      "description": "Get the status of an async lead-to-deal conversion by conversion ID (Pipedrive v2 GET /leads/{id}/convert/status/{conversion_id})."
+    },
+    {
+      "name": "pipedrive_list_projects",
+      "description": "List projects from Pipedrive with optional filtering by board, phase, or status. Returns paginated results. (Requires the Projects add-on; Projects API is in public beta.)"
+    },
+    {
+      "name": "pipedrive_get_project",
+      "description": "Get detailed information about a specific project by ID. (Requires the Projects add-on; Projects API is in public beta.)"
+    },
+    {
+      "name": "pipedrive_create_project",
+      "description": "Create a new project in Pipedrive. Requires title, board_id, and phase_id. (Requires the Projects add-on; Projects API is in public beta.)"
+    },
+    {
+      "name": "pipedrive_update_project",
+      "description": "Update an existing project in Pipedrive. (Requires the Projects add-on; Projects API is in public beta.)"
+    },
+    {
+      "name": "pipedrive_delete_project",
+      "description": "Delete a project. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true environment variable. (Requires the Projects add-on; Projects API is in public beta.)"
+    },
+    {
+      "name": "pipedrive_search_projects",
+      "description": "Search for projects in Pipedrive by title. (Requires the Projects add-on; Projects API is in public beta.)"
+    },
+    {
+      "name": "pipedrive_archive_project",
+      "description": "Archive a project by setting its status to archived. (Requires the Projects add-on; Projects API is in public beta.)"
+    },
+    {
+      "name": "pipedrive_list_project_tasks",
+      "description": "List tasks for a project you already have the ID for — pass only `id` (the project ID). For broader task queries use pipedrive_list_tasks. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_list_project_templates",
+      "description": "List all project templates available in Pipedrive. Returns paginated results."
+    },
+    {
+      "name": "pipedrive_get_project_template",
+      "description": "Get detailed information about a specific project template by ID."
+    },
+    {
+      "name": "pipedrive_list_archived_projects",
+      "description": "List archived projects from Pipedrive with optional filtering by filter, phase, or status. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_get_project_permitted_users",
+      "description": "Get the list of user IDs that have permission to access a project. Returns an array of integer user IDs. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_get_project_changelog",
+      "description": "Get the changelog for a project, showing what changed, when, and by whom. Returns paginated entries with actor_user_id, new_values, and old_values. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_list_products",
+      "description": "List products from Pipedrive with optional filtering by owner, IDs, or filter."
+    },
+    {
+      "name": "pipedrive_get_product",
+      "description": "Get detailed information about a specific product by ID."
+    },
+    {
+      "name": "pipedrive_search_products",
+      "description": "Search for products by name, code, or custom fields."
+    },
+    {
+      "name": "pipedrive_create_product",
+      "description": "Create a new product in Pipedrive. Only name is required."
+    },
+    {
+      "name": "pipedrive_update_product",
+      "description": "Update an existing product in Pipedrive."
+    },
+    {
+      "name": "pipedrive_delete_product",
+      "description": "Delete a product. The product will be marked as deleted and permanently removed after 30 days."
+    },
+    {
+      "name": "pipedrive_list_product_variations",
+      "description": "List all variations for a product."
+    },
+    {
+      "name": "pipedrive_add_product_variation",
+      "description": "Add a variation to a product."
+    },
+    {
+      "name": "pipedrive_update_product_variation",
+      "description": "Update an existing product variation."
+    },
+    {
+      "name": "pipedrive_delete_product_variation",
+      "description": "Delete a product variation."
+    },
+    {
+      "name": "pipedrive_list_product_followers",
+      "description": "List all followers for a product."
+    },
+    {
+      "name": "pipedrive_add_product_follower",
+      "description": "Add a follower to a product."
+    },
+    {
+      "name": "pipedrive_delete_product_follower",
+      "description": "Remove a follower from a product."
+    },
+    {
+      "name": "pipedrive_get_product_followers_changelog",
+      "description": "Get the followers changelog for a product."
+    },
+    {
+      "name": "pipedrive_get_product_image",
+      "description": "Get the image of a product (returns a single image with a public URL valid for 7 days)."
+    },
+    {
+      "name": "pipedrive_delete_product_image",
+      "description": "Delete the image of a product."
+    },
+    {
+      "name": "pipedrive_upload_product_image",
+      "description": "Upload an image for a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem — only use it when the server shares your filesystem (e.g. a local CLI); otherwise use base64_data, which is transport-safe."
+    },
+    {
+      "name": "pipedrive_update_product_image",
+      "description": "Update (replace) the image of a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem — only use it when the server shares your filesystem (e.g. a local CLI); otherwise use base64_data, which is transport-safe."
+    },
+    {
+      "name": "pipedrive_list_tasks",
+      "description": "General task query across all projects, with optional project_id, assignee_id, done/milestone, and parent filters. Use for anything beyond a single project's full task list. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_get_task",
+      "description": "Get detailed information about a specific task by ID. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_create_task",
+      "description": "Create a new task in a project. title and project_id are required. Use boolean is_done/is_milestone (same field names as the GET response); a milestone task must have a due_date. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_update_task",
+      "description": "Update an existing task. Only id is required; all other fields are optional. Use boolean is_done/is_milestone (same field names as the GET response); a milestone task must have a due_date. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_delete_task",
+      "description": "Delete a task. If the task has subtasks, those will also be deleted. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_list_boards",
+      "description": "List all project boards. Returns the complete list (no pagination — the boards endpoint returns all records at once). (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_get_board",
+      "description": "Get detailed information about a specific project board by ID. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_create_board",
+      "description": "Create a new project board. name is required. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_update_board",
+      "description": "Update an existing project board. Only id is required; all other fields are optional. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_delete_board",
+      "description": "Delete a project board. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_list_phases",
+      "description": "List all phases for a project board. board_id is required. Returns the complete list (no pagination — the phases endpoint returns all records for a board at once). (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_get_phase",
+      "description": "Get detailed information about a specific project phase by ID. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_create_phase",
+      "description": "Create a new project phase. name and board_id are required. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_update_phase",
+      "description": "Update an existing project phase. Only id is required; all other fields are optional. Set board_id to move this phase to a different board. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_delete_phase",
+      "description": "Delete a project phase. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_get_person_emails",
+      "description": "Get email messages linked to a person (company-wide, all users' emails). Returns metadata for emails from any user's mailbox that are linked to this person. Note: To get full message body, use pipedrive_get_mail_message, but only for emails in YOUR mailbox."
+    },
+    {
+      "name": "pipedrive_get_deal_emails",
+      "description": "Get email messages linked to a deal (company-wide, all users' emails). Returns metadata for emails from any user's mailbox that are linked to this deal. Note: To get full message body, use pipedrive_get_mail_message, but only for emails in YOUR mailbox."
+    },
+    {
+      "name": "pipedrive_list_mail_threads",
+      "description": "List mail threads from YOUR mailbox only (authenticated user). Other users' threads are not accessible. Use folder parameter to filter by inbox, drafts, sent, or archive."
+    },
+    {
+      "name": "pipedrive_get_mail_thread",
+      "description": "Get a mail thread with messages. Access depends on visibility settings - threads visible within deals/persons you can access should work. Returns 404 if the thread isn't accessible to you."
+    },
+    {
+      "name": "pipedrive_get_mail_message",
+      "description": "Get full email message with body. Access depends on visibility settings - messages linked to deals/persons you can access should work, even if sent by other users."
+    },
+    {
+      "name": "pipedrive_list_organization_fields",
+      "description": "List all organization field definitions, including custom fields. Use this to map 40-character field keys to human-readable names."
+    },
+    {
+      "name": "pipedrive_list_deal_fields",
+      "description": "List all deal field definitions, including custom fields. Essential for understanding deal data structure."
+    },
+    {
+      "name": "pipedrive_list_person_fields",
+      "description": "List all person field definitions, including custom fields. Use to understand contact data structure."
+    },
+    {
+      "name": "pipedrive_list_product_fields",
+      "description": "List all product field definitions, including custom fields."
+    },
+    {
+      "name": "pipedrive_list_project_fields",
+      "description": "List all project field definitions, including custom fields. (Projects add-on; Projects API in public beta.)"
+    },
+    {
+      "name": "pipedrive_get_field",
+      "description": "Get details of a specific field by its key. Useful for looking up what a 40-character hash field key means."
+    },
+    {
+      "name": "pipedrive_create_deal_field",
+      "description": "Create a deal custom field. field_name and field_type are required. For enum/set types, options is required. The response data.field_code is the 40-char hash you must keep to update or delete the field later."
+    },
+    {
+      "name": "pipedrive_update_deal_field",
+      "description": "Update a deal custom field by field_code. field_type and field_code cannot be changed."
+    },
+    {
+      "name": "pipedrive_delete_deal_field",
+      "description": "Delete a deal custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_update_deal_field_options",
+      "description": "Bulk-update option labels of a deal enum/set field. Atomic: the whole request fails if any option ID does not exist."
+    },
+    {
+      "name": "pipedrive_delete_deal_field_options",
+      "description": "Bulk-delete options of a deal enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_create_person_field",
+      "description": "Create a person custom field. field_name and field_type are required. For enum/set types, options is required. The response data.field_code is the 40-char hash to keep for later updates."
+    },
+    {
+      "name": "pipedrive_update_person_field",
+      "description": "Update a person custom field by field_code. field_type and field_code cannot be changed."
+    },
+    {
+      "name": "pipedrive_delete_person_field",
+      "description": "Delete a person custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_update_person_field_options",
+      "description": "Bulk-update option labels of a person enum/set field. Atomic: the whole request fails if any option ID does not exist."
+    },
+    {
+      "name": "pipedrive_delete_person_field_options",
+      "description": "Bulk-delete options of a person enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_create_organization_field",
+      "description": "Create an organization custom field. field_name and field_type are required. For enum/set types, options is required. The response data.field_code is the 40-char hash to keep for later updates."
+    },
+    {
+      "name": "pipedrive_update_organization_field",
+      "description": "Update an organization custom field by field_code. field_type and field_code cannot be changed."
+    },
+    {
+      "name": "pipedrive_delete_organization_field",
+      "description": "Delete an organization custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_update_organization_field_options",
+      "description": "Bulk-update option labels of an organization enum/set field. Atomic: the whole request fails if any option ID does not exist."
+    },
+    {
+      "name": "pipedrive_delete_organization_field_options",
+      "description": "Bulk-delete options of an organization enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_create_product_field",
+      "description": "Create a product custom field. field_name and field_type are required. For enum/set types, options is required. Product fields use a simpler model: no description, important_fields, or required_fields. The response data.field_code is the 40-char hash to keep for later updates."
+    },
+    {
+      "name": "pipedrive_update_product_field",
+      "description": "Update a product custom field by field_code. Only field_name and ui_visibility can be changed (product fields have no description/important_fields/required_fields)."
+    },
+    {
+      "name": "pipedrive_delete_product_field",
+      "description": "Delete a product custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_update_product_field_options",
+      "description": "Bulk-update option labels of a product enum/set field. Atomic: the whole request fails if any option ID does not exist."
+    },
+    {
+      "name": "pipedrive_delete_product_field_options",
+      "description": "Bulk-delete options of a product enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_list_organizations",
+      "description": "List organizations from Pipedrive with optional filtering by owner or first letter of name."
+    },
+    {
+      "name": "pipedrive_get_organization",
+      "description": "Get detailed information about a specific organization by ID."
+    },
+    {
+      "name": "pipedrive_create_organization",
+      "description": "Create a new organization in Pipedrive. Only name is required."
+    },
+    {
+      "name": "pipedrive_update_organization",
+      "description": "Update an existing organization in Pipedrive."
+    },
+    {
+      "name": "pipedrive_search_organizations",
+      "description": "Search for organizations by name or address."
+    },
+    {
+      "name": "pipedrive_delete_organization",
+      "description": "Delete an organization. The organization will be marked as deleted and permanently removed after 30 days."
+    },
+    {
+      "name": "pipedrive_list_organization_followers",
+      "description": "List all followers for an organization."
+    },
+    {
+      "name": "pipedrive_add_organization_follower",
+      "description": "Add a follower to an organization."
+    },
+    {
+      "name": "pipedrive_delete_organization_follower",
+      "description": "Remove a follower from an organization."
+    },
+    {
+      "name": "pipedrive_get_organization_followers_changelog",
+      "description": "Get the followers changelog for an organization."
+    },
+    {
+      "name": "pipedrive_list_pipelines",
+      "description": "List sales pipelines in Pipedrive with cursor pagination. Pipelines contain stages that deals move through."
+    },
+    {
+      "name": "pipedrive_list_stages",
+      "description": "List stages with cursor pagination, optionally filtered by pipeline. Stages represent steps in the sales process."
+    },
+    {
+      "name": "pipedrive_get_stage",
+      "description": "Get details of a specific stage by ID."
+    },
+    {
+      "name": "pipedrive_create_pipeline",
+      "description": "Create a new sales pipeline. Only name is required. Set is_deal_probability_enabled to turn on weighted deal probability for the pipeline."
+    },
+    {
+      "name": "pipedrive_update_pipeline",
+      "description": "Update an existing pipeline. Provide the pipeline id and any fields to change."
+    },
+    {
+      "name": "pipedrive_delete_pipeline",
+      "description": "Delete a pipeline. Marks the pipeline as deleted. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_create_stage",
+      "description": "Create a new stage in a pipeline. name and pipeline_id are required. Use is_deal_rot_enabled and days_to_rotten to configure deal rotting."
+    },
+    {
+      "name": "pipedrive_update_stage",
+      "description": "Update an existing stage. Provide the stage id and any fields to change. Set pipeline_id to move the stage to another pipeline."
+    },
+    {
+      "name": "pipedrive_delete_stage",
+      "description": "Delete a stage. Marks the stage as deleted. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+    },
+    {
+      "name": "pipedrive_list_users",
+      "description": "List all users in the Pipedrive account. Useful for finding owner IDs when creating or filtering records."
+    },
+    {
+      "name": "pipedrive_get_user",
+      "description": "Get details of a specific user by ID."
+    },
+    {
+      "name": "pipedrive_get_current_user",
+      "description": "Get details of the current user (API key owner). Useful for verifying connection and getting your user ID."
+    }
   ],
-  "keywords": ["crm", "pipedrive", "sales", "deals", "contacts"]
+  "keywords": [
+    "crm",
+    "pipedrive",
+    "sales",
+    "deals",
+    "contacts"
+  ]
 }

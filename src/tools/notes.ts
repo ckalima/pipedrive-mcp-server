@@ -289,6 +289,7 @@ export const noteTools = [
       },
       required: ["id"],
     },
+    destructive: true,
     handler: deleteNote,
     schema: DeleteNoteSchema,
   },

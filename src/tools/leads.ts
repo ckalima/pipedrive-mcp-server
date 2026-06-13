@@ -537,6 +537,7 @@ export const leadsTools = [
       },
       required: ["id"],
     },
+    destructive: true,
     handler: deleteLead,
     schema: DeleteLeadSchema,
   },
