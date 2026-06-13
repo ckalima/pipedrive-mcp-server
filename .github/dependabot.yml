@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # Runtime + dev npm dependencies. Minor/patch bumps are grouped into a single weekly
+  # PR to keep noise low; majors come through as individual PRs so they get real review.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "area: infra"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions pinned in .github/workflows (checkout, setup-node, gitleaks-action).
+  # Same grouping policy so action bumps stay current without churn.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "area: infra"
+    groups:
+      actions-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"

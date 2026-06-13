@@ -1,0 +1,34 @@
+# gitleaks configuration for the CI secret-scan job (.github/workflows/ci.yml).
+#
+# We extend gitleaks' default ruleset and only carve out documented false positives.
+# A real Pipedrive API token is a 40-character key read at runtime from the
+# PIPEDRIVE_API_KEY environment variable (see SECURITY.md); none has ever been
+# committed. The allowlist below covers placeholder / example values ONLY, scoped as
+# narrowly as possible so a genuine accidental secret would still trip the scan.
+
+title = "pipedrive-mcp-server"
+
+[extend]
+# Inherit all of gitleaks' built-in rules; the entries below only subtract from them.
+useDefault = true
+
+# Singular [allowlist] is the broadly-compatible form: it works on the gitleaks version
+# the CI action pins (8.24.3) through current releases (verified on 8.30.1). The plural
+# [[allowlists]] array form only exists from 8.25.0, so it is intentionally avoided here.
+[allowlist]
+description = "Documented false positives: vendored upstream API specs and a test fixture."
+
+# The vendored Pipedrive OpenAPI specs ship example `api_token=...` values inside their
+# sample request URLs. These are third-party documentation placeholders, not our
+# credentials, so the whole (read-only, upstream) spec files are exempt.
+paths = [
+  '''docs/api/openapi-v1\.yaml''',
+  '''docs/api/openapi-v2\.yaml''',
+]
+
+# An obvious dummy fixture in a unit test. Anchored (^...$) so it allowlists ONLY a
+# secret that is exactly this literal -- a real 40-char key that merely contained this
+# 12-char run as a substring would still be flagged.
+regexes = [
+  '''^abc123def456$''',
+]
