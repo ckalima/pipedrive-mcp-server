@@ -77,18 +77,22 @@ Counts are grouped by the primary entity in each tool name and sum to 155.
 
 | # | Registry | Mechanism | Status |
 |---|---|---|---|
-| 1 | Official MCP registry | `mcp-publisher` CLI + `server.json` | ☐ Not submitted |
-| 2 | Glama | Web listing refresh (re-index/claim) | ☐ Stale (shows 38 tools) |
-| 3 | Smithery | Publisher CLI / GitHub connect + `smithery.yaml` | ☐ Not submitted |
-| 4 | mcp.so | Self-registration form | ☐ Not submitted |
-| 5 | PulseMCP | Submission form | ☐ Not submitted |
-| 6 | awesome-mcp-servers (punkpeye) | PR | ☐ Not submitted |
+| 1 | Official MCP registry | `mcp-publisher` CLI + `server.json` | ✅ **Live** (2026-06-13, status `active`) |
+| 2 | Glama | Web listing refresh (re-index/claim) | ☐ Stale (unscoped pkg, ~40 tools, v1.0.0) |
+| 3 | Smithery | Publisher CLI / GitHub connect + `smithery.yaml` | ☐ Not submitted (`smithery.yaml` verified current) |
+| 4 | mcp.so | Self-registration form | ☐ Not submitted (payload ready below) |
+| 5 | PulseMCP | Submission form | ☐ Not submitted (payload ready below) |
+| 6 | awesome-mcp-servers (punkpeye) | PR | ☐ Not submitted (entry line + placement verified below) |
 
 Update this table as each listing goes live.
 
 ---
 
 ## 1. Official MCP registry
+
+> ✅ **Submitted and live (2026-06-13).** Published via `mcp-publisher publish`; the registry
+> reports `io.github.ckalima/pipedrive-mcp-server` version `2.0.0`, status `active`, `isLatest:
+> true`. Verify with the `curl` below.
 
 The official registry feeds client-side discovery (Claude Desktop, Cursor, VS Code). It hosts
 **metadata only** — the package itself lives on npm.
@@ -112,7 +116,11 @@ Install the publisher CLI and publish the registry entry:
 ```bash
 # Install mcp-publisher (macOS/Linux)
 curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher && sudo mv mcp-publisher /usr/local/bin/
-# or: brew install mcp-publisher
+# or: brew install mcp-publisher   (it's in homebrew-core)
+#   Homebrew 6.0+ note: if `brew install` aborts with "Refusing to load formula ... from
+#   untrusted tap", that's brew's mandatory tap-trust gate tripping on unrelated third-party
+#   taps, not on mcp-publisher. Trust the taps you use (`brew trust <user>/<tap> ...`) or
+#   untap ones you don't, then re-run. mcp-publisher itself is core and always trusted.
 
 # Pre-flight: validate server.json against the live registry schema (no auth needed).
 # Catches schema errors (e.g. the 100-char description cap) before you log in.
@@ -139,16 +147,20 @@ curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.cka
 
 ## 2. Glama (refresh the stale listing)
 
-The existing Glama listing shows **38 tools** (Quality A rating worth preserving) and predates the
-scoped npm rename. Glama auto-indexes from GitHub, so a re-index usually picks up the corrected
-tool count and the scoped package once `server.json` + the updated README are on `main`.
+Existing listing: **https://glama.ai/mcp/servers/@ckalima/pipedrive-mcp-server**
 
-1. Sign in at https://glama.ai/mcp/servers with the GitHub account that owns the repo.
-2. Find the existing `pipedrive-mcp-server` listing and **claim / refresh** it.
+Verified stale state (2026-06-13): shows ~40 tools, install command points at the **unscoped**
+`npx -y pipedrive-mcp-server` (a *different* owner's package, not ours), version `1.0.0`, and the
+old generic description. Ratings are License A / Quality A / Maintenance B, worth preserving.
+Glama auto-indexes from GitHub, so a re-index picks up the corrected tool count, the scoped
+package, and `2.0.0` now that the rename + 155-tool README are on `main`.
+
+1. Sign in at https://glama.ai with the GitHub account that owns the repo (`ckalima`).
+2. Open the listing above and **claim / refresh** it.
 3. Trigger a re-index (Glama re-reads the repo). Confirm:
-   - Tool count reads **155**, not 38.
-   - Package shows the scoped `@ckalima/pipedrive-mcp-server`.
-   - Description matches the canonical pack above.
+   - Tool count reads **155** (not ~40).
+   - Install command shows the scoped `@ckalima/pipedrive-mcp-server` (not the unscoped name).
+   - Version reads **2.0.0**; description matches the canonical pack above.
 4. Keep the existing Quality A rating; do not create a duplicate listing.
 
 ---
@@ -170,8 +182,17 @@ tool count and the scoped package once `server.json` + the updated README are on
 Self-registration form (no CLI).
 
 1. Go to https://mcp.so and open the "Submit" / "Add server" form.
-2. Fill from the canonical pack: name **Pipedrive CRM**, repo URL, npm package, the <160-char
-   description, stdio transport, MIT license, and the example config snippet.
+2. Fill from the canonical pack. Ready-to-paste payload (field names may vary slightly on the form):
+
+   | Form field | Value |
+   |---|---|
+   | Name | `Pipedrive CRM` |
+   | Repository URL | `https://github.com/ckalima/pipedrive-mcp-server` |
+   | npm package | `@ckalima/pipedrive-mcp-server` |
+   | Description | `MCP server for Pipedrive CRM. 155 tools spanning deals, persons, organizations, activities, products, projects, tasks, leads, notes, mail, and fields.` |
+   | Transport | `stdio` |
+   | License | `MIT` |
+   | Config snippet | the example block under "Canonical metadata pack" above |
 
 ---
 
@@ -180,7 +201,17 @@ Self-registration form (no CLI).
 Submission form (no CLI).
 
 1. Go to https://www.pulsemcp.com and open the server submission form.
-2. Fill from the canonical pack (name, repo, npm package, description, 155 tools, stdio, MIT).
+2. Fill from the canonical pack. Ready-to-paste payload:
+
+   | Form field | Value |
+   |---|---|
+   | Name | `Pipedrive CRM` |
+   | Repository URL | `https://github.com/ckalima/pipedrive-mcp-server` |
+   | npm package | `@ckalima/pipedrive-mcp-server` |
+   | Description | `MCP server for Pipedrive CRM. 155 tools spanning deals, persons, organizations, activities, products, projects, tasks, leads, notes, mail, and fields.` |
+   | Tool count | `155` |
+   | Transport | `stdio` |
+   | License | `MIT` |
 
 ---
 
@@ -190,18 +221,24 @@ Open a PR against https://github.com/punkpeye/awesome-mcp-servers.
 
 - **Section:** `Customer Data Platforms` (👤) — the closest fit for a CRM. If a maintainer prefers,
   `Other Tools and Integrations` is the common fallback for CRM servers.
-- **Order:** insert alphabetically by repo owner within the section.
-- **Legend:** 📇 (TypeScript) ☁️ (Cloud Service). Do **not** use 🎖️ — that marks vendor-official
-  servers, and this is a third-party Pipedrive integration.
+- **Placement (verified 2026-06-13 against `main`):** there is **no existing pipedrive entry** in
+  the file, so this is a fresh line (no duplicate). Insert in alphabetical position by repo owner:
+  `ckalima` (c) goes **after the `a*` entries** (`antv/mcp-server-chart`, `azmartone67/...`) and
+  **before** the `embeddedlayers`/`hustcc` entries. The section isn't strictly sorted in practice,
+  so a maintainer mainly checks that `c` sits sensibly after `a`.
+- **Legend:** 📇 (TypeScript) ☁️ (Cloud Service). ☁️ is **correct** despite the local stdio process:
+  punkpeye's own legend note defines cloud as "talking to remote APIs" (their example: a weather
+  API), and this server talks to the remote Pipedrive REST API. Do **not** use 🎖️; that marks
+  vendor-official servers, and this is a third-party Pipedrive integration.
 
-Exact entry line to add:
+Exact entry line to add (legend + formatting verified against neighboring entries):
 
 ```markdown
 - [ckalima/pipedrive-mcp-server](https://github.com/ckalima/pipedrive-mcp-server) 📇 ☁️ - MCP server for [Pipedrive CRM](https://www.pipedrive.com). 155 tools covering deals, persons, organizations, activities, products, projects, tasks, leads, notes, mail, and fields. stdio transport, API-key auth, delete tools gated behind an env flag. Published on npm as `@ckalima/pipedrive-mcp-server`. MIT.
 ```
 
-Follow the repo's `CONTRIBUTING.md`: keep alphabetical order, one entry per line, match the
-existing punctuation/capitalization.
+Follow the repo's `CONTRIBUTING.md` (verified: it requires alphabetical order within a category,
+one entry per line, and consistent punctuation/capitalization, all satisfied above).
 
 ---
 
