@@ -1,0 +1,85 @@
+name: Bug report
+description: Report something that isn't working in the Pipedrive MCP server.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. **Before you submit, redact every real Pipedrive
+        token, account ID, email address, and customer record** from anything you
+        paste below. Use placeholders like `<token>` / `person@example.com`.
+  - type: input
+    id: tool
+    attributes:
+      label: Tool name
+      description: >-
+        Which MCP tool misbehaved? Use the full name, e.g. `pipedrive_list_deals`.
+        If it isn't tool-specific (startup, config, connection), write "n/a".
+      placeholder: pipedrive_...
+    validations:
+      required: true
+  - type: input
+    id: plan
+    attributes:
+      label: Pipedrive plan tier
+      description: >-
+        Your Pipedrive subscription tier (e.g. Lite / Growth / Premium / Ultimate, or a
+        legacy Essential / Advanced / Professional / Power / Enterprise plan). Some tools
+        require a "Growth+" entitlement (for example deal installments), so plan gating is
+        a common source of "it returns 403 / empty" confusion. Write "not sure" if unknown.
+      placeholder: e.g. Growth, or "not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect to happen, and what actually happened?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact tool call(s) and order that trigger the bug.
+      placeholder: |
+        1. Call pipedrive_... with { ... }
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: request-response
+    attributes:
+      label: Request / response (redacted)
+      description: >-
+        The tool input you sent and the response or error you received.
+        **Redact tokens, account IDs, real emails, and customer data.**
+      render: json
+    validations:
+      required: false
+  - type: textarea
+    id: stderr
+    attributes:
+      label: Error output (stderr)
+      description: Any error text the server printed to stderr. The server never logs to stdout.
+      render: shell
+    validations:
+      required: false
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Server version and Node.js version (`node --version`).
+      placeholder: "server 2.0.0, node v20.x"
+    validations:
+      required: true
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have removed all real Pipedrive tokens, account IDs, and customer data from this report.
+          required: true
+        - label: I searched existing issues and this isn't a duplicate.
+          required: true

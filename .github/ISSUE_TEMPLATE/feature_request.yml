@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest a new tool, capability, or improvement.
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. The clearest requests name the specific Pipedrive
+        capability you want exposed, so they can be scoped against the API directly.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The use case or problem you're solving, not just the proposed solution.
+    validations:
+      required: true
+  - type: input
+    id: endpoint
+    attributes:
+      label: Pipedrive endpoint or capability
+      description: >-
+        Which Pipedrive API endpoint or feature should this cover? Link the
+        Pipedrive API docs if you have them (e.g. `POST /api/v2/deals`, "deal followers").
+      placeholder: e.g. /api/v2/... or the capability name
+    validations:
+      required: true
+  - type: dropdown
+    id: api-version
+    attributes:
+      label: API version (if known)
+      description: >-
+        Pipedrive is mid-migration to API v2; some capabilities only exist on v1.
+        Pick "Not sure" if you don't know.
+      options:
+        - Not sure
+        - v2
+        - v1
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: Proposed tool shape (optional)
+      description: If you have one in mind, sketch the tool name, inputs, and what it returns.
+      placeholder: |
+        pipedrive_<verb>_<entity>
+        inputs: { ... }
+        returns: ...
+    validations:
+      required: false
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd be willing to open a PR for this (see CONTRIBUTING.md).
+          required: false
