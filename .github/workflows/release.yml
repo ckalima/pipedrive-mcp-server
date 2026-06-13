@@ -5,13 +5,17 @@ name: Release
 # the "Protect release tags (v*)" ruleset). workflow_dispatch runs a publish-
 # skipping dry-run that still validates the build and the staged tarball.
 #
-# Auth (bootstrap path): npm cannot pre-register a trusted publisher for a
-# never-published package, so the first 2.0.0 publish authenticates with a
-# granular NPM_TOKEN. Provenance is generated from the Actions OIDC id-token
-# (id-token: write below), independent of publish auth, so 2.0.0 ships signed.
-# After the package exists: register the npm trusted publisher (user ckalima,
-# repo pipedrive-mcp-server, workflow release.yml), drop NODE_AUTH_TOKEN, and
-# revoke the NPM_TOKEN.
+# Auth: OIDC trusted publishing. The npm package is configured with a trusted
+# publisher (user ckalima, repo pipedrive-mcp-server, workflow release.yml) and
+# publishing access set to "disallow tokens", so npm authenticates this workflow
+# via the Actions OIDC id-token (id-token: write below) with no long-lived
+# secret. Trusted publishing requires npm >= 11.5.1, which is installed below
+# because the Node 22 runtime ships an older npm. Provenance attestations are
+# produced automatically under trusted publishing.
+#
+# History: 2.0.0 was bootstrap-published with a granular NPM_TOKEN because npm
+# cannot pre-register a trusted publisher for a never-published package; that
+# token was retired once the package existed.
 
 on:
   push:
@@ -36,7 +40,7 @@ jobs:
     # cannot inherit token-minting (id-token) or release-writing (contents) rights.
     permissions:
       contents: write # create the GitHub Release
-      id-token: write # OIDC token for npm build provenance
+      id-token: write # OIDC token: authenticates trusted publishing + signs provenance
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -47,6 +51,13 @@ jobs:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
           cache: npm
+
+      - name: Upgrade npm for OIDC trusted publishing (requires >= 11.5.1)
+        # Node 22 ships npm 10.x, which predates OIDC trusted publishing. The
+        # tokenless publish below fails without this. Pin to the v11 major
+        # (well above the 11.5.1 floor) rather than @latest so a future npm
+        # major can't silently change publish behavior on a tag push.
+        run: npm install -g npm@11
 
       - name: Install dependencies
         run: npm ci
@@ -80,8 +91,8 @@ jobs:
 
       - name: Publish to npm with provenance
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        # No NODE_AUTH_TOKEN: auth is OIDC trusted publishing via id-token: write.
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_LOGLEVEL: warn
         run: |
           VER=${GITHUB_REF_NAME#v}
