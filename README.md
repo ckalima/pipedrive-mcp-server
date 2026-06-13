@@ -413,6 +413,13 @@ Common error codes:
 - `RATE_LIMITED` - Wait 60 seconds before retrying
 - `VALIDATION_ERROR` - Check your request parameters
 
+## Security
+
+See [SECURITY.md](SECURITY.md) for the threat model (data flows, credential handling,
+prompt-injection honesty, and known limitations) and how to report a vulnerability
+privately. In short: STDIO-only with no network listener, the API token is read from the
+environment and never logged, and destructive operations are gated off by default.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
@@ -425,4 +432,5 @@ MIT - see [LICENSE](LICENSE)
 
 - [Pipedrive API Documentation](https://developers.pipedrive.com/docs/api/v1)
 - [MCP Protocol](https://modelcontextprotocol.io/)
+- [Security Policy](SECURITY.md)
 - [Report Issues](https://github.com/ckalima/pipedrive-mcp-server/issues)
