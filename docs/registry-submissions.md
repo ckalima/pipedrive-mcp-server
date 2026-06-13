@@ -34,6 +34,13 @@ Reuse these values verbatim across every registry so the listings stay consisten
 | **Repository** | https://github.com/ckalima/pipedrive-mcp-server |
 | **Language / scope (awesome legend)** | 📇 TypeScript · ☁️ Cloud Service |
 
+> **Official-registry exception (100-char description cap).** The official MCP registry schema
+> caps `server.json`'s `description` at **100 characters**, so [`server.json`](../server.json)
+> carries a shortened 96-char variant: _"MCP server for Pipedrive CRM. 155 tools for deals,
+> persons, organizations, activities, and more."_ Every other surface (npm, comms, registries 2-6
+> below) uses the 151-char description above. Re-confirm `server.json` passes the registry schema
+> any time with `mcp-publisher validate` (no auth required).
+
 ### Tool profile (155 total, grouped by primary entity)
 
 | Entity | Tools | | Entity | Tools |
@@ -106,6 +113,10 @@ Install the publisher CLI and publish the registry entry:
 # Install mcp-publisher (macOS/Linux)
 curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher && sudo mv mcp-publisher /usr/local/bin/
 # or: brew install mcp-publisher
+
+# Pre-flight: validate server.json against the live registry schema (no auth needed).
+# Catches schema errors (e.g. the 100-char description cap) before you log in.
+mcp-publisher validate          # expect: "✅ server.json is valid"
 
 # Authenticate. GitHub auth grants the io.github.ckalima/* namespace — log in as the
 # GitHub user "ckalima".
