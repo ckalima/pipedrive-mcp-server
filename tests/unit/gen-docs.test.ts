@@ -25,9 +25,13 @@ import {
   buildManifest,
   isDestructive,
   isGrowthPlus,
+  stripScope,
 } from '../../scripts/gen-docs.js';
 
 const TOOLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../src/tools');
+
+/** Expected registered tool count; bump in lockstep with the live registry. */
+const EXPECTED_TOOL_COUNT = 155;
 
 /**
  * Statically derive the set of handler function names that call
@@ -67,8 +71,8 @@ describe('gen-docs generator', () => {
       expect(new Set(grouped)).toEqual(new Set(allTools.map((t) => t.name)));
     });
 
-    it('lists all 155 tools in the README region', () => {
-      expect(allTools.length).toBe(155);
+    it(`lists all ${EXPECTED_TOOL_COUNT} tools in the README region`, () => {
+      expect(allTools.length).toBe(EXPECTED_TOOL_COUNT);
       const region = buildReadmeRegion();
       for (const tool of allTools) {
         expect(region, `README region missing ${tool.name}`).toContain(`\`${tool.name}\``);
@@ -171,10 +175,7 @@ describe('gen-docs generator', () => {
       );
       const manifest = buildManifest();
       // name is unscoped (MCPB names carry no npm scope).
-      const expectedName = String(pkg.name).startsWith('@')
-        ? String(pkg.name).slice(String(pkg.name).indexOf('/') + 1)
-        : String(pkg.name);
-      expect(manifest.name).toBe(expectedName);
+      expect(manifest.name).toBe(stripScope(String(pkg.name)));
       expect(manifest.version).toBe(pkg.version);
       expect(manifest.description).toBe(pkg.description);
       // MCPB rejects unknown top-level keys, so the provenance breadcrumb must not leak in.

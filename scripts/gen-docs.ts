@@ -87,7 +87,7 @@ export function isGrowthPlus(tool: ToolLike): boolean {
 }
 
 /** Strip an npm scope (`@scope/name` → `name`); MCPB names are unscoped. */
-function stripScope(name: string): string {
+export function stripScope(name: string): string {
   return name.startsWith("@") ? name.slice(name.indexOf("/") + 1) : name;
 }
 
