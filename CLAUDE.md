@@ -36,6 +36,24 @@ src/
 
 v1 full sunset: 2026-07-31 (working horizon — per Pipedrive integration partners Make/Zapier; Pipedrive's own docs state only "grace period ≥ 1 year"; re-verify before committing). Official first-party date: 2025-12-31 applies only to selected endpoints with v2 equivalents — it does NOT cover notes, mail, users, or leads CRUD. See `docs/v1-only-capabilities.md`.
 
+## Docs: public vs. private
+
+Engineering docs are **public** and live in this repo. The menehune backlog pipeline
+reads and writes plans here, so they must be tracked (not gitignored):
+
+- `docs/plans/` — implementation plans (`/backlog:plan` writes these)
+- `docs/brainstorms/` — feature/requirements RFCs
+- `docs/residual-review-findings/` — code-review follow-ups
+
+Keep the following **out** of this public repo — put them in `docs/private/` (gitignored)
+and back them up in the private repo `ckalima/pipedrive-mcp-internal`:
+
+- Competitive / market strategy (competitor names, positioning, moat analysis)
+- Session handoffs that carry account identifiers or PII (trial account IDs, real emails)
+
+Never commit Pipedrive account IDs, API tokens, or real customer data. Test fixtures use
+`@example.com` addresses.
+
 ## Conventions
 
 - Every tool handler returns `{ content: [{ type: "text", text: string }] }` with optional `isError: true`
