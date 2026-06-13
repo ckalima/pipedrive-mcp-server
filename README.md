@@ -1,6 +1,21 @@
 # Pipedrive MCP Server
 
+[![npm version](https://img.shields.io/npm/v/@ckalima/pipedrive-mcp-server?logo=npm)](https://www.npmjs.com/package/@ckalima/pipedrive-mcp-server)
+[![CI](https://github.com/ckalima/pipedrive-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/ckalima/pipedrive-mcp-server/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-1%2C700%2B%20passing-brightgreen)](https://github.com/ckalima/pipedrive-mcp-server/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 An MCP (Model Context Protocol) server for Pipedrive CRM integration with Claude Code and Claude Desktop. Query, create, and update CRM data directly from your AI assistant.
+
+## Why this server
+
+- **API v2-first.** Every entity uses Pipedrive's v2 REST API where it exists; v1 is used only for the capabilities that have no v2 equivalent (notes, mail, users, and leads CRUD). See [API Versioning](#api-versioning).
+- **Contract-tested against the real OpenAPI spec.** Request params, request bodies, and response shapes are checked against the vendored Pipedrive OpenAPI v2 definition (`docs/api/openapi-v2.yaml`) in `tests/contract/`, so the v2 tools can't silently drift from the documented API.
+- **Live-smoke verified.** The tool surface is broadly exercised against a real Pipedrive account (`scripts/smoke-coverage.ts`), with only API-unseedable surfaces (e.g. mail threads, project templates) left to manual checks. Coverage includes plan-gated endpoints such as Growth+ deal installments (`scripts/smoke-installments.ts`). Key write smokes (e.g. the task `is_done` flag) assert the field value actually changed on the wire, not just a 200.
+- **Destructive ops gated by default.** Deletes, conversions, and other irreversible writes (🔒 in the tool table) are disabled until you set `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`, so the server is read-and-create only out of the box. Every tool also carries MCP annotations (`readOnlyHint`/`destructiveHint`/`idempotentHint`) so policy-aware clients can tell reads from writes from deletes.
+- **MIT licensed**, published with npm build provenance.
+
+**Honest limitations.** Transport is STDIO only today (a Streamable HTTP flag is planned), and auth is via a Pipedrive API key, which matches the local/self-hosted tier this server targets. There is no hosted OAuth offering yet.
 
 ## Features
 
