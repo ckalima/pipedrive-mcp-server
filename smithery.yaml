@@ -1,0 +1,30 @@
+# Smithery configuration. Reference: https://smithery.ai/docs/build/project-config
+# This server is distributed on npm and runs locally over stdio.
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema describing the configuration Smithery collects from the user.
+    type: object
+    required:
+      - pipedriveApiKey
+    properties:
+      pipedriveApiKey:
+        type: string
+        title: Pipedrive API key
+        description: Your 40-character Pipedrive API token (Settings > Personal preferences > API).
+      enableDestructive:
+        type: boolean
+        title: Enable destructive (delete) tools
+        description: When true, delete tools are exposed. Disabled by default for safety.
+        default: false
+  commandFunction:
+    # Produces the CLI command Smithery uses to launch the server over stdio.
+    |-
+    config => ({
+      command: 'npx',
+      args: ['-y', '@ckalima/pipedrive-mcp-server'],
+      env: {
+        PIPEDRIVE_API_KEY: config.pipedriveApiKey,
+        ...(config.enableDestructive ? { PIPEDRIVE_ENABLE_DESTRUCTIVE: 'true' } : {})
+      }
+    })
