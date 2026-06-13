@@ -61,6 +61,16 @@ export const VERB_SEMANTICS: Record<string, VerbSemantics> = {
  *  test suite guarantees no shipped tool actually falls through to this. */
 const FALLBACK_SEMANTICS: VerbSemantics = { readOnly: false, idempotent: false };
 
+/**
+ * Atomic bulk-delete-by-id endpoints (`delete_<entity>_field_options`) delete a list of
+ * option IDs in a single request that fails entirely if ANY id is already gone. Unlike a
+ * normal `delete` (deleting an already-deleted resource converges to the same 404/no-op
+ * end state), repeating one of these calls ERRORS rather than being a no-op, so it is NOT
+ * idempotent. This is the one spot where the endpoint's real contract overrides the verb's
+ * default idempotency. Enforced against the live registry in the annotations test.
+ */
+const ATOMIC_BULK_DELETE = /^pipedrive_delete_\w+_field_options$/;
+
 /** The verb token of a tool name (`pipedrive_list_deals` → `list`). */
 export function toolVerb(name: string): string {
   return name.replace(/^pipedrive_/, "").split("_")[0];
@@ -68,7 +78,8 @@ export function toolVerb(name: string): string {
 
 /** Operation semantics for a tool name, falling back to a conservative write. */
 export function verbSemantics(name: string): VerbSemantics {
-  return VERB_SEMANTICS[toolVerb(name)] ?? FALLBACK_SEMANTICS;
+  const base = VERB_SEMANTICS[toolVerb(name)] ?? FALLBACK_SEMANTICS;
+  return ATOMIC_BULK_DELETE.test(name) ? { ...base, idempotent: false } : base;
 }
 
 /** Build the MCP annotations object for a tool from its name verb + declared `destructive` field. */

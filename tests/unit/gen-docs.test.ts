@@ -12,9 +12,6 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 
 import { allTools } from '../../src/tools/index.js';
 import {
@@ -27,40 +24,10 @@ import {
   isGrowthPlus,
   stripScope,
 } from '../../scripts/gen-docs.js';
-
-const TOOLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../src/tools');
+import { guardedHandlerNames, type ToolWithHandler } from '../helpers/guardedHandlers.js';
 
 /** Expected registered tool count; bump in lockstep with the live registry. */
 const EXPECTED_TOOL_COUNT = 155;
-
-/**
- * Statically derive the set of handler function names that call
- * `destructiveOperationGuard(`, by scanning the tool source. This NEVER imports or
- * runs handler code. Each `export async function NAME` opens a block that runs to
- * the next such declaration (or EOF); a block is "guarded" if its text contains the
- * guard call. Guards are the first statement in each destructive handler, so this
- * attribution is exact.
- */
-function guardedHandlerNames(): Set<string> {
-  const guarded = new Set<string>();
-  const files = readdirSync(TOOLS_DIR).filter((f) => f.endsWith('.ts') && f !== 'index.ts');
-  for (const file of files) {
-    const src = readFileSync(join(TOOLS_DIR, file), 'utf8');
-    const matches = [...src.matchAll(/export async function (\w+)/g)];
-    for (let i = 0; i < matches.length; i++) {
-      const name = matches[i][1];
-      const start = matches[i].index ?? 0;
-      const end = i + 1 < matches.length ? (matches[i + 1].index ?? src.length) : src.length;
-      if (src.slice(start, end).includes('destructiveOperationGuard(')) {
-        guarded.add(name);
-      }
-    }
-  }
-  return guarded;
-}
-
-/** Runtime view of a tool def with its bound handler function. */
-type ToolWithHandler = { name: string; destructive?: boolean; handler?: (...args: unknown[]) => unknown };
 
 describe('gen-docs generator', () => {
   describe('coverage', () => {

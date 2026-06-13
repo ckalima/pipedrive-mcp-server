@@ -16,9 +16,6 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 
 import { allTools, toolDefinitions } from '../../src/tools/index.js';
 import {
@@ -27,37 +24,17 @@ import {
   verbSemantics,
   buildToolAnnotations,
 } from '../../src/tools/annotations.js';
-
-const TOOLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../src/tools');
+import { guardedHandlerNames, type ToolWithHandler } from '../helpers/guardedHandlers.js';
 
 /** Expected registered tool count; bump in lockstep with the live registry. */
 const EXPECTED_TOOL_COUNT = 155;
-/** Verb prefixes that denote a read-only operation. */
-const READ_VERBS = new Set(['list', 'get', 'search']);
-
-/**
- * Statically derive the set of handler function names that call
- * `destructiveOperationGuard(`. NEVER imports or runs handler code (see gen-docs.test.ts).
- */
-function guardedHandlerNames(): Set<string> {
-  const guarded = new Set<string>();
-  const files = readdirSync(TOOLS_DIR).filter((f) => f.endsWith('.ts') && f !== 'index.ts');
-  for (const file of files) {
-    const src = readFileSync(join(TOOLS_DIR, file), 'utf8');
-    const matches = [...src.matchAll(/export async function (\w+)/g)];
-    for (let i = 0; i < matches.length; i++) {
-      const name = matches[i][1];
-      const start = matches[i].index ?? 0;
-      const end = i + 1 < matches.length ? (matches[i + 1].index ?? src.length) : src.length;
-      if (src.slice(start, end).includes('destructiveOperationGuard(')) {
-        guarded.add(name);
-      }
-    }
-  }
-  return guarded;
-}
-
-type ToolWithHandler = { name: string; destructive?: boolean; handler?: (...args: unknown[]) => unknown };
+/** Verb prefixes that denote a read-only operation, derived from the semantics table so it
+ *  can never drift from VERB_SEMANTICS. */
+const READ_VERBS = new Set(
+  Object.entries(VERB_SEMANTICS)
+    .filter(([, s]) => s.readOnly)
+    .map(([verb]) => verb),
+);
 
 describe('tool annotations', () => {
   describe('coverage', () => {
@@ -178,11 +155,59 @@ describe('tool annotations', () => {
       ['pipedrive_bulk_add_deal_products', false],
       ['pipedrive_convert_deal_to_lead', false],
       ['pipedrive_upload_product_image', false],
+      // Atomic bulk-delete-by-id fails on repeat (ids already gone) → not idempotent,
+      // unlike its update sibling which converges.
+      ['pipedrive_delete_deal_field_options', false],
+      ['pipedrive_update_deal_field_options', true],
     ];
     it.each(cases)('%s → idempotentHint=%s', (name, expected) => {
       const tool = allTools.find((t) => t.name === name);
       expect(tool, `${name} should exist`).toBeDefined();
       expect(buildToolAnnotations(tool!).idempotentHint).toBe(expected);
+    });
+
+    it('every tool annotation matches its verb semantics (exhaustive)', () => {
+      for (const tool of allTools) {
+        expect(buildToolAnnotations(tool).idempotentHint, `${tool.name} idempotentHint`).toBe(
+          verbSemantics(tool.name).idempotent,
+        );
+      }
+    });
+  });
+
+  describe('atomic bulk-delete exception', () => {
+    // The only place the `delete` verb's default idempotency is overridden: the four
+    // delete_<entity>_field_options tools issue an atomic bulk-delete-by-id that errors on
+    // repeat. Lock the exception to exactly these four so it can't quietly widen or vanish.
+    const ATOMIC_BULK_DELETE = /^pipedrive_delete_\w+_field_options$/;
+
+    it('marks exactly the four field-option bulk deletes non-idempotent', () => {
+      const flipped = allTools
+        .filter((t) => toolVerb(t.name) === 'delete' && !buildToolAnnotations(t).idempotentHint)
+        .map((t) => t.name)
+        .sort();
+      expect(flipped).toEqual([
+        'pipedrive_delete_deal_field_options',
+        'pipedrive_delete_organization_field_options',
+        'pipedrive_delete_person_field_options',
+        'pipedrive_delete_product_field_options',
+      ]);
+      // The set of non-idempotent deletes is exactly the names matching the override regex.
+      for (const tool of allTools) {
+        if (toolVerb(tool.name) !== 'delete') continue;
+        expect(buildToolAnnotations(tool).idempotentHint, `${tool.name}`).toBe(
+          !ATOMIC_BULK_DELETE.test(tool.name),
+        );
+      }
+    });
+
+    it('keeps these deletes as destructive, non-read writes despite the override', () => {
+      for (const tool of allTools.filter((t) => ATOMIC_BULK_DELETE.test(t.name))) {
+        const a = buildToolAnnotations(tool);
+        expect(a.readOnlyHint, `${tool.name} readOnly`).toBe(false);
+        expect(a.idempotentHint, `${tool.name} idempotent`).toBe(false);
+        expect(a.destructiveHint, `${tool.name} destructive`).toBe(true);
+      }
     });
   });
 
@@ -214,6 +239,12 @@ describe('tool annotations', () => {
         idempotentHint: false,
         openWorldHint: true,
       });
+    });
+
+    it('overrides idempotency only for atomic bulk-delete-by-id (field-option) deletes', () => {
+      // A field-option bulk delete is a non-idempotent write; a plain entity delete stays idempotent.
+      expect(verbSemantics('pipedrive_delete_x_field_options')).toEqual({ readOnly: false, idempotent: false });
+      expect(verbSemantics('pipedrive_delete_x')).toEqual({ readOnly: false, idempotent: true });
     });
   });
 });
