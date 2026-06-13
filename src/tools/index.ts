@@ -17,6 +17,7 @@ import { projectTools } from "./projects.js";
 import { productTools } from "./products.js";
 import { taskTools } from "./tasks.js";
 import { boardTools, phaseTools } from "./boards.js";
+import { buildToolAnnotations } from "./annotations.js";
 
 /**
  * All available tools
@@ -47,12 +48,17 @@ export const allTools = [
 ];
 
 /**
- * Tool definitions for MCP listTools
+ * Tool definitions for MCP listTools.
+ *
+ * `annotations` (readOnlyHint/destructiveHint/idempotentHint/openWorldHint) are derived
+ * per tool by `buildToolAnnotations` so policy-aware clients can distinguish reads from
+ * writes from deletes without parsing tool names. See `./annotations.ts`.
  */
 export const toolDefinitions = allTools.map(tool => ({
   name: tool.name,
   description: tool.description,
   inputSchema: tool.inputSchema,
+  annotations: buildToolAnnotations(tool),
 }));
 
 /**
