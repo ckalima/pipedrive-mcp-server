@@ -30,8 +30,8 @@ src/
 
 ## API Versions
 
-- **v2** (default): deals, persons, organizations, activities (`https://api.pipedrive.com/api/v2`)
-- **v1**: notes, mail, fields, pipelines, users (`https://api.pipedrive.com/v1`)
+- **v2** (default): deals, persons, organizations, activities, products, projects, tasks, boards & phases, fields, pipelines & stages, leads search (`https://api.pipedrive.com/api/v2`)
+- **v1**: notes, mail, users, leads CRUD (`https://api.pipedrive.com/v1`)
 - Auth: `api_token` query parameter for both versions
 
 v1 full sunset: 2026-07-31 (working horizon — per Pipedrive integration partners Make/Zapier; Pipedrive's own docs state only "grace period ≥ 1 year"; re-verify before committing). Official first-party date: 2025-12-31 applies only to selected endpoints with v2 equivalents — it does NOT cover notes, mail, users, or leads CRUD. See `docs/v1-only-capabilities.md`.
@@ -41,6 +41,7 @@ v1 full sunset: 2026-07-31 (working horizon — per Pipedrive integration partne
 - Every tool handler returns `{ content: [{ type: "text", text: string }] }` with optional `isError: true`
 - Error responses use `getErrorResponse(response)` from `utils/errors.ts`, never inline fallbacks
 - Delete tools are gated by `PIPEDRIVE_ENABLE_DESTRUCTIVE=true` env var (default: disabled)
+- Destructive tools must both call `destructiveOperationGuard()` as the handler's first statement AND declare `destructive: true` on the tool def (drives the README/manifest 🔒 marker; enforced by the field-guard invariant test in `tests/unit/gen-docs.test.ts`)
 - Schemas use Zod. `visible_to` is always `z.number().int()` with `.refine()`, never string enum
 - Tool files export a `*Tools` array and individual handler functions
 - Tests: unit tests in `tests/unit/`, integration tests in `tests/integration/`
@@ -52,3 +53,4 @@ v1 full sunset: 2026-07-31 (working horizon — per Pipedrive integration partne
 2. Create tool handlers in `src/tools/<entity>.ts` following existing patterns
 3. Add to `allTools` spread in `src/tools/index.ts`
 4. Add unit tests for schemas, integration tests for tools
+5. Run `npm run gen:docs` to regenerate the README tool table and `bundle/manifest.json` (CI fails on drift)

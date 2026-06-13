@@ -12,7 +12,7 @@
  * here, so a clean checkout reproduces the bundle from source.
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -55,9 +55,12 @@ function main(): void {
   // 4. Install production deps inside the bundle so the .mcpb is self-contained.
   run("npm install --omit=dev --no-audit --no-fund", SERVER);
 
-  // 5. Pack bundle/ into a versioned .mcpb at the repo root.
+  // 5. Pack bundle/ into a versioned .mcpb at the repo root. execFileSync (argv, no
+  //    shell) keeps BUNDLE/out as discrete arguments, so a checkout path containing a
+  //    space or shell metacharacter is never word-split.
   const out = join(ROOT, `pipedrive-mcp-server-${pkg.version}.mcpb`);
-  run(`npx mcpb pack ${BUNDLE} ${out}`);
+  console.log(`$ npx mcpb pack ${BUNDLE} ${out}`);
+  execFileSync("npx", ["mcpb", "pack", BUNDLE, out], { cwd: ROOT, stdio: "inherit" });
 
   console.log(`\nbuilt ${out}`);
 }

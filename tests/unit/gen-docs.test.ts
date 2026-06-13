@@ -135,12 +135,32 @@ describe('gen-docs generator', () => {
   });
 
   describe('determinism', () => {
+    const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
+
     it('produces byte-identical README regions across builds', () => {
       expect(buildReadmeRegion()).toBe(buildReadmeRegion());
     });
 
     it('produces byte-identical manifests across builds', () => {
       expect(JSON.stringify(buildManifest())).toBe(JSON.stringify(buildManifest()));
+    });
+
+    // The two checks above only prove the generator is a pure function within one
+    // process. The real property the CI drift gate enforces is that the generator
+    // reproduces the COMMITTED files byte-for-byte; assert that here so a
+    // non-idempotent generator (or a forgotten `npm run gen:docs`) fails fast in the
+    // unit suite, not only in CI.
+    it('reproduces the committed README region byte-for-byte', () => {
+      const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
+      const begin = '<!-- BEGIN GENERATED TOOLS -->';
+      const end = '<!-- END GENERATED TOOLS -->';
+      const committed = readme.slice(readme.indexOf(begin), readme.indexOf(end) + end.length);
+      expect(buildReadmeRegion()).toBe(committed);
+    });
+
+    it('reproduces the committed bundle/manifest.json byte-for-byte', () => {
+      const committed = readFileSync(join(ROOT, 'bundle', 'manifest.json'), 'utf8');
+      expect(JSON.stringify(buildManifest(), null, 2) + '\n').toBe(committed);
     });
   });
 
