@@ -51,7 +51,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25",
     "@vitest/coverage-v8": "^4.1.8",
-    "eslint": "^9.39.4",
+    "eslint": "^10.5.0",
     "js-yaml": "^4.2.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
