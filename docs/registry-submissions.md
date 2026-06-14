@@ -78,13 +78,19 @@ Counts are grouped by the primary entity in each tool name and sum to 155.
 | # | Registry | Mechanism | Status |
 |---|---|---|---|
 | 1 | Official MCP registry | `mcp-publisher` CLI + `server.json` | ✅ **Live** (2026-06-13, status `active`) |
-| 2 | Glama | Web listing refresh (re-index/claim) | ☐ Stale (unscoped pkg, ~40 tools, v1.0.0) |
-| 3 | Smithery | Publisher CLI / GitHub connect + `smithery.yaml` | ☐ Not submitted (`smithery.yaml` verified current) |
-| 4 | mcp.so | Self-registration form | ☐ Not submitted (payload ready below) |
-| 5 | PulseMCP | Submission form | ☐ Not submitted (payload ready below) |
-| 6 | awesome-mcp-servers (punkpeye) | PR | ☐ Not submitted (entry line + placement verified below) |
+| 2 | Glama | Web listing refresh (re-index/claim) | ✅ **Live** (2026-06-14; claimed, scoped pkg, 155 tools, ratings A/A/A) |
+| 3 | Smithery | `.mcpb` bundle / hosted URL (model changed) | ⏸️ **Deferred** (MCPB vs. Smithery schema conflict; see §3) |
+| 4 | mcp.so | Self-registration form | ✅ **Live** (2026-06-14, [`/server/pipedrive-crm`](https://mcp.so/server/pipedrive-crm)) |
+| 5 | PulseMCP | Auto-imported from the official registry | ✅ **Live** (2026-06-14; no form needed) |
+| 6 | awesome-mcp-servers (punkpeye) | PR | ⏳ **PR open** ([#8065](https://github.com/punkpeye/awesome-mcp-servers/pull/8065)) |
 
 Update this table as each listing goes live.
+
+> **The official registry seeds downstream catalogs.** Publishing to the official MCP registry (#1)
+> propagated automatically: **PulseMCP (#5)** imported the listing with no form submission, and
+> **LobeHub** (outside the original six, at https://lobehub.com/mcp/ckalima-pipedrive-mcp-server)
+> also lists it. mcp.so (#4) had a pre-existing auto-crawled entry as well. Net effect: once #1 was
+> live, several catalogs needed little or no manual work.
 
 ---
 
@@ -147,6 +153,11 @@ curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.cka
 
 ## 2. Glama (refresh the stale listing)
 
+> ✅ **Done (2026-06-14).** Listing claimed and re-indexed. Now shows the scoped
+> `@ckalima/pipedrive-mcp-server`, **155 tools**, current version, ratings License A / Quality A /
+> Maintenance A (Maintenance improved from B), no duplicate. The steps below are retained for
+> reference and future refreshes.
+
 Existing listing: **https://glama.ai/mcp/servers/@ckalima/pipedrive-mcp-server**
 
 Verified stale state (2026-06-13): shows ~40 tools, install command points at the **unscoped**
@@ -165,19 +176,45 @@ package, and `2.0.0` now that the rename + 155-tool README are on `main`.
 
 ---
 
-## 3. Smithery
+## 3. Smithery (deferred)
 
-`smithery.yaml` (committed at repo root) declares a stdio server launched via
-`npx -y @ckalima/pipedrive-mcp-server` with an API-key config schema.
+> ⏸️ **Deferred (2026-06-14).** Smithery changed its model and no longer fits this server cleanly.
+> Revisit if its tooling stabilizes.
 
-1. Sign in at https://smithery.ai with GitHub and connect the repository.
-2. Smithery reads `smithery.yaml` from the default branch. Confirm the deploy/listing shows the
-   scoped package, stdio transport, and the `pipedriveApiKey` config field.
-3. Alternatively use the CLI: `npx -y @smithery/cli@latest` and follow its publish prompts.
+`smithery.yaml` (committed at repo root) is still correct: it declares a stdio server launched via
+`npx -y @ckalima/pipedrive-mcp-server` with an API-key config schema. The blocker is on Smithery's
+side, not in our descriptor.
+
+**What changed.** Smithery dropped the old "connect a GitHub repo with `smithery.yaml`" path for
+stdio servers. The submit flow now requires **either**:
+
+1. a **hosted HTTP server URL**, which we decline on purpose (a CRM connector should not centralize
+   every user's Pipedrive API key behind a shared endpoint), or
+2. a **local `.mcpb` bundle**, published via
+   `npx -y @smithery/cli@latest mcp publish <bundle.mcpb> -n <namespace>`.
+
+**Why the bundle path fails.** We can build a valid `.mcpb` (`npm run bundle:mcpb`), but
+`smithery mcp publish` returns a 400 with one "expected object, received undefined" per tool (155
+of them): Smithery validates a per-tool **`inputSchema`** in the bundle manifest. The MCPB manifest
+standard does **not** carry `inputSchema` on tool entries, and enriching it makes `mcpb validate` /
+`mcpb pack` reject the manifest ("Unrecognized key(s): inputSchema"). The two schemas are mutually
+exclusive, so a single bundle cannot satisfy both; a Smithery listing would need a hand-zipped,
+non-standard bundle maintained outside our `gen:docs` discipline. Smithery's publish endpoint also
+has open bugs (smithery-ai/cli #770) at the time of writing.
+
+**To revisit later:** re-check whether Smithery accepts a standard MCPB bundle (no per-tool
+`inputSchema`), or whether the MCPB manifest spec adds an `inputSchema` field. Either change removes
+the conflict.
 
 ---
 
 ## 4. mcp.so
+
+> ✅ **Live (2026-06-14)** at **https://mcp.so/server/pipedrive-crm** (slug from the `Name` field).
+> Submitted via the "Edit Server" form with the scoped package, canonical description, and 155
+> tools. Note: mcp.so also had an older **auto-crawled** entry at `/server/pipedrive-mcp-server`; if
+> that still resolves separately it is a low-priority duplicate (report to mcp.so for merge, not a
+> launch blocker). mcp.so 403s automated reads, so verify by eye.
 
 Self-registration form (no CLI).
 
@@ -198,6 +235,11 @@ Self-registration form (no CLI).
 
 ## 5. PulseMCP
 
+> ✅ **Live (2026-06-14)** at **https://www.pulsemcp.com/servers/ckalima-pipedrive**, with no form
+> submission. PulseMCP **auto-imported** the listing from the official registry (#1): it shows
+> `io.github.ckalima/pipedrive-mcp-server`, 155 tools, and the correct repo. The manual form below
+> was not required.
+
 Submission form (no CLI).
 
 1. Go to https://www.pulsemcp.com and open the server submission form.
@@ -217,6 +259,10 @@ Submission form (no CLI).
 
 ## 6. awesome-mcp-servers (punkpeye)
 
+> ⏳ **PR open (2026-06-14):** [punkpeye/awesome-mcp-servers#8065](https://github.com/punkpeye/awesome-mcp-servers/pull/8065)
+> — one line added to **Customer Data Platforms**, including the Glama score badge. Awaiting
+> maintainer merge. (`CONTRIBUTING.md` offers an agent fast-track: append `🤖🤖🤖` to the PR title.)
+
 Open a PR against https://github.com/punkpeye/awesome-mcp-servers.
 
 - **Section:** `Customer Data Platforms` (👤) — the closest fit for a CRM. If a maintainer prefers,
@@ -231,10 +277,11 @@ Open a PR against https://github.com/punkpeye/awesome-mcp-servers.
   API), and this server talks to the remote Pipedrive REST API. Do **not** use 🎖️; that marks
   vendor-official servers, and this is a third-party Pipedrive integration.
 
-Exact entry line to add (legend + formatting verified against neighboring entries):
+Exact entry line submitted (legend + formatting verified against neighboring entries; includes the
+Glama score badge, matching peers in the section):
 
 ```markdown
-- [ckalima/pipedrive-mcp-server](https://github.com/ckalima/pipedrive-mcp-server) 📇 ☁️ - MCP server for [Pipedrive CRM](https://www.pipedrive.com). 155 tools covering deals, persons, organizations, activities, products, projects, tasks, leads, notes, mail, and fields. stdio transport, API-key auth, delete tools gated behind an env flag. Published on npm as `@ckalima/pipedrive-mcp-server`. MIT.
+- [ckalima/pipedrive-mcp-server](https://github.com/ckalima/pipedrive-mcp-server) [![ckalima/pipedrive-mcp-server MCP server](https://glama.ai/mcp/servers/ckalima/pipedrive-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/ckalima/pipedrive-mcp-server) 📇 ☁️ - MCP server for [Pipedrive CRM](https://www.pipedrive.com). 155 tools covering deals, persons, organizations, activities, products, projects, tasks, leads, notes, mail, and fields. stdio transport, API-key auth, delete tools gated behind an env flag. Published on npm as `@ckalima/pipedrive-mcp-server`. MIT.
 ```
 
 Follow the repo's `CONTRIBUTING.md` (verified: it requires alphabetical order within a category,
@@ -244,5 +291,9 @@ one entry per line, and consistent punctuation/capitalization, all satisfied abo
 
 ## Acceptance (issue #86)
 
-All six list the **scoped** package with an accurate **155**-tool count and the canonical
-description; the Glama listing no longer says 38 tools.
+Target: each listing carries the **scoped** package, an accurate **155**-tool count, and the
+canonical description. Status as of 2026-06-14: **#1 Official, #2 Glama, #4 mcp.so, and #5 PulseMCP
+are live and correct** (Glama no longer says 38 tools); **#6 awesome-mcp-servers** is an open PR
+([#8065](https://github.com/punkpeye/awesome-mcp-servers/pull/8065)) pending maintainer merge; **#3
+Smithery is deferred** (see §3) because its current submission model conflicts with the MCPB bundle
+standard. Five of six covered, with Smithery the documented exception.
