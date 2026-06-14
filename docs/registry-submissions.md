@@ -210,11 +210,12 @@ the conflict.
 
 ## 4. mcp.so
 
-> ✅ **Live (2026-06-14)** at **https://mcp.so/server/pipedrive-crm** (slug from the `Name` field).
-> Submitted via the "Edit Server" form with the scoped package, canonical description, and 155
-> tools. Note: mcp.so also had an older **auto-crawled** entry at `/server/pipedrive-mcp-server`; if
-> that still resolves separately it is a low-priority duplicate (report to mcp.so for merge, not a
-> launch blocker). mcp.so 403s automated reads, so verify by eye.
+> ✅ **Live (2026-06-14)** at **https://mcp.so/server/pipedrive-crm**. Submitted via the "Edit
+> Server" form with the scoped package, canonical description, and 155 tools. **No duplicate of
+> ours:** mcp.so keys listings by name + author (`/server/<name>/<author>`), so the
+> `/server/pipedrive-mcp-server` slug is a disambiguation page for two *unrelated* third-party
+> servers of the same name (`binarapps`, `WillDent`), not this one. Naming ours "Pipedrive CRM" /
+> `pipedrive-crm` sidesteps that collision. mcp.so 403s automated reads, so verify by eye.
 
 Self-registration form (no CLI).
 
