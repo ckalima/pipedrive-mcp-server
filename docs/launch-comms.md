@@ -61,8 +61,8 @@ Every public draft draws only from this list. Nothing here is comparative.
 - **Live-smoke verified** against a real account, including plan-gated endpoints (Growth+ deal
   installments). Write smokes assert the field value actually changed on the wire, not just a 200.
 - **1,700+ tests passing** (1,741 at time of writing) across unit, integration, and contract suites.
-- **Honest limits:** STDIO transport only today (a Streamable HTTP flag is planned); auth is a Pipedrive
-  API key (matches the local/self-hosted tier this targets); no hosted OAuth yet.
+- **Honest limits:** STDIO transport only today (no remote/HTTP transport); auth is a Pipedrive
+  API key (matches the local/self-hosted tier this targets); no hosted OAuth.
 
 ---
 
