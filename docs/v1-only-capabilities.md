@@ -71,6 +71,38 @@ Two dates are in play. They have different scopes and different levels of author
 
 ---
 
+## Version Routing & Sunset Detection
+
+The v1 version decision and lazy sunset detection for all four capabilities above
+now live in one place: the routing seam in **`src/version-routing.ts`**. The v1-only
+tool handlers call a capability-scoped seam (`notesV1`, `mailV1`, `usersV1`,
+`leadsV1`) instead of passing a `"v1"` literal to the client, so:
+
+- **Migration touches one file, not every call site.** When Pipedrive publishes a v2
+  equivalent for one of these capabilities, flip that capability's registry entry in
+  `src/version-routing.ts` (and update the handler's endpoint/shape) rather than
+  hunting `"v1"` literals across the tool files. The client stays a pure transport.
+- **Retirement is detected lazily from the call result**, with no startup probe. A 410
+  Gone (the strong signal), or a 404 on a capability's collection root where opted in
+  (notes `/notes`; users `/users`, `/users/me`; leads `/leads`; mail is 410-only
+  because its thread list legitimately 404s), marks the capability retired for the
+  process lifetime. Subsequent calls short-circuit to a clear "retired by Pipedrive,
+  no v2 equivalent" message without another upstream request. Ordinary item not-found
+  404s, validation, auth, rate-limit, 5xx, and network errors never trip it.
+- **Telemetry is operator-only.** Each capability logs a once-per-session warning to
+  stderr noting it rides v1 with no v2 equivalent. There is no per-call repetition and
+  no model-facing notice on tool responses.
+
+### Deprecation marking: operator-telemetry-only (resolved)
+
+README and tool-annotation "deprecated" marks for the v1-only tools are intentionally
+**not** added. The deprecation signal stays operator-only (the stderr warning above),
+which keeps the model's context clean and avoids churn in `gen:docs` output (no tool
+definitions change, so CI's doc-drift check stays green). This is a cheap optional add
+if model-facing signaling is later wanted; revisit then.
+
+---
+
 ## Spec Citation Basis
 
 All four "no v2 equivalent" claims are grounded in the vendored OpenAPI specs at `docs/api/`:
