@@ -403,6 +403,75 @@ describe('PipedriveClient', () => {
     });
   });
 
+  // U1/KTD4: the seam needs a reliable HTTP status to discriminate retirement,
+  // even when a retired endpoint returns an empty/non-JSON body.
+  describe('HTTP status capture (U1, KTD4)', () => {
+    it('exposes the HTTP status on a non-OK response with a valid JSON body', async () => {
+      mockApiError(400, 'Invalid parameter value');
+      const client = new PipedriveClient();
+
+      const response = await client.get('/notes', undefined, 'v1');
+
+      expect(response.success).toBe(false);
+      expect(response.error?.code).toBe('VALIDATION_ERROR');
+      expect(response.httpStatus).toBe(400);
+    });
+
+    it('exposes the HTTP status on a successful response (200)', async () => {
+      mockApiSuccess([fixtures.note]);
+      const client = new PipedriveClient();
+
+      const response = await client.get('/notes', undefined, 'v1');
+
+      expect(response.success).toBe(true);
+      expect(response.httpStatus).toBe(200);
+    });
+
+    it('a 410 with an empty/non-JSON body yields a status-bearing error carrying 410, not NETWORK_ERROR', async () => {
+      // A retired endpoint may return 410 Gone with no JSON body. Today that throws
+      // at parse time and is lost as a status-less network error; the seam needs the
+      // 410 to survive (this is the retirement-at-sunset case R5 depends on).
+      const mockFn = vi.fn(async (): Promise<Response> => ({
+        ok: false,
+        status: 410,
+        statusText: 'Gone',
+        headers: new Headers(),
+        json: async () => { throw new SyntaxError('Unexpected end of JSON input'); },
+        text: async () => '',
+      } as unknown as Response));
+      vi.stubGlobal('fetch', mockFn);
+      const client = new PipedriveClient();
+
+      const response = await client.get('/notes', undefined, 'v1');
+
+      expect(response.success).toBe(false);
+      expect(response.httpStatus).toBe(410);
+      expect(response.error?.code).not.toBe('NETWORK_ERROR');
+    });
+
+    it('a genuine network failure produces NETWORK_ERROR with NO http status', async () => {
+      mockFetchNetworkError('Connection refused');
+      const client = new PipedriveClient();
+
+      const response = await client.get('/notes', undefined, 'v1');
+
+      expect(response.success).toBe(false);
+      expect(response.error?.code).toBe('NETWORK_ERROR');
+      expect(response.httpStatus).toBeUndefined();
+    });
+
+    it('keeps the public ErrorResponse shape unchanged (status is not a rendered error field)', async () => {
+      mockApiError(404, 'Note not found');
+      const client = new PipedriveClient();
+
+      const response = await client.get('/notes/99999', undefined, 'v1');
+
+      expect(response.error).toBeDefined();
+      expect(Object.keys(response.error!).sort()).toEqual(['code', 'message', 'suggestion']);
+      expect(response.error).not.toHaveProperty('httpStatus');
+    });
+  });
+
   describe('testConnection', () => {
     it('should return success on valid connection', async () => {
       mockApiSuccess({ id: 1, name: 'Test User' });

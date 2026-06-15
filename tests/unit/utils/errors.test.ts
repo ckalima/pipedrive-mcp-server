@@ -11,6 +11,7 @@ import {
   destructiveOperationGuard,
   mcpErrorResult,
   mcpErrorFromCode,
+  capabilityRetiredError,
   redactSecrets,
   boundErrorMessage,
   MAX_ERROR_MESSAGE_LENGTH,
@@ -420,6 +421,35 @@ describe('errors', () => {
       const result = mcpErrorFromCode('API_ERROR', 'Server error');
 
       expect(result.content[0].text).not.toContain('Suggestion:');
+    });
+  });
+
+  describe('capabilityRetiredError (U1, R6)', () => {
+    it('produces a CAPABILITY_RETIRED error naming only the supplied display name', () => {
+      const error = capabilityRetiredError('Notes');
+
+      expect(error.code).toBe('CAPABILITY_RETIRED');
+      expect(error.message).toContain('Notes');
+      expect(error.message).toContain('no v2 equivalent');
+      expect(error.suggestion).toContain('changelog');
+    });
+
+    it('does not reflect a raw endpoint string — only the display name appears', () => {
+      // The builder takes a static, server-authored display name; a caller-supplied
+      // endpoint path must never enter the model-facing message.
+      const error = capabilityRetiredError('Leads (CRUD)');
+
+      expect(error.message).toContain('Leads (CRUD)');
+      expect(error.message).not.toContain('/leads');
+      expect(error.message).not.toContain('123');
+    });
+
+    it('renders through formatErrorForMcp as code + message + suggestion', () => {
+      const rendered = formatErrorForMcp(capabilityRetiredError('Mail'));
+
+      expect(rendered).toContain('Error [CAPABILITY_RETIRED]:');
+      expect(rendered).toContain('Mail');
+      expect(rendered).toContain('Suggestion:');
     });
   });
 

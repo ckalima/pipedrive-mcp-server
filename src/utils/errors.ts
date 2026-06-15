@@ -18,7 +18,8 @@ export type ErrorCode =
   | "API_ERROR"
   | "NETWORK_ERROR"
   | "DESTRUCTIVE_DISABLED"
-  | "RESPONSE_TOO_LARGE";
+  | "RESPONSE_TOO_LARGE"
+  | "CAPABILITY_RETIRED";
 
 export type McpToolErrorResult = { content: { type: "text"; text: string }[]; isError: true };
 
@@ -97,6 +98,25 @@ export function boundErrorMessage(value: string, knownSecret?: string): string {
   return redacted.length > MAX_ERROR_MESSAGE_LENGTH
     ? `${redacted.slice(0, MAX_ERROR_MESSAGE_LENGTH)}… [truncated]`
     : redacted;
+}
+
+/**
+ * Builds the clear, structured "retired by Pipedrive, no v2 equivalent" error
+ * (R6) returned when a registered v1-only capability is detected as retired.
+ *
+ * Only the capability's static, server-authored display name (from the routing
+ * registry) is interpolated — never the caller-supplied endpoint or any
+ * CRM-/backend-sourced value — so no untrusted path segment can enter the
+ * model-facing message (consistent with the untrusted-data posture elsewhere).
+ * The message rides the existing {@link formatErrorForMcp} / {@link mcpErrorResult}
+ * path like any other `ErrorResponse`.
+ */
+export function capabilityRetiredError(capabilityDisplayName: string): ErrorResponse {
+  return createErrorResponse(
+    "CAPABILITY_RETIRED",
+    `The ${capabilityDisplayName} capability has been retired by Pipedrive. It relied on Pipedrive API v1, which has no v2 equivalent, so this tool can no longer be served.`,
+    "This cannot be restored from the MCP server. Check the Pipedrive changelog for a v2 replacement: https://developers.pipedrive.com/changelog",
+  );
 }
 
 /**

@@ -12,6 +12,15 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: ErrorResponse;
+  /**
+   * Seam-internal HTTP status from the underlying fetch Response. Carried on the
+   * client return shape (NOT on the rendered `ErrorResponse`) so the version-routing
+   * seam can discriminate a retirement signal (410 / collection-root 404) from an
+   * ordinary error. Absent on the network/timeout path — that statuslessness is what
+   * keeps transient failures from ever looking like retirement (KTD4). Never rendered
+   * to the model: only `error` and `data` reach tool output.
+   */
+  httpStatus?: number;
   additional_data?: {
     pagination?: {
       more_items_in_collection?: boolean;
@@ -78,20 +87,42 @@ export class PipedriveClient {
   }
 
   /**
-   * Normalizes a fetch Response plus its parsed JSON body into the ApiResponse envelope
+   * Reads a fetch Response body and normalizes it into the ApiResponse envelope.
+   *
+   * The HTTP status is captured BEFORE the body is parsed, and a parse failure on a
+   * NON-OK response (an empty or non-JSON body — exactly what a retired endpoint is
+   * likely to return for a 410/404) still yields a status-bearing error instead of
+   * being lost as a status-less network error (KTD4). A parse failure on an OK
+   * response is rethrown so the caller's catch maps it to a network error, exactly
+   * as before — the success path is unchanged.
    */
-  private parseResponse<T>(
-    response: Response,
-    body: Record<string, unknown>
-  ): ApiResponse<T> {
+  private async parseResponse<T>(response: Response): Promise<ApiResponse<T>> {
+    const status = response.status;
+
+    let body: Record<string, unknown>;
+    try {
+      body = await response.json() as Record<string, unknown>;
+    } catch (parseError) {
+      if (!response.ok) {
+        return {
+          success: false,
+          httpStatus: status,
+          error: handleApiError(status, {}),
+        };
+      }
+      throw parseError;
+    }
+
     if (!response.ok) {
       return {
         success: false,
-        error: handleApiError(response.status, body),
+        httpStatus: status,
+        error: handleApiError(status, body),
       };
     }
     return {
       success: true,
+      httpStatus: status,
       data: body.data as T,
       additional_data: body.additional_data as ApiResponse<T>["additional_data"],
     };
@@ -253,9 +284,7 @@ export class PipedriveClient {
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
 
-      const responseData = await response.json() as Record<string, unknown>;
-
-      return this.parseResponse<T>(response, responseData);
+      return await this.parseResponse<T>(response);
     } catch (error) {
       return this.networkError<T>(error);
     }
@@ -301,9 +330,7 @@ export class PipedriveClient {
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
 
-      const responseData = await response.json() as Record<string, unknown>;
-
-      return this.parseResponse<T>(response, responseData);
+      return await this.parseResponse<T>(response);
     } catch (error) {
       return this.networkError<T>(error);
     }
