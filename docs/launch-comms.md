@@ -12,19 +12,20 @@ gate item is green, so that every link lands on a product matching its claims.
 
 Comms are mid-flight. The go/no-go gate is fully green (#84/#85/#86 done, core registries live).
 All copy below is the **humanized, postable version** with a client-origin framing ("built for
-a client, open-sourced for anyone") and verified factual claims. The devcommunity show-and-tell is
-live; **r/mcp is the next, primary targeted post** (r/ClaudeAI runs the same copy for reach).
+a client, open-sourced for anyone") and verified factual claims. The devcommunity show-and-tell and
+the r/mcp show-and-tell are both live; **r/ClaudeAI is next** (same copy, for reach), after watching
+r/mcp for replies.
 
 | Item | Channel | Status |
 |---|---|---|
 | 1 | Pipedrive devcommunity, own show-and-tell topic in **App Development** | ✅ **Live** at https://devcommunity.pipedrive.com/t/open-source-pipedrive-mcp-server-155-tools-v2-first-mit/20392 |
-| 2 | r/mcp, fresh top-level show-and-tell (Draft 2) — primary targeted post | Staged; next to fire |
-| 3 | r/ClaudeAI (Draft 2, same copy) — reach | Staged; holds behind r/mcp (stagger) |
+| 2 | r/mcp, fresh top-level show-and-tell (Draft 2) — primary targeted post | ✅ **Posted** at https://www.reddit.com/r/mcp/comments/1u6q2js/pipedrive_has_no_official_mcp_server_so_we/ |
+| 3 | r/ClaudeAI (Draft 2, same copy) — reach | Next to fire, after watching r/mcp for replies (stagger) |
 | 4 | r/sales (Draft 3) — sales-ops / Salt & Wind angle | Staged; holds behind r/ClaudeAI (stagger) |
 | 5 | r/mcp, author-update on the stale Glama bot listing (Draft 4) | ✅ Posted 2026-06-14 (correction to an existing listing; ran independently of the stagger) |
 
-Items 1 and 5 are done. Next to fire: r/mcp show-and-tell (Draft 2), then r/ClaudeAI (same copy),
-then r/sales (Draft 3), staggered.
+Items 1, 2, and 5 are done. Watching r/mcp for replies before firing r/ClaudeAI (Draft 2, same
+copy), then r/sales (Draft 3), staggered.
 
 ## Decision context
 
