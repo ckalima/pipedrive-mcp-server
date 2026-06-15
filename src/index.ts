@@ -27,7 +27,12 @@ import {
 
 import { validateConfig, getCachedApiToken } from "./config.js";
 import { toolDefinitions, getToolHandler, getToolSchema, getTool } from "./tools/index.js";
-import { resolveCapabilityMode, filterToolDefinitionsForMode, isToolAllowedInMode } from "./capability-modes.js";
+import {
+  resolveCapabilityMode,
+  filterToolDefinitionsForMode,
+  isToolAllowedInMode,
+  capabilityModeStartupLines,
+} from "./capability-modes.js";
 import { mcpErrorFromCode, boundErrorMessage } from "./utils/errors.js";
 import { MAX_TOOL_RESPONSE_CHARS, measureResultTextLength } from "./utils/formatting.js";
 
@@ -158,6 +163,12 @@ async function main() {
     console.error(`[${SERVER_NAME}] Tools will return configuration errors until API key is provided.`);
   } else {
     console.error(`[${SERVER_NAME}] Configuration validated successfully.`);
+  }
+
+  // Report the resolved capability mode once at startup, plus any deprecation/invalid-
+  // value notice (R9, R3). All string logic lives in the pure helper.
+  for (const line of capabilityModeStartupLines()) {
+    console.error(`[${SERVER_NAME}] ${line}`);
   }
 
   // Create MCP server

@@ -107,6 +107,34 @@ export function isToolAllowedInMode(
   return true; // non-destructive write: safe-write or full
 }
 
+/**
+ * The stderr lines describing the resolved capability mode at startup (R9, R3 messaging).
+ *
+ * Pure: it returns the lines; `main()` performs the `console.error` I/O. The first line
+ * always reports the resolved mode; a second line is added either to warn about an
+ * unrecognized `PIPEDRIVE_MODE` value (naming the valid values and the read-only fallback)
+ * or to nudge an operator off the deprecated `PIPEDRIVE_ENABLE_DESTRUCTIVE` flag. The two
+ * cases are mutually exclusive (one requires `PIPEDRIVE_MODE` set, the other unset).
+ */
+export function capabilityModeStartupLines(env: EnvLike = process.env): string[] {
+  const { mode, invalidMode, rawMode, derivedFromLegacyFlag } = describeCapabilityMode(env);
+  const lines = [`Capability mode: ${mode}`];
+
+  if (invalidMode) {
+    lines.push(
+      `Warning: unrecognized PIPEDRIVE_MODE='${rawMode}'. Valid values are ` +
+        `${CAPABILITY_MODES.join(", ")}; falling back to the safest tier (read-only).`,
+    );
+  } else if (derivedFromLegacyFlag) {
+    lines.push(
+      "Note: PIPEDRIVE_ENABLE_DESTRUCTIVE is deprecated; the mode was derived from it. " +
+        "Prefer PIPEDRIVE_MODE (read-only | safe-write | full).",
+    );
+  }
+
+  return lines;
+}
+
 /** Minimal `tools/list` definition shape this filter reads. */
 export type AnnotatedToolDefinition = {
   name: string;

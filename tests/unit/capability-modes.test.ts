@@ -20,6 +20,7 @@ import {
   describeCapabilityMode,
   resolveCapabilityMode,
   isToolAllowedInMode,
+  capabilityModeStartupLines,
   type CapabilityMode,
 } from '../../src/capability-modes.js';
 
@@ -193,6 +194,40 @@ describe('capability modes', () => {
           expect(isToolAllowedInMode(tool, 'read-only'), `${tool.name}`).toBe(true);
         }
       }
+    });
+  });
+
+  describe('capabilityModeStartupLines (U5)', () => {
+    const joined = (env: Record<string, string | undefined>) => capabilityModeStartupLines(env).join('\n');
+
+    it('reports the resolved mode with no deprecation/warning for an explicit valid mode', () => {
+      const lines = capabilityModeStartupLines({ PIPEDRIVE_MODE: 'read-only' });
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('read-only');
+      expect(joined({ PIPEDRIVE_MODE: 'read-only' })).not.toMatch(/deprecated|unrecognized/i);
+    });
+
+    it('reports full and a deprecation line when derived from the legacy flag', () => {
+      const text = joined({ PIPEDRIVE_ENABLE_DESTRUCTIVE: 'true' });
+      expect(text).toContain('full');
+      expect(text).toMatch(/deprecated/i);
+      expect(text).toContain('PIPEDRIVE_MODE');
+    });
+
+    it('warns on an unrecognized value, naming the valid values and the read-only fallback', () => {
+      const text = joined({ PIPEDRIVE_MODE: 'garbage' });
+      expect(text).toMatch(/unrecognized/i);
+      expect(text).toContain('read-only');
+      expect(text).toContain('safe-write');
+      expect(text).toContain('full');
+      // and the resolved-mode line still reports read-only
+      expect(capabilityModeStartupLines({ PIPEDRIVE_MODE: 'garbage' })[0]).toContain('read-only');
+    });
+
+    it('reports safe-write with no deprecation when neither var is set', () => {
+      const lines = capabilityModeStartupLines({});
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('safe-write');
     });
   });
 
