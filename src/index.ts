@@ -25,9 +25,9 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { validateConfig } from "./config.js";
+import { validateConfig, getCachedApiToken } from "./config.js";
 import { toolDefinitions, getToolHandler, getToolSchema } from "./tools/index.js";
-import { mcpErrorFromCode } from "./utils/errors.js";
+import { mcpErrorFromCode, boundErrorMessage } from "./utils/errors.js";
 
 // Server metadata
 const SERVER_NAME = "pipedrive-mcp-server";
@@ -79,10 +79,15 @@ export async function handleCallTool(request: { params: { name: string; argument
     const result = await handler(validatedArgs as any);
     return result;
   } catch (error) {
-    console.error(`[${SERVER_NAME}] Error executing ${name}:`, error);
+    const rawMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    // A thrown error can embed the API token or a filesystem path. Redact and
+    // length-bound it, and never pass the raw error object to console.error (its
+    // stack/cause can carry the same secrets) (F1/KTD3).
+    const safeMessage = boundErrorMessage(rawMessage, getCachedApiToken() ?? undefined);
+    console.error(`[${SERVER_NAME}] Error executing ${name}: ${safeMessage}`);
     return mcpErrorFromCode(
       "API_ERROR",
-      error instanceof Error ? error.message : "Unknown error occurred",
+      safeMessage,
       "Check your API key and network connection"
     );
   }

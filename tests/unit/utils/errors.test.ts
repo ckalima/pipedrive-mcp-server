@@ -11,6 +11,9 @@ import {
   destructiveOperationGuard,
   mcpErrorResult,
   mcpErrorFromCode,
+  redactSecrets,
+  boundErrorMessage,
+  MAX_ERROR_MESSAGE_LENGTH,
   type ErrorResponse,
 } from '../../../src/utils/errors.js';
 
@@ -128,6 +131,88 @@ describe('errors', () => {
 
       expect(result.code).toBe('VALIDATION_ERROR');
       expect(result.message).toContain('Unknown error');
+    });
+  });
+
+  describe('redactSecrets (U2, F1)', () => {
+    const TOKEN = 'a'.repeat(40);
+
+    it('redacts the literal secret value when it appears bare', () => {
+      const result = redactSecrets(`the key is ${TOKEN} ok`, TOKEN);
+      expect(result).not.toContain(TOKEN);
+      expect(result).toContain('[REDACTED]');
+    });
+
+    it('redacts every occurrence of the literal secret', () => {
+      const result = redactSecrets(`${TOKEN} and again ${TOKEN}`, TOKEN);
+      expect(result).not.toContain(TOKEN);
+      expect(result.match(/\[REDACTED\]/g)).toHaveLength(2);
+    });
+
+    it('redacts the secret embedded in a v1 request URL', () => {
+      const url = `https://api.pipedrive.com/v1/notes?api_token=${TOKEN}`;
+      const result = redactSecrets(`request to ${url} failed`, TOKEN);
+      expect(result).not.toContain(TOKEN);
+      expect(result).toContain('[REDACTED]');
+    });
+
+    it('redacts the api_token= query form even without the literal secret', () => {
+      const url = 'https://api.pipedrive.com/v1/notes?api_token=somethingsecret&limit=10';
+      const result = redactSecrets(`request to ${url} failed`);
+      expect(result).toContain('api_token=[REDACTED]');
+      expect(result).not.toContain('somethingsecret');
+      // Trailing query params after the token are preserved.
+      expect(result).toContain('limit=10');
+    });
+
+    it('redacts an x-api-token header value even without the literal secret', () => {
+      const result = redactSecrets('headers: { x-api-token: someheaderval }');
+      expect(result).toContain('x-api-token');
+      expect(result).not.toContain('someheaderval');
+      expect(result).toContain('[REDACTED]');
+    });
+
+    it('does NOT match the v2 header name as the v1 query param', () => {
+      // `x-api-token` (hyphen) must not be redacted by the `api_token=` (underscore) net.
+      const result = redactSecrets('x-api-token present');
+      expect(result).toContain('x-api-token present');
+    });
+
+    it('replaces control characters and newlines with spaces (no log-line forging)', () => {
+      const result = redactSecrets('line1\nline2\r\ttab\x00null');
+      expect(result).not.toMatch(/[\n\r\t\x00]/);
+      expect(result).toBe('line1 line2  tab null');
+    });
+
+    it('is a no-op on a clean string', () => {
+      expect(redactSecrets('a perfectly clean message')).toBe('a perfectly clean message');
+    });
+
+    it('handles an undefined knownSecret without throwing', () => {
+      expect(() => redactSecrets('some message', undefined)).not.toThrow();
+    });
+  });
+
+  describe('boundErrorMessage (U2/U5)', () => {
+    const TOKEN = 'b'.repeat(40);
+
+    it('redacts the token', () => {
+      const result = boundErrorMessage(`failed with ${TOKEN}`, TOKEN);
+      expect(result).not.toContain(TOKEN);
+      expect(result).toContain('[REDACTED]');
+    });
+
+    it('truncates messages longer than the cap with an explicit marker', () => {
+      const long = 'x'.repeat(MAX_ERROR_MESSAGE_LENGTH + 100);
+      const result = boundErrorMessage(long);
+      expect(result.length).toBeLessThanOrEqual(MAX_ERROR_MESSAGE_LENGTH + '… [truncated]'.length);
+      expect(result).toContain('… [truncated]');
+    });
+
+    it('leaves short messages unchanged (no marker)', () => {
+      const result = boundErrorMessage('short message');
+      expect(result).toBe('short message');
+      expect(result).not.toContain('[truncated]');
     });
   });
 

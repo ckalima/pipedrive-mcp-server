@@ -382,6 +382,25 @@ describe('PipedriveClient', () => {
       expect(response.error?.code).toBe('NETWORK_ERROR');
       expect(response.error?.message).toContain('Connection refused');
     });
+
+    it('AE2: redacts the v1 token from a network error that embeds the request URL', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // Reject with an error whose message embeds the full v1 URL (token in query).
+      const mockFn = vi.fn(async (url: string | URL) => {
+        throw new Error(`request to ${String(url)} failed`);
+      });
+      vi.stubGlobal('fetch', mockFn);
+      const client = new PipedriveClient();
+
+      const response = await client.get('/users', undefined, 'v1');
+
+      expect(response.success).toBe(false);
+      expect(response.error?.code).toBe('NETWORK_ERROR');
+      expect(response.error?.message).not.toContain(VALID_API_KEY);
+      const stderr = errorSpy.mock.calls.flat().map(String).join('\n');
+      expect(stderr).not.toContain(VALID_API_KEY);
+      errorSpy.mockRestore();
+    });
   });
 
   describe('testConnection', () => {

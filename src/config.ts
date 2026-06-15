@@ -10,6 +10,26 @@ export interface Config {
 }
 
 /**
+ * Last successfully loaded API token, cached for redaction-only use. Populated by
+ * getConfig() on a successful load. See getCachedApiToken().
+ */
+let cachedApiToken: string | null = null;
+
+/**
+ * Non-throwing accessor for the configured API token, for SECRET REDACTION ONLY.
+ *
+ * Returns the token last loaded by getConfig(), falling back to the current
+ * environment value, or null if neither is available. Unlike getConfig() it never
+ * throws and does not validate length — its sole purpose is to give redaction code
+ * that has no Config in hand (notably the dispatcher catch block in index.ts) the
+ * literal secret value to strip from error/log strings. Never use it to gate
+ * behavior or as a substitute for getConfig().
+ */
+export function getCachedApiToken(): string | null {
+  return cachedApiToken ?? (process.env.PIPEDRIVE_API_KEY || null);
+}
+
+/**
  * Validates and returns the configuration from environment variables
  * @throws Error if required configuration is missing or invalid
  */
@@ -29,6 +49,9 @@ export function getConfig(): Config {
       "Verify your API key at Pipedrive Settings > Personal preferences > API"
     );
   }
+
+  // Cache the validated token for redaction-only use (see getCachedApiToken()).
+  cachedApiToken = apiKey;
 
   return {
     apiKey,

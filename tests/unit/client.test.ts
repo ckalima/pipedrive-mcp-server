@@ -300,3 +300,106 @@ describe('PipedriveClient multipart (U4, #69)', () => {
     });
   });
 });
+
+/**
+ * Token redaction (U2, F1, covers AE2).
+ *
+ * On v1 the token rides in the request URL's `?api_token=` query string, so any
+ * error whose message embeds the URL embeds the token. These tests induce failures
+ * whose error message DOES embed the full URL (the worst case undici could surface
+ * in a future version) and assert the token reaches neither the returned message
+ * nor stderr — proving redaction is the durable control, not a reliance on undici.
+ */
+describe('PipedriveClient token redaction (U2, F1)', () => {
+  beforeEach(() => {
+    setupEnvWithApiKey(VALID_API_KEY);
+  });
+
+  /** Mock fetch that rejects with an error message embedding the request URL. */
+  function mockFetchRejectsWithUrl(suffix = 'connect ECONNREFUSED 127.0.0.1:443') {
+    const mockFn = vi.fn(async (url: string | URL) => {
+      throw new Error(`request to ${String(url)} failed, reason: ${suffix}`);
+    });
+    vi.stubGlobal('fetch', mockFn);
+    return mockFn;
+  }
+
+  function makeFormData(): FormData {
+    const fd = new FormData();
+    fd.append('data', new Blob([Buffer.from('hello')]), 'hello.png');
+    return fd;
+  }
+
+  it('AE2: v1 network error — token in neither the returned message nor stderr', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetchRejectsWithUrl();
+    const client = new PipedriveClient();
+
+    const res = await client.get('/notes', undefined, 'v1');
+
+    expect(res.success).toBe(false);
+    expect(res.error?.code).toBe('NETWORK_ERROR');
+    expect(res.error?.message).not.toContain(VALID_API_KEY);
+    expect(res.error?.message).toContain('[REDACTED]');
+
+    const stderr = errorSpy.mock.calls.flat().map(String).join('\n');
+    expect(stderr).not.toContain(VALID_API_KEY);
+    errorSpy.mockRestore();
+  });
+
+  it('v1 multipart network error — token redacted in message and stderr', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetchRejectsWithUrl();
+    const client = new PipedriveClient();
+
+    const res = await client.postMultipart('/products/3/images', makeFormData(), 'v1');
+
+    expect(res.success).toBe(false);
+    expect(res.error?.message).not.toContain(VALID_API_KEY);
+
+    const stderr = errorSpy.mock.calls.flat().map(String).join('\n');
+    expect(stderr).not.toContain(VALID_API_KEY);
+    errorSpy.mockRestore();
+  });
+
+  it('v1 timeout-style error embedding the URL — token redacted', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Simulate a future undici timeout error that includes the request URL.
+    const mockFn = vi.fn(async (url: string | URL) => {
+      throw Object.assign(new Error(`Timeout fetching ${String(url)}`), { name: 'TimeoutError' });
+    });
+    vi.stubGlobal('fetch', mockFn);
+    const client = new PipedriveClient();
+
+    const res = await client.get('/notes', undefined, 'v1');
+
+    expect(res.error?.code).toBe('NETWORK_ERROR');
+    expect(res.error?.message).not.toContain(VALID_API_KEY);
+    const stderr = errorSpy.mock.calls.flat().map(String).join('\n');
+    expect(stderr).not.toContain(VALID_API_KEY);
+    errorSpy.mockRestore();
+  });
+
+  it('testConnection — token redacted when fetch rejects with a URL-embedding error', async () => {
+    mockFetchRejectsWithUrl();
+    const client = new PipedriveClient();
+
+    const result = await client.testConnection();
+
+    expect(result.success).toBe(false);
+    expect(result.message).not.toContain(VALID_API_KEY);
+  });
+
+  it('per-request log on success contains the method + endpoint path only, not the token', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    makeFetchMock();
+    const client = new PipedriveClient();
+
+    await client.get('/users', undefined, 'v1');
+
+    const stderr = errorSpy.mock.calls.flat().map(String).join('\n');
+    expect(stderr).toContain('GET /users');
+    expect(stderr).not.toContain(VALID_API_KEY);
+    errorSpy.mockRestore();
+  });
+});

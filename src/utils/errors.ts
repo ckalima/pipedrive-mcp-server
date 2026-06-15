@@ -36,6 +36,68 @@ export function createErrorResponse(
   };
 }
 
+/** Placeholder substituted for any redacted secret. */
+const REDACTED = "[REDACTED]";
+
+/** Max length of a reflected/forwarded backend or exception message before truncation. */
+export const MAX_ERROR_MESSAGE_LENGTH = 500;
+
+/**
+ * Redacts secrets and strips control characters from a string before it can reach
+ * stderr or be returned to the model.
+ *
+ * The load-bearing control (KTD3) is removing the literal configured token value
+ * (`knownSecret`) wherever it appears — bare, or embedded in a request URL's
+ * `?api_token=` query string (v1 auth). Pattern-based redaction of the
+ * `api_token=` query form and the `x-api-token` header form is a secondary net for
+ * cases where the literal token is not in hand (e.g. a token surfaced by the
+ * backend, or a future auth-scheme change).
+ *
+ * It also replaces ASCII control characters (including CR/LF) with spaces so a
+ * CRM-sourced or backend-sourced error string cannot forge a new stderr log line
+ * or smuggle terminal escape sequences.
+ *
+ * The token is passed as an argument (never imported from config) so this helper
+ * stays unit-testable without env setup and adds no `errors.ts -> config.ts`
+ * dependency.
+ */
+export function redactSecrets(value: string, knownSecret?: string): string {
+  let out = value;
+
+  // 1. Redact the literal configured token wherever it appears (bare or in a URL).
+  //    This is the durable control; we do not rely on undici to omit the token.
+  if (knownSecret && knownSecret.length > 0) {
+    out = out.split(knownSecret).join(REDACTED);
+  }
+
+  // 2. Secondary net: redact the value of an `api_token=` query param even when the
+  //    literal secret was not supplied. (`x-api-token` uses a hyphen, so this does
+  //    not match the v2 header name.)
+  out = out.replace(/(api_token=)[^&\s"'#]+/gi, `$1${REDACTED}`);
+
+  // 3. Secondary net: redact the value following an `x-api-token` header (v2 auth),
+  //    in case a headers/Request object is ever stringified into an error.
+  out = out.replace(/(x-api-token["']?\s*[:=]\s*["']?)[^\s,&"'}\]]+/gi, `$1${REDACTED}`);
+
+  // 4. Replace ASCII control characters (incl. newlines) with spaces so the string
+  //    cannot forge a log line or inject terminal escapes.
+  out = out.replace(/[\u0000-\u001F\u007F]/g, " ");
+
+  return out;
+}
+
+/**
+ * Redacts a message (via {@link redactSecrets}) and length-caps it with an explicit
+ * truncation marker. Used wherever backend-authored or exception text is reflected
+ * back to the model so disclosure is bounded and token-free (KTD3, KTD6).
+ */
+export function boundErrorMessage(value: string, knownSecret?: string): string {
+  const redacted = redactSecrets(value, knownSecret);
+  return redacted.length > MAX_ERROR_MESSAGE_LENGTH
+    ? `${redacted.slice(0, MAX_ERROR_MESSAGE_LENGTH)}… [truncated]`
+    : redacted;
+}
+
 /**
  * Maps HTTP status codes to error responses
  */

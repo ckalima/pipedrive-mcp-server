@@ -4,7 +4,7 @@
  */
 
 import { getConfig, type Config } from "./config.js";
-import { handleApiError, createErrorResponse, formatErrorForMcp, type ErrorResponse } from "./utils/errors.js";
+import { handleApiError, createErrorResponse, formatErrorForMcp, redactSecrets, type ErrorResponse } from "./utils/errors.js";
 
 export type ApiVersion = "v1" | "v2";
 
@@ -101,13 +101,19 @@ export class PipedriveClient {
    * Builds the standard network-error envelope (shared by the JSON and multipart paths)
    */
   private networkError<T>(error: unknown): ApiResponse<T> {
+    const rawMessage = error instanceof Error ? error.message : "Unknown network error";
+    // Redact the token before the message reaches stderr or the model. On v1 the
+    // token rides in the request URL's `?api_token=` query string, so any error
+    // whose message embeds the URL embeds the token (F1/KTD3). We never pass the
+    // raw `error` object to console.error — it can carry the URL in its `cause`.
+    const safeMessage = redactSecrets(rawMessage, this.config?.apiKey);
     // Log to stderr (not stdout) to avoid STDIO protocol corruption
-    console.error(`[pipedrive-mcp] Network error: ${error}`);
+    console.error(`[pipedrive-mcp] Network error: ${safeMessage}`);
     return {
       success: false,
       error: createErrorResponse(
         "NETWORK_ERROR",
-        error instanceof Error ? error.message : "Unknown network error",
+        safeMessage,
         "Check your internet connection and try again"
       ),
     };
@@ -318,9 +324,11 @@ export class PipedriveClient {
         message: response.error ? formatErrorForMcp(response.error) : "Connection failed",
       };
     } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : "Connection test failed";
+      // Redact the token in case the error message embeds the request URL (F1).
       return {
         success: false,
-        message: error instanceof Error ? error.message : "Connection test failed",
+        message: redactSecrets(rawMessage, this.config?.apiKey),
       };
     }
   }
