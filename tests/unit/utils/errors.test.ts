@@ -132,6 +132,66 @@ describe('errors', () => {
       expect(result.code).toBe('VALIDATION_ERROR');
       expect(result.message).toContain('Unknown error');
     });
+
+    describe('reflected backend message is bounded and redacted (U5, F4)', () => {
+      const TOKEN = 'c'.repeat(40);
+
+      it('length-bounds an over-long backend message in the 400 branch', () => {
+        const long = 'x'.repeat(MAX_ERROR_MESSAGE_LENGTH + 200);
+        const result = handleApiError(400, { error: long });
+
+        expect(result.code).toBe('VALIDATION_ERROR');
+        expect(result.message).toContain('… [truncated]');
+        // The whole message is "Invalid request: " + bounded body; the body itself
+        // must not exceed the cap (+ marker).
+        expect(result.message.length).toBeLessThanOrEqual(
+          'Invalid request: '.length + MAX_ERROR_MESSAGE_LENGTH + '… [truncated]'.length
+        );
+      });
+
+      it('length-bounds an over-long backend message in the default branch', () => {
+        const long = 'y'.repeat(MAX_ERROR_MESSAGE_LENGTH + 200);
+        const result = handleApiError(500, { error: long });
+
+        expect(result.code).toBe('API_ERROR');
+        expect(result.message).toContain('… [truncated]');
+      });
+
+      it('redacts a token-like value reflected in the 400 backend body', () => {
+        const result = handleApiError(400, {
+          error: `request to https://api.pipedrive.com/v1/x?api_token=${TOKEN} failed`,
+        });
+
+        expect(result.message).not.toContain(TOKEN);
+        expect(result.message).toContain('[REDACTED]');
+      });
+
+      it('redacts a token-like value reflected in the default backend body', () => {
+        const result = handleApiError(500, {
+          error: `upstream https://api.pipedrive.com/v1/x?api_token=${TOKEN}`,
+        });
+
+        expect(result.message).not.toContain(TOKEN);
+        expect(result.message).toContain('[REDACTED]');
+      });
+
+      it('strips control characters from a reflected backend body', () => {
+        const result = handleApiError(400, { error: 'line1\nline2\rinjected' });
+
+        expect(result.message).not.toMatch(/[\n\r]/);
+      });
+
+      it('leaves the fixed 401/403/404/429 strings unchanged (no reflection)', () => {
+        // These branches never reflect the backend body, so a token-like or
+        // over-long body must not appear and must not perturb the fixed copy.
+        const noisy = { error: `api_token=${TOKEN} ` + 'z'.repeat(1000) };
+
+        expect(handleApiError(401, noisy).message).toBe('API key is invalid or expired');
+        expect(handleApiError(403, noisy).message).toBe('Access denied to this resource');
+        expect(handleApiError(404, noisy).message).toBe('Resource not found');
+        expect(handleApiError(429, noisy).message).toBe('Rate limit exceeded');
+      });
+    });
   });
 
   describe('redactSecrets (U2, F1)', () => {

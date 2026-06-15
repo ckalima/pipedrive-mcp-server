@@ -106,11 +106,18 @@ export function handleApiError(status: number, body: unknown): ErrorResponse {
     ? String((body as { error: unknown }).error)
     : "Unknown error";
 
+  // The 400 and default branches reflect Pipedrive's own error text back to the
+  // model for debuggability. That text is backend-authored (untrusted) and can be
+  // arbitrarily long or carry a token-like value, so bound and redact it before
+  // it leaves this function. 401/403/404/429 use fixed strings and need no
+  // treatment (F4/KTD6).
+  const safeBodyMessage = boundErrorMessage(bodyMessage);
+
   switch (status) {
     case 400:
       return createErrorResponse(
         "VALIDATION_ERROR",
-        `Invalid request: ${bodyMessage}`,
+        `Invalid request: ${safeBodyMessage}`,
         "Check your request parameters"
       );
     case 401:
@@ -140,7 +147,7 @@ export function handleApiError(status: number, body: unknown): ErrorResponse {
     default:
       return createErrorResponse(
         "API_ERROR",
-        `Pipedrive API error (${status}): ${bodyMessage}`
+        `Pipedrive API error (${status}): ${safeBodyMessage}`
       );
   }
 }
