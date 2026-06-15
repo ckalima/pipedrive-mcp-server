@@ -17,7 +17,9 @@ npm run test:coverage  # Coverage report
 ```
 src/
   index.ts          # MCP server entry point (STDIO transport)
-  client.ts         # Singleton PipedriveClient (lazy init, API calls)
+  client.ts         # Singleton PipedriveClient (lazy init, API calls); drives the resilience retry/breaker loop below fetch
+  resilience.ts     # Retry classifier, full-jitter backoff, Retry-After parsing, per-process circuit breaker (sits below the client chokepoint)
+  version-routing.ts # v1-only capability seam: routes the four v1 capabilities + lazy sunset/retirement detection (sits above the client)
   config.ts         # Environment validation (PIPEDRIVE_API_KEY, PIPEDRIVE_ENABLE_DESTRUCTIVE)
   tools/            # MCP tool handlers (one file per entity)
     index.ts        # Tool registration, allTools array, getToolHandler/getToolSchema
@@ -27,6 +29,8 @@ src/
     formatting.ts   # createListSummary
     pagination.ts   # v1 (offset) and v2 (cursor) pagination helpers
 ```
+
+Request flow: tool handlers → (v1 capabilities only) version-routing seam → client `request()`/`requestMultipart()` → resilience driver (`sendWithResilience`: circuit-breaker gate + retry loop) → `fetch`. Reads retry transient failures (429/503/5xx/network); writes retry 429 only. See `docs/plans/2026-06-14-003-feat-resilient-request-core-plan.md`.
 
 ## API Versions
 
