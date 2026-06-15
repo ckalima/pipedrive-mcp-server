@@ -9,6 +9,10 @@ import {
   OptionalDateSchema,
   ActivityTypeSchema,
   SortDirectionSchema,
+  BoundedNameSchema,
+  BoundedTextSchema,
+  BoundedQueryParamSchema,
+  boundedArray,
 } from "./common.js";
 
 /**
@@ -16,25 +20,25 @@ import {
  * Defined locally per issue #45; do not move to common.ts.
  */
 const LocationSchema = z.object({
-  value: z.string().optional()
+  value: BoundedNameSchema.optional()
     .describe("The full address of the activity"),
-  country: z.string().optional()
+  country: BoundedNameSchema.optional()
     .describe("Country of the activity"),
-  admin_area_level_1: z.string().optional()
+  admin_area_level_1: BoundedNameSchema.optional()
     .describe("Admin area level 1 (e.g. state)"),
-  admin_area_level_2: z.string().optional()
+  admin_area_level_2: BoundedNameSchema.optional()
     .describe("Admin area level 2 (e.g. county)"),
-  locality: z.string().optional()
+  locality: BoundedNameSchema.optional()
     .describe("Locality (e.g. city)"),
-  sublocality: z.string().optional()
+  sublocality: BoundedNameSchema.optional()
     .describe("Sublocality (e.g. neighborhood)"),
-  route: z.string().optional()
+  route: BoundedNameSchema.optional()
     .describe("Route (e.g. street)"),
-  street_number: z.string().optional()
+  street_number: BoundedNameSchema.optional()
     .describe("Street number"),
-  subpremise: z.string().optional()
+  subpremise: BoundedNameSchema.optional()
     .describe("Subpremise (e.g. apartment/suite number)"),
-  postal_code: z.string().optional()
+  postal_code: BoundedNameSchema.optional()
     .describe("Postal code"),
 }).optional();
 
@@ -44,13 +48,13 @@ const LocationSchema = z.object({
 export const ListActivitiesSchema = PaginationParamsSchema.extend({
   filter_id: z.number().int().positive().optional()
     .describe("Filter by saved filter ID"),
-  ids: z.string().optional()
+  ids: BoundedQueryParamSchema.optional()
     .describe("Comma-separated activity IDs to fetch (max 100)"),
   owner_id: z.number().int().positive().optional()
     .describe("Filter by owner user ID"),
   deal_id: z.number().int().positive().optional()
     .describe("Filter by linked deal ID"),
-  lead_id: z.string().optional()
+  lead_id: BoundedQueryParamSchema.optional()
     .describe("Filter by linked lead ID (UUID format)"),
   person_id: z.number().int().positive().optional()
     .describe("Filter by linked person ID"),
@@ -58,15 +62,15 @@ export const ListActivitiesSchema = PaginationParamsSchema.extend({
     .describe("Filter by linked organization ID"),
   done: z.boolean().optional()
     .describe("Filter by completion status (true=done, false=pending)"),
-  updated_since: z.string().optional()
+  updated_since: BoundedQueryParamSchema.optional()
     .describe("Filter activities updated after this time (RFC3339 format)"),
-  updated_until: z.string().optional()
+  updated_until: BoundedQueryParamSchema.optional()
     .describe("Filter activities updated before this time (RFC3339 format)"),
   sort_by: z.enum(["id", "update_time", "add_time", "due_date"])
     .optional()
     .describe("Field to sort by (id, update_time, add_time, due_date)"),
   sort_direction: SortDirectionSchema,
-  include_fields: z.string().optional()
+  include_fields: BoundedQueryParamSchema.optional()
     .describe("Include additional data in response"),
 });
 
@@ -74,7 +78,7 @@ export const ListActivitiesSchema = PaginationParamsSchema.extend({
  * Get activity parameters
  */
 export const GetActivitySchema = IdParamSchema.extend({
-  include_fields: z.string().optional()
+  include_fields: BoundedQueryParamSchema.optional()
     .describe("Include additional data in response"),
 });
 
@@ -96,7 +100,7 @@ export const CreateActivitySchema = z.object({
     .describe("Owner user ID (defaults to API key owner)"),
   deal_id: z.number().int().positive().optional()
     .describe("Link to deal ID"),
-  lead_id: z.string().optional()
+  lead_id: BoundedQueryParamSchema.optional()
     .describe("Link to lead ID (UUID format)"),
   person_id: z.number().int().positive().optional()
     .describe("Link to person ID"),
@@ -104,7 +108,7 @@ export const CreateActivitySchema = z.object({
     .describe("Link to organization ID"),
   project_id: z.number().int().positive().optional()
     .describe("Link to project ID"),
-  note: z.string().optional()
+  note: BoundedTextSchema.optional()
     .describe("Activity notes/description (HTML supported)"),
   done: z.boolean().optional()
     .describe("Mark as completed"),
@@ -112,19 +116,19 @@ export const CreateActivitySchema = z.object({
     .describe("Show as busy in calendar"),
   priority: z.number().int().optional()
     .describe("Activity priority (integer, use activityFields API to map values)"),
-  participants: z.array(z.object({
+  participants: boundedArray(z.object({
     person_id: z.number().int().positive(),
     primary: z.boolean().optional(),
   })).optional()
     .describe("Activity participants (person IDs)"),
-  attendees: z.array(z.object({
+  attendees: boundedArray(z.object({
     email: z.email(),
-    name: z.string().optional(),
+    name: BoundedNameSchema.optional(),
   })).optional()
     .describe("External attendees (email addresses)"),
   location: LocationSchema
     .describe("Activity location (structured object)"),
-  public_description: z.string().optional()
+  public_description: BoundedTextSchema.optional()
     .describe("Public description visible to guests"),
 });
 
@@ -146,7 +150,7 @@ export const UpdateActivitySchema = IdParamSchema.extend({
     .describe("New owner user ID"),
   deal_id: z.number().int().positive().optional()
     .describe("New linked deal ID"),
-  lead_id: z.string().optional()
+  lead_id: BoundedQueryParamSchema.optional()
     .describe("New linked lead ID (UUID format)"),
   person_id: z.number().int().positive().optional()
     .describe("New linked person ID"),
@@ -154,7 +158,7 @@ export const UpdateActivitySchema = IdParamSchema.extend({
     .describe("New linked organization ID"),
   project_id: z.number().int().positive().optional()
     .describe("New linked project ID"),
-  note: z.string().optional()
+  note: BoundedTextSchema.optional()
     .describe("New notes/description"),
   done: z.boolean().optional()
     .describe("Mark as completed or pending"),
@@ -162,14 +166,14 @@ export const UpdateActivitySchema = IdParamSchema.extend({
     .describe("Show as busy in calendar"),
   priority: z.number().int().optional()
     .describe("New activity priority (integer)"),
-  participants: z.array(z.object({
+  participants: boundedArray(z.object({
     person_id: z.number().int().positive(),
     primary: z.boolean().optional(),
   })).optional()
     .describe("New activity participants"),
-  attendees: z.array(z.object({
+  attendees: boundedArray(z.object({
     email: z.email(),
-    name: z.string().optional(),
+    name: BoundedNameSchema.optional(),
   })).optional()
     .describe("New external attendees"),
   location: LocationSchema

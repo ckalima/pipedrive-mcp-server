@@ -3,7 +3,7 @@
  */
 
 import { z } from "zod";
-import { IdParamSchema, PaginationParamsSchema } from "./common.js";
+import { IdParamSchema, PaginationParamsSchema, BoundedNameSchema } from "./common.js";
 
 /**
  * List pipelines parameters (v2 cursor-based pagination)
@@ -32,7 +32,7 @@ export const GetStageSchema = IdParamSchema;
  * Create pipeline parameters
  */
 export const CreatePipelineSchema = z.object({
-  name: z.string().min(1)
+  name: BoundedNameSchema.min(1)
     .describe("The name of the pipeline (required)"),
   is_deal_probability_enabled: z.boolean().optional()
     .describe("Whether deal probability is enabled for this pipeline (default false)"),
@@ -43,7 +43,7 @@ export const CreatePipelineSchema = z.object({
  * body is a valid no-op (not an API error); all updatable fields are optional.
  */
 export const UpdatePipelineSchema = IdParamSchema.extend({
-  name: z.string().min(1).optional()
+  name: BoundedNameSchema.min(1).optional()
     .describe("The new name of the pipeline"),
   is_deal_probability_enabled: z.boolean().optional()
     .describe("Whether deal probability is enabled for this pipeline"),
@@ -63,7 +63,7 @@ export const DeletePipelineSchema = IdParamSchema;
  * Create stage parameters
  */
 export const CreateStageSchema = z.object({
-  name: z.string().min(1)
+  name: BoundedNameSchema.min(1)
     .describe("The name of the stage (required)"),
   pipeline_id: z.number().int().positive()
     .describe("The ID of the pipeline to add the stage to (required)"),
@@ -80,7 +80,7 @@ export const CreateStageSchema = z.object({
  * is a valid no-op; all updatable fields are optional.
  */
 export const UpdateStageSchema = IdParamSchema.extend({
-  name: z.string().min(1).optional()
+  name: BoundedNameSchema.min(1).optional()
     .describe("The new name of the stage"),
   pipeline_id: z.number().int().positive().optional()
     .describe("Move the stage to this pipeline ID"),

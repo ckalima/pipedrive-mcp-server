@@ -8,6 +8,10 @@ import {
   IdParamSchema,
   SearchTermSchema,
   DateStringSchema,
+  BoundedNameSchema,
+  BoundedTextSchema,
+  BoundedQueryParamSchema,
+  boundedArray,
 } from "./common.js";
 
 /**
@@ -18,7 +22,7 @@ export const ListProjectsSchema = PaginationParamsSchema.extend({
     .describe("Filter by saved filter ID"),
   phase_id: z.number().int().positive().optional()
     .describe("Filter by phase ID"),
-  status: z.string().optional()
+  status: BoundedNameSchema.optional()
     .describe("Filter by project status (e.g. open, completed, canceled, deleted)"),
 });
 
@@ -37,9 +41,9 @@ export const CreateProjectSchema = z.object({
     .describe("Board ID the project belongs to (required)"),
   phase_id: z.number().int().positive()
     .describe("Phase ID within the board (required)"),
-  description: z.string().optional() // guess
+  description: BoundedTextSchema.optional() // guess
     .describe("Project description"),
-  status: z.string().optional() // guess
+  status: BoundedNameSchema.optional() // guess
     .describe("Project status"),
   owner_id: z.number().int().positive().optional() // guess
     .describe("Owner user ID"),
@@ -47,13 +51,13 @@ export const CreateProjectSchema = z.object({
     .describe("Project start date (YYYY-MM-DD format)"),
   end_date: DateStringSchema.optional() // guess
     .describe("Project end date (YYYY-MM-DD format)"),
-  deal_ids: z.array(z.number().int().positive()).optional()
+  deal_ids: boundedArray(z.number().int().positive()).optional()
     .describe("Deal IDs linked to the project"),
-  person_ids: z.array(z.number().int().positive()).optional()
+  person_ids: boundedArray(z.number().int().positive()).optional()
     .describe("Person IDs linked to the project"),
-  org_ids: z.array(z.number().int().positive()).optional()
+  org_ids: boundedArray(z.number().int().positive()).optional()
     .describe("Organization IDs linked to the project"),
-  label_ids: z.array(z.number().int().positive()).optional()
+  label_ids: boundedArray(z.number().int().positive()).optional()
     .describe("Label IDs to attach to the project"),
 });
 
@@ -67,9 +71,9 @@ export const UpdateProjectSchema = IdParamSchema.extend({
     .describe("New board ID the project belongs to"),
   phase_id: z.number().int().positive().optional()
     .describe("New phase ID within the board"),
-  description: z.string().optional() // guess
+  description: BoundedTextSchema.optional() // guess
     .describe("New project description"),
-  status: z.string().optional() // guess
+  status: BoundedNameSchema.optional() // guess
     .describe("New project status"),
   owner_id: z.number().int().positive().optional() // guess
     .describe("New owner user ID"),
@@ -77,13 +81,13 @@ export const UpdateProjectSchema = IdParamSchema.extend({
     .describe("New project start date (YYYY-MM-DD format)"),
   end_date: DateStringSchema.optional() // guess
     .describe("New project end date (YYYY-MM-DD format)"),
-  deal_ids: z.array(z.number().int().positive()).optional()
+  deal_ids: boundedArray(z.number().int().positive()).optional()
     .describe("New deal IDs linked to the project"),
-  person_ids: z.array(z.number().int().positive()).optional()
+  person_ids: boundedArray(z.number().int().positive()).optional()
     .describe("New person IDs linked to the project"),
-  org_ids: z.array(z.number().int().positive()).optional()
+  org_ids: boundedArray(z.number().int().positive()).optional()
     .describe("New organization IDs linked to the project"),
-  label_ids: z.array(z.number().int().positive()).optional()
+  label_ids: boundedArray(z.number().int().positive()).optional()
     .describe("New label IDs to attach to the project"),
 });
 
@@ -107,7 +111,7 @@ export const SearchProjectsSchema = z.object({
     .describe("Use exact match instead of fuzzy search"),
   limit: z.number().min(1).max(100).optional().default(50)
     .describe("Number of results to return (1-100, default 50)"),
-  cursor: z.string().optional()
+  cursor: BoundedQueryParamSchema.optional()
     .describe("Cursor for pagination (from previous response)"),
 });
 
@@ -136,7 +140,7 @@ export const ListArchivedProjectsSchema = PaginationParamsSchema.extend({
     .describe("Filter by saved filter ID"),
   phase_id: z.number().int().positive().optional()
     .describe("Filter by phase ID"),
-  status: z.string().optional()
+  status: BoundedNameSchema.optional()
     .describe("Filter by project status (e.g. open, completed, canceled)"),
 });
 

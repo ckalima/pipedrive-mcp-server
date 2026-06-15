@@ -6,6 +6,8 @@ import { z } from "zod";
 import {
   PaginationParamsV1Schema,
   IdParamSchema,
+  BoundedTextSchema,
+  BoundedQueryParamSchema,
 } from "./common.js";
 
 /**
@@ -18,7 +20,7 @@ export const ListNotesSchema = PaginationParamsV1Schema.extend({
     .describe("Filter by linked person ID"),
   org_id: z.number().int().positive().optional()
     .describe("Filter by linked organization ID"),
-  lead_id: z.string().optional()
+  lead_id: BoundedQueryParamSchema.optional()
     .describe("Filter by linked lead ID (UUID format)"),
   pinned_to_deal_flag: z.boolean().optional()
     .describe("Filter by pinned to deal status"),
@@ -41,7 +43,7 @@ export const GetNoteSchema = IdParamSchema;
  * Create note parameters
  */
 export const CreateNoteSchema = z.object({
-  content: z.string().min(1)
+  content: BoundedTextSchema.min(1)
     .describe("Note content (required, HTML supported)"),
   deal_id: z.number().int().positive().optional()
     .describe("Link to deal ID"),
@@ -49,7 +51,7 @@ export const CreateNoteSchema = z.object({
     .describe("Link to person ID"),
   org_id: z.number().int().positive().optional()
     .describe("Link to organization ID"),
-  lead_id: z.string().optional()
+  lead_id: BoundedQueryParamSchema.optional()
     .describe("Link to lead ID (UUID format)"),
   pinned_to_deal_flag: z.boolean().optional()
     .describe("Pin note to deal"),
@@ -63,7 +65,7 @@ export const CreateNoteSchema = z.object({
  * Update note parameters
  */
 export const UpdateNoteSchema = IdParamSchema.extend({
-  content: z.string().min(1).optional()
+  content: BoundedTextSchema.min(1).optional()
     .describe("New note content (HTML supported)"),
   deal_id: z.number().int().positive().optional()
     .describe("New linked deal ID"),
@@ -71,7 +73,7 @@ export const UpdateNoteSchema = IdParamSchema.extend({
     .describe("New linked person ID"),
   org_id: z.number().int().positive().optional()
     .describe("New linked organization ID"),
-  lead_id: z.string().optional()
+  lead_id: BoundedQueryParamSchema.optional()
     .describe("New linked lead ID (UUID format)"),
   pinned_to_deal_flag: z.boolean().optional()
     .describe("Pin note to deal"),

@@ -13,6 +13,11 @@ import {
   SearchTermSchema,
   SortDirectionSchema,
   VisibilitySchema,
+  BoundedTextSchema,
+  BoundedNameSchema,
+  BoundedQueryParamSchema,
+  BoundedCustomFieldsSchema,
+  boundedArray,
 } from "./common.js";
 
 /**
@@ -21,7 +26,7 @@ import {
 export const ListDealsSchema = PaginationParamsSchema.extend({
   filter_id: z.number().int().positive().optional()
     .describe("Filter by saved filter ID"),
-  ids: z.string().optional()
+  ids: BoundedQueryParamSchema.optional()
     .describe("Comma-separated deal IDs to fetch (max 100)"),
   owner_id: z.number().int().positive().optional()
     .describe("Filter by owner user ID"),
@@ -35,17 +40,17 @@ export const ListDealsSchema = PaginationParamsSchema.extend({
     .describe("Filter by stage ID"),
   status: DealStatusSchema.optional()
     .describe("Filter by deal status (open, won, lost)"),
-  updated_since: z.string().optional()
+  updated_since: BoundedQueryParamSchema.optional()
     .describe("Filter deals updated after this time (RFC3339 format, e.g. 2024-01-01T00:00:00Z)"),
-  updated_until: z.string().optional()
+  updated_until: BoundedQueryParamSchema.optional()
     .describe("Filter deals updated before this time (RFC3339 format)"),
   sort_by: z.enum(["id", "update_time", "add_time"])
     .optional()
     .describe("Field to sort by (id, update_time, add_time)"),
   sort_direction: SortDirectionSchema,
-  include_fields: z.string().optional()
+  include_fields: BoundedQueryParamSchema.optional()
     .describe("Comma-separated extra fields (v2 enum, e.g. next_activity_id, last_activity_id, products_count, files_count, notes_count, followers_count)"),
-  custom_fields: z.string().optional()
+  custom_fields: BoundedQueryParamSchema.optional()
     .describe("Include custom fields in response (comma-separated field keys or 'all')"),
 });
 
@@ -53,9 +58,9 @@ export const ListDealsSchema = PaginationParamsSchema.extend({
  * Get deal parameters
  */
 export const GetDealSchema = IdParamSchema.extend({
-  include_fields: z.string().optional()
+  include_fields: BoundedQueryParamSchema.optional()
     .describe("Comma-separated extra fields (v2 enum, e.g. next_activity_id, last_activity_id, products_count, files_count, notes_count, followers_count)"),
-  custom_fields: z.string().optional()
+  custom_fields: BoundedQueryParamSchema.optional()
     .describe("Include custom fields in response (comma-separated field keys or 'all')"),
 });
 
@@ -85,9 +90,9 @@ export const CreateDealSchema = z.object({
   probability: z.number().min(0).max(100).optional()
     .describe("Deal success probability (0-100)"),
   visible_to: VisibilitySchema,
-  label_ids: z.array(z.number()).optional()
+  label_ids: boundedArray(z.number()).optional()
     .describe("Label IDs to attach to deal"),
-  custom_fields: z.record(z.string(), z.unknown()).optional()
+  custom_fields: BoundedCustomFieldsSchema.optional()
     .describe("Custom field values as object with field keys"),
 });
 
@@ -116,15 +121,15 @@ export const UpdateDealSchema = IdParamSchema.extend({
     .describe("New expected close date (YYYY-MM-DD)"),
   probability: z.number().min(0).max(100).optional()
     .describe("New success probability (0-100)"),
-  won_time: z.string().optional()
+  won_time: BoundedNameSchema.optional()
     .describe("Won time (required when setting status to 'won')"),
-  lost_time: z.string().optional()
+  lost_time: BoundedNameSchema.optional()
     .describe("Lost time (required when setting status to 'lost')"),
-  lost_reason: z.string().optional()
+  lost_reason: BoundedNameSchema.optional()
     .describe("Lost reason (when status is 'lost')"),
-  label_ids: z.array(z.number()).optional()
+  label_ids: boundedArray(z.number()).optional()
     .describe("Label IDs to set on deal"),
-  custom_fields: z.record(z.string(), z.unknown()).optional()
+  custom_fields: BoundedCustomFieldsSchema.optional()
     .describe("Custom field values as object with field keys"),
 });
 
@@ -134,7 +139,7 @@ export const UpdateDealSchema = IdParamSchema.extend({
 export const SearchDealsSchema = z.object({
   term: SearchTermSchema
     .describe("Search term to find in deal title, notes, and custom fields"),
-  fields: z.string().optional()
+  fields: BoundedQueryParamSchema.optional()
     .describe("Comma-separated fields to search (allowed: title, notes, custom_fields). Defaults to all."),
   person_id: z.number().int().positive().optional()
     .describe("Filter by linked person"),
@@ -145,7 +150,7 @@ export const SearchDealsSchema = z.object({
     .describe("Use exact match instead of fuzzy search"),
   limit: z.number().min(1).max(100).optional().default(50)
     .describe("Number of results to return"),
-  cursor: z.string().optional()
+  cursor: BoundedQueryParamSchema.optional()
     .describe("Cursor for pagination (from previous response)"),
 });
 
@@ -194,7 +199,7 @@ export const DealFollowersChangelogSchema = PaginationParamsSchema.extend({
 const dealProductOptionalFields = {
   tax: z.number().optional()
     .describe("Tax percentage applied to the line item (default 0)"),
-  comments: z.string().optional()
+  comments: BoundedTextSchema.optional()
     .describe("Free-text comments for this line item"),
   discount: z.number().optional()
     .describe("Discount applied to the line item (default 0)"),
@@ -288,7 +293,7 @@ export const ListDealDiscountsSchema = IdParamSchema;
  * Add deal discount parameters
  */
 export const AddDealDiscountSchema = IdParamSchema.extend({
-  description: z.string().min(1).describe("Discount description (required)"),
+  description: BoundedTextSchema.min(1).describe("Discount description (required)"),
   amount: z.number().positive().describe("Discount amount, must be positive (required)"),
   type: z.enum(["percentage", "amount"]).describe("Whether amount is a percentage or fixed amount (required)"),
 });
@@ -299,7 +304,7 @@ export const AddDealDiscountSchema = IdParamSchema.extend({
  */
 export const UpdateDealDiscountSchema = IdParamSchema.extend({
   discount_id: z.uuid().describe("The discount UUID"),
-  description: z.string().min(1).optional().describe("Discount description"),
+  description: BoundedTextSchema.min(1).optional().describe("Discount description"),
   amount: z.number().positive().optional().describe("Discount amount, must be positive"),
   type: z.enum(["percentage", "amount"]).optional().describe("Whether amount is a percentage or fixed amount"),
 });
@@ -330,7 +335,7 @@ export const ListDealInstallmentsSchema = PaginationParamsSchema.extend({
  * Add deal installment parameters
  */
 export const AddDealInstallmentSchema = IdParamSchema.extend({
-  description: z.string().min(1).describe("Installment description (required)"),
+  description: BoundedTextSchema.min(1).describe("Installment description (required)"),
   amount: z.number().positive().describe("Installment amount, must be positive (required)"),
   billing_date: DateStringSchema.describe("Billing date in YYYY-MM-DD format (required)"),
 });
@@ -340,7 +345,7 @@ export const AddDealInstallmentSchema = IdParamSchema.extend({
  */
 export const UpdateDealInstallmentSchema = IdParamSchema.extend({
   installment_id: z.number().int().positive().describe("The installment ID"),
-  description: z.string().min(1).optional().describe("Installment description"),
+  description: BoundedTextSchema.min(1).optional().describe("Installment description"),
   amount: z.number().positive().optional().describe("Installment amount, must be positive"),
   billing_date: DateStringSchema.optional().describe("Billing date in YYYY-MM-DD format"),
 });

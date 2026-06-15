@@ -8,6 +8,8 @@ import {
   SearchTermSchema,
   VisibilitySchema,
   DateStringSchema,
+  BoundedQueryParamSchema,
+  boundedArray,
 } from "./common.js";
 
 /**
@@ -38,7 +40,7 @@ export const ListLeadsSchema = PaginationParamsV1Schema.extend({
     .describe("Filter by linked organization ID"),
   filter_id: z.number().int().positive().optional()
     .describe("Filter by saved filter ID"),
-  sort: z.string().optional()
+  sort: BoundedQueryParamSchema.optional()
     .describe("Sort field and direction (e.g. 'id ASC')"),
 });
 
@@ -66,7 +68,7 @@ export const CreateLeadSchema = z.object({
     .describe("Monetary value of the lead"),
   owner_id: z.number().int().positive().optional()
     .describe("Owner user ID (defaults to API key owner)"),
-  label_ids: z.array(z.uuid()).optional()
+  label_ids: boundedArray(z.uuid()).optional()
     .describe("Lead label UUIDs to attach to lead"),
   expected_close_date: DateStringSchema.optional()
     .describe("Expected close date (YYYY-MM-DD format)"),
@@ -87,7 +89,7 @@ export const UpdateLeadSchema = LeadIdSchema.extend({
     .describe("New monetary value"),
   owner_id: z.number().int().positive().optional()
     .describe("New owner user ID"),
-  label_ids: z.array(z.uuid()).optional()
+  label_ids: boundedArray(z.uuid()).optional()
     .describe("New lead label UUIDs"),
   expected_close_date: DateStringSchema.optional()
     .describe("New expected close date (YYYY-MM-DD format)"),
@@ -127,7 +129,7 @@ export const GetLeadConversionStatusSchema = LeadIdSchema.extend({
 export const SearchLeadsSchema = z.object({
   term: SearchTermSchema
     .describe("Search term for lead title, notes, or custom fields"),
-  fields: z.string().optional()
+  fields: BoundedQueryParamSchema.optional()
     .describe("Comma-separated fields to search (allowed: title, notes, custom_fields). Defaults to all."),
   person_id: z.number().int().positive().optional()
     .describe("Filter leads by linked person ID"),
@@ -139,7 +141,7 @@ export const SearchLeadsSchema = z.object({
     .describe("Use exact match instead of fuzzy search"),
   limit: z.number().min(1).max(500).optional().default(50)
     .describe("Number of results to return (1-500, default 50)"),
-  cursor: z.string().optional()
+  cursor: BoundedQueryParamSchema.optional()
     .describe("Cursor for pagination (from previous response)"),
 });
 

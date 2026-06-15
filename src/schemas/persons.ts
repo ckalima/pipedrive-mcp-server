@@ -9,24 +9,28 @@ import {
   SearchTermSchema,
   SortDirectionSchema,
   VisibilitySchema,
+  BoundedNameSchema,
+  BoundedQueryParamSchema,
+  BoundedCustomFieldsSchema,
+  boundedArray,
 } from "./common.js";
 
 /**
  * Email input schema for creating/updating persons
  */
-export const EmailInputSchema = z.array(z.object({
+export const EmailInputSchema = boundedArray(z.object({
   value: z.email().describe("Email address"),
   primary: z.boolean().optional().describe("Whether this is the primary email"),
-  label: z.string().optional().describe("Label (work, home, other)"),
+  label: BoundedNameSchema.optional().describe("Label (work, home, other)"),
 })).optional().describe("List of email addresses");
 
 /**
  * Phone input schema for creating/updating persons
  */
-export const PhoneInputSchema = z.array(z.object({
-  value: z.string().describe("Phone number"),
+export const PhoneInputSchema = boundedArray(z.object({
+  value: BoundedNameSchema.describe("Phone number"),
   primary: z.boolean().optional().describe("Whether this is the primary phone"),
-  label: z.string().optional().describe("Label (work, home, mobile, other)"),
+  label: BoundedNameSchema.optional().describe("Label (work, home, mobile, other)"),
 })).optional().describe("List of phone numbers");
 
 /**
@@ -35,23 +39,23 @@ export const PhoneInputSchema = z.array(z.object({
 export const ListPersonsSchema = PaginationParamsSchema.extend({
   filter_id: z.number().int().positive().optional()
     .describe("Filter by saved filter ID"),
-  ids: z.string().optional()
+  ids: BoundedQueryParamSchema.optional()
     .describe("Comma-separated person IDs to fetch (max 100)"),
   owner_id: z.number().int().positive().optional()
     .describe("Filter by owner user ID"),
   org_id: z.number().int().positive().optional()
     .describe("Filter by organization ID"),
-  updated_since: z.string().optional()
+  updated_since: BoundedQueryParamSchema.optional()
     .describe("Filter persons updated after this time (RFC3339 format)"),
-  updated_until: z.string().optional()
+  updated_until: BoundedQueryParamSchema.optional()
     .describe("Filter persons updated before this time (RFC3339 format)"),
   sort_by: z.enum(["id", "update_time", "add_time"])
     .optional()
     .describe("Field to sort by (id, update_time, add_time)"),
   sort_direction: SortDirectionSchema,
-  include_fields: z.string().optional()
+  include_fields: BoundedQueryParamSchema.optional()
     .describe("Comma-separated extra fields (v2 enum, e.g. next_activity_id, open_deals_count, won_deals_count, notes_count, followers_count)"),
-  custom_fields: z.string().optional()
+  custom_fields: BoundedQueryParamSchema.optional()
     .describe("Include custom fields in response (comma-separated field keys or 'all')"),
 });
 
@@ -59,9 +63,9 @@ export const ListPersonsSchema = PaginationParamsSchema.extend({
  * Get person parameters
  */
 export const GetPersonSchema = IdParamSchema.extend({
-  include_fields: z.string().optional()
+  include_fields: BoundedQueryParamSchema.optional()
     .describe("Comma-separated extra fields (v2 enum, e.g. next_activity_id, open_deals_count, won_deals_count, notes_count, followers_count)"),
-  custom_fields: z.string().optional()
+  custom_fields: BoundedQueryParamSchema.optional()
     .describe("Include custom fields in response (comma-separated field keys or 'all')"),
 });
 
@@ -80,11 +84,11 @@ export const CreatePersonSchema = z.object({
   visible_to: VisibilitySchema,
   marketing_status: z.enum(["no_consent", "unsubscribed", "subscribed", "archived"]).optional()
     .describe("Marketing email consent status"),
-  label_ids: z.array(z.number()).optional()
+  label_ids: boundedArray(z.number()).optional()
     .describe("Label IDs to attach to person"),
-  add_time: z.string().optional()
+  add_time: BoundedNameSchema.optional()
     .describe("Creation time (RFC3339 format) - backdate the person"),
-  custom_fields: z.record(z.string(), z.unknown()).optional()
+  custom_fields: BoundedCustomFieldsSchema.optional()
     .describe("Custom field values as object with field keys"),
 });
 
@@ -103,9 +107,9 @@ export const UpdatePersonSchema = IdParamSchema.extend({
   visible_to: VisibilitySchema,
   marketing_status: z.enum(["no_consent", "unsubscribed", "subscribed", "archived"]).optional()
     .describe("New marketing status"),
-  label_ids: z.array(z.number()).optional()
+  label_ids: boundedArray(z.number()).optional()
     .describe("Label IDs to set on person"),
-  custom_fields: z.record(z.string(), z.unknown()).optional()
+  custom_fields: BoundedCustomFieldsSchema.optional()
     .describe("Custom field values as object with field keys"),
 });
 
@@ -115,7 +119,7 @@ export const UpdatePersonSchema = IdParamSchema.extend({
 export const SearchPersonsSchema = z.object({
   term: SearchTermSchema
     .describe("Search term for name, email, phone, or notes"),
-  fields: z.string().optional()
+  fields: BoundedQueryParamSchema.optional()
     .describe("Comma-separated fields to search (allowed: name, email, phone, notes, custom_fields). Defaults to all."),
   org_id: z.number().int().positive().optional()
     .describe("Filter by organization"),
@@ -123,7 +127,7 @@ export const SearchPersonsSchema = z.object({
     .describe("Use exact match instead of fuzzy search"),
   limit: z.number().min(1).max(100).optional().default(50)
     .describe("Number of results to return"),
-  cursor: z.string().optional()
+  cursor: BoundedQueryParamSchema.optional()
     .describe("Cursor for pagination (from previous response)"),
 });
 

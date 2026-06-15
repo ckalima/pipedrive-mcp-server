@@ -19,7 +19,21 @@ import {
   SearchTermSchema,
   CustomFieldValueSchema,
   PathSegmentSchema,
+  BoundedTextSchema,
+  BoundedNameSchema,
+  BoundedQueryParamSchema,
+  boundedArray,
+  BoundedCustomFieldsSchema,
+  BoundedProductCustomFieldsSchema,
+  MAX_TEXT_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_QUERY_PARAM_LENGTH,
+  MAX_ARRAY_ITEMS,
+  MAX_CUSTOM_FIELD_KEYS,
+  MAX_CUSTOM_FIELD_VALUE_LENGTH,
+  MAX_CUSTOM_FIELD_DEPTH,
 } from '../../../src/schemas/common.js';
+import { z } from 'zod';
 
 describe('common schemas', () => {
   describe('PaginationParamsSchema (v2)', () => {
@@ -394,6 +408,135 @@ describe('common schemas', () => {
       ]) {
         expect(() => PathSegmentSchema.parse(hostile)).toThrow();
       }
+    });
+
+    it('rejects an over-long (but allowlist-valid) segment (U4 cap)', () => {
+      expect(() => PathSegmentSchema.parse('a'.repeat(256))).toThrow();
+      expect(PathSegmentSchema.parse('a'.repeat(255))).toHaveLength(255);
+    });
+  });
+
+  // ─── U4 (F3): input-size bounds ─────────────────────────────────────────────
+  // These guard the resource-exhaustion class: a single call must not be able to
+  // drive unbounded free text, arrays, or deeply-nested records into the API.
+  // The caps are generous (far above any legitimate CRM payload); the tests
+  // assert the boundary holds, not Pipedrive's own field limits.
+
+  describe('BoundedTextSchema (U4)', () => {
+    it('accepts a normal long body', () => {
+      const body = 'x'.repeat(10_000);
+      expect(BoundedTextSchema.parse(body)).toBe(body);
+    });
+
+    it('accepts text at the cap', () => {
+      expect(BoundedTextSchema.parse('x'.repeat(MAX_TEXT_LENGTH))).toHaveLength(MAX_TEXT_LENGTH);
+    });
+
+    it('rejects text past the cap', () => {
+      expect(() => BoundedTextSchema.parse('x'.repeat(MAX_TEXT_LENGTH + 1))).toThrow();
+    });
+  });
+
+  describe('BoundedNameSchema (U4)', () => {
+    it('accepts a normal name', () => {
+      expect(BoundedNameSchema.parse('Acme Corp')).toBe('Acme Corp');
+    });
+
+    it('accepts a value at the cap', () => {
+      expect(BoundedNameSchema.parse('x'.repeat(MAX_NAME_LENGTH))).toHaveLength(MAX_NAME_LENGTH);
+    });
+
+    it('rejects a value past the cap', () => {
+      expect(() => BoundedNameSchema.parse('x'.repeat(MAX_NAME_LENGTH + 1))).toThrow();
+    });
+  });
+
+  describe('BoundedQueryParamSchema (U4)', () => {
+    it('accepts a comma-separated id list', () => {
+      expect(BoundedQueryParamSchema.parse('1,2,3')).toBe('1,2,3');
+    });
+
+    it('accepts a value at the cap', () => {
+      expect(BoundedQueryParamSchema.parse('x'.repeat(MAX_QUERY_PARAM_LENGTH))).toHaveLength(MAX_QUERY_PARAM_LENGTH);
+    });
+
+    it('rejects a value past the cap', () => {
+      expect(() => BoundedQueryParamSchema.parse('x'.repeat(MAX_QUERY_PARAM_LENGTH + 1))).toThrow();
+    });
+  });
+
+  describe('boundedArray (U4)', () => {
+    it('accepts an array within the default cap', () => {
+      const arr = Array.from({ length: 5 }, (_, i) => i);
+      expect(boundedArray(z.number()).parse(arr)).toEqual(arr);
+    });
+
+    it('accepts an array at the default cap', () => {
+      const arr = Array.from({ length: MAX_ARRAY_ITEMS }, () => 1);
+      expect(boundedArray(z.number()).parse(arr)).toHaveLength(MAX_ARRAY_ITEMS);
+    });
+
+    it('rejects an array past the default cap', () => {
+      const arr = Array.from({ length: MAX_ARRAY_ITEMS + 1 }, () => 1);
+      expect(() => boundedArray(z.number()).parse(arr)).toThrow();
+    });
+
+    it('honors an explicit lower cap', () => {
+      expect(() => boundedArray(z.number(), 2).parse([1, 2, 3])).toThrow();
+      expect(boundedArray(z.number(), 2).parse([1, 2])).toEqual([1, 2]);
+    });
+
+    it('still allows chaining .min() after the cap', () => {
+      const schema = boundedArray(z.number()).min(1);
+      expect(() => schema.parse([])).toThrow();
+      expect(schema.parse([1])).toEqual([1]);
+    });
+  });
+
+  describe('BoundedCustomFieldsSchema (U4)', () => {
+    it('accepts a normal custom_fields record', () => {
+      const rec = { hash1: 'value', hash2: 42, hash3: ['a', 'b'] };
+      expect(BoundedCustomFieldsSchema.parse(rec)).toEqual(rec);
+    });
+
+    it('accepts a moderately nested value within the depth cap', () => {
+      const rec = { hash1: { a: { b: { c: 1 } } } }; // depth 4 < 6
+      expect(BoundedCustomFieldsSchema.parse(rec)).toEqual(rec);
+    });
+
+    it('rejects too many keys', () => {
+      const rec: Record<string, unknown> = {};
+      for (let i = 0; i <= MAX_CUSTOM_FIELD_KEYS; i++) rec[`k${i}`] = 1;
+      expect(() => BoundedCustomFieldsSchema.parse(rec)).toThrow();
+    });
+
+    it('rejects a value nested past the depth cap', () => {
+      // Build a value nested deeper than MAX_CUSTOM_FIELD_DEPTH container levels.
+      let deep: unknown = 1;
+      for (let i = 0; i < MAX_CUSTOM_FIELD_DEPTH + 1; i++) deep = { nest: deep };
+      expect(() => BoundedCustomFieldsSchema.parse({ hash1: deep })).toThrow();
+    });
+
+    it('rejects a value past the per-value serialized-size cap', () => {
+      const huge = 'x'.repeat(MAX_CUSTOM_FIELD_VALUE_LENGTH + 1);
+      expect(() => BoundedCustomFieldsSchema.parse({ hash1: huge })).toThrow();
+    });
+  });
+
+  describe('BoundedProductCustomFieldsSchema (U4)', () => {
+    it('accepts a flat scalar/array record', () => {
+      const rec = { hash1: 'value', hash2: 42, hash3: ['a', 'b'] };
+      expect(BoundedProductCustomFieldsSchema.parse(rec)).toEqual(rec);
+    });
+
+    it('rejects too many keys', () => {
+      const rec: Record<string, unknown> = {};
+      for (let i = 0; i <= MAX_CUSTOM_FIELD_KEYS; i++) rec[`k${i}`] = 1;
+      expect(() => BoundedProductCustomFieldsSchema.parse(rec)).toThrow();
+    });
+
+    it('rejects a nested object value (product values are flat)', () => {
+      expect(() => BoundedProductCustomFieldsSchema.parse({ hash1: { nested: 1 } })).toThrow();
     });
   });
 });

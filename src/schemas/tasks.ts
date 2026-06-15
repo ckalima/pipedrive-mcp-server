@@ -3,7 +3,13 @@
  */
 
 import { z } from "zod";
-import { PaginationParamsSchema, IdParamSchema } from "./common.js";
+import {
+  PaginationParamsSchema,
+  IdParamSchema,
+  BoundedTextSchema,
+  BoundedNameSchema,
+  BoundedQueryParamSchema,
+} from "./common.js";
 
 // ─── U1: Read schemas ─────────────────────────────────────────────────────────
 
@@ -21,7 +27,7 @@ export const ListTasksSchema = PaginationParamsSchema.extend({
     .describe("Filter by project ID"),
   // The API accepts a string: an integer-string for subtask filtering, or the
   // literal "null" to return only root-level tasks (no parent).
-  parent_task_id: z.string().optional()
+  parent_task_id: BoundedQueryParamSchema.optional()
     .describe("Filter by parent task ID. Use the literal string \"null\" to return only root-level tasks."),
 });
 
@@ -57,15 +63,15 @@ export const CreateTaskSchema = z.object({
     .describe("ID of the project this task belongs to (required)"),
   parent_task_id: z.number().int().positive().nullable().optional()
     .describe("ID of the parent task (null for root-level task)"),
-  description: z.string().nullable().optional()
+  description: BoundedTextSchema.nullable().optional()
     .describe("Task description"),
   is_done: TaskFlagSchema
     .describe("Mark task as done (boolean true/false). Same field name and type as the GET response."),
   is_milestone: TaskFlagSchema
     .describe("Mark task as milestone (boolean true/false). A milestone task must have a due_date. Same field name and type as the GET response."),
-  due_date: z.string().nullable().optional()
+  due_date: BoundedNameSchema.nullable().optional()
     .describe("Task due date (YYYY-MM-DD format)"),
-  start_date: z.string().nullable().optional()
+  start_date: BoundedNameSchema.nullable().optional()
     .describe("Task start date (YYYY-MM-DD format)"),
   assignee_id: z.number().int().positive().nullable().optional()
     .describe("Assignee user ID"),
@@ -85,15 +91,15 @@ export const UpdateTaskSchema = IdParamSchema.extend({
     .describe("ID of the project this task belongs to"),
   parent_task_id: z.number().int().positive().nullable().optional()
     .describe("ID of the parent task (null to make root-level)"),
-  description: z.string().nullable().optional()
+  description: BoundedTextSchema.nullable().optional()
     .describe("Task description"),
   is_done: TaskFlagSchema
     .describe("Mark task as done (boolean true/false). Same field name and type as the GET response."),
   is_milestone: TaskFlagSchema
     .describe("Mark task as milestone (boolean true/false). A milestone task must have a due_date. Same field name and type as the GET response."),
-  due_date: z.string().nullable().optional()
+  due_date: BoundedNameSchema.nullable().optional()
     .describe("Task due date (YYYY-MM-DD format)"),
-  start_date: z.string().nullable().optional()
+  start_date: BoundedNameSchema.nullable().optional()
     .describe("Task start date (YYYY-MM-DD format)"),
   assignee_id: z.number().int().positive().nullable().optional()
     .describe("Assignee user ID"),

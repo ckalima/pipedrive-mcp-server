@@ -3,7 +3,13 @@
  */
 
 import { z } from "zod";
-import { PaginationParamsSchema, PathSegmentSchema } from "./common.js";
+import {
+  PaginationParamsSchema,
+  PathSegmentSchema,
+  BoundedNameSchema,
+  BoundedTextSchema,
+  boundedArray,
+} from "./common.js";
 
 /**
  * Field entity types
@@ -45,7 +51,7 @@ export const ListProjectFieldsSchema = PaginationParamsSchema;
 export const GetFieldSchema = z.object({
   entity_type: FieldEntityTypeSchema
     .describe("Entity type (organization, deal, person, etc.)"),
-  key: z.string()
+  key: BoundedNameSchema
     .describe("Field key (40-character hash for custom fields, or standard field name)"),
 });
 
@@ -65,7 +71,7 @@ export const FieldTypeSchema = z.enum([
  * A single option label for an enum/set field (create body).
  */
 export const FieldOptionInputSchema = z.object({
-  label: z.string().min(1).describe("The option label"),
+  label: BoundedNameSchema.min(1).describe("The option label"),
 }).strict();
 
 /**
@@ -103,7 +109,7 @@ export const OptionUpdateInputSchema = z.object({
 /** Pipeline-scoped visibility (deal fields only). */
 export const ShowInPipelinesSchema = z.object({
   show_in_all: z.boolean().optional(),
-  pipeline_ids: z.array(z.number().int()).optional(),
+  pipeline_ids: boundedArray(z.number().int()).optional(),
 });
 
 /** Add-dialog visibility ({show, order}) used by person/org fields. */
@@ -118,7 +124,7 @@ export const ShowInDialogSchema = z.object({
  */
 export const ImportantFieldsSchema = z.object({
   enabled: z.boolean().optional(),
-  stage_ids: z.array(z.number().int()).optional(),
+  stage_ids: boundedArray(z.number().int()).optional(),
 });
 
 /** Deal-field UI visibility (has show_in_pipelines + projects flag). */
@@ -147,7 +153,7 @@ export const OrgUiVisibilitySchema = z.object({
 /** Deal required_fields: enabled + deal stage_ids + per-pipeline won/lost statuses. */
 export const DealRequiredFieldsSchema = z.object({
   enabled: z.boolean().optional(),
-  stage_ids: z.array(z.number().int()).optional(),
+  stage_ids: boundedArray(z.number().int()).optional(),
   statuses: z.record(z.string(), z.array(z.enum(["won", "lost"]))).optional(),
 });
 
@@ -174,7 +180,7 @@ const ENUM_SET_OPTIONS_REFINE = {
 export const CreateDealFieldSchema = z.object({
   field_name: z.string().min(1).max(255).describe("Field name (required, 1-255 chars)"),
   field_type: FieldTypeSchema.describe("Field type (required). Use 'enum' or 'set' for option fields."),
-  options: z.array(FieldOptionInputSchema).optional()
+  options: boundedArray(FieldOptionInputSchema).optional()
     .describe("Field options (required for enum and set field types)"),
   ui_visibility: DealUiVisibilitySchema.optional()
     .describe("UI visibility settings (where the field appears in the web UI)"),
@@ -182,7 +188,7 @@ export const CreateDealFieldSchema = z.object({
     .describe("Important-field highlighting (stage_ids reference deal stages)"),
   required_fields: DealRequiredFieldsSchema.optional()
     .describe("Required-field configuration"),
-  description: z.string().nullable().optional().describe("Field description"),
+  description: BoundedTextSchema.nullable().optional().describe("Field description"),
 }).refine(optionsPresentForEnumSet, ENUM_SET_OPTIONS_REFINE);
 
 export const UpdateDealFieldSchema = z.object({
@@ -191,20 +197,20 @@ export const UpdateDealFieldSchema = z.object({
   ui_visibility: DealUiVisibilitySchema.optional(),
   important_fields: ImportantFieldsSchema.optional(),
   required_fields: DealRequiredFieldsSchema.optional(),
-  description: z.string().nullable().optional().describe("Field description"),
+  description: BoundedTextSchema.nullable().optional().describe("Field description"),
 });
 
 export const DeleteDealFieldSchema = z.object({ field_code: FieldCodeSchema });
 
 export const UpdateDealFieldOptionsSchema = z.object({
   field_code: FieldCodeSchema,
-  options: z.array(OptionUpdateInputSchema).min(1)
+  options: boundedArray(OptionUpdateInputSchema).min(1)
     .describe("Options to update (at least one). Atomic: fails if any option ID does not exist."),
 });
 
 export const DeleteDealFieldOptionsSchema = z.object({
   field_code: FieldCodeSchema,
-  option_ids: z.array(z.number().int().positive()).min(1)
+  option_ids: boundedArray(z.number().int().positive()).min(1)
     .describe("IDs of the options to delete (at least one). Atomic: fails if any ID does not exist."),
 });
 
@@ -213,7 +219,7 @@ export const DeleteDealFieldOptionsSchema = z.object({
 export const CreatePersonFieldSchema = z.object({
   field_name: z.string().min(1).max(255).describe("Field name (required, 1-255 chars)"),
   field_type: FieldTypeSchema.describe("Field type (required). Use 'enum' or 'set' for option fields."),
-  options: z.array(FieldOptionInputSchema).optional()
+  options: boundedArray(FieldOptionInputSchema).optional()
     .describe("Field options (required for enum and set field types)"),
   ui_visibility: PersonUiVisibilitySchema.optional()
     .describe("UI visibility settings (where the field appears in the web UI)"),
@@ -235,13 +241,13 @@ export const DeletePersonFieldSchema = z.object({ field_code: FieldCodeSchema })
 
 export const UpdatePersonFieldOptionsSchema = z.object({
   field_code: FieldCodeSchema,
-  options: z.array(OptionUpdateInputSchema).min(1)
+  options: boundedArray(OptionUpdateInputSchema).min(1)
     .describe("Options to update (at least one). Atomic: fails if any option ID does not exist."),
 });
 
 export const DeletePersonFieldOptionsSchema = z.object({
   field_code: FieldCodeSchema,
-  option_ids: z.array(z.number().int().positive()).min(1)
+  option_ids: boundedArray(z.number().int().positive()).min(1)
     .describe("IDs of the options to delete (at least one). Atomic: fails if any ID does not exist."),
 });
 
@@ -250,7 +256,7 @@ export const DeletePersonFieldOptionsSchema = z.object({
 export const CreateOrganizationFieldSchema = z.object({
   field_name: z.string().min(1).max(255).describe("Field name (required, 1-255 chars)"),
   field_type: FieldTypeSchema.describe("Field type (required). Use 'enum' or 'set' for option fields."),
-  options: z.array(FieldOptionInputSchema).optional()
+  options: boundedArray(FieldOptionInputSchema).optional()
     .describe("Field options (required for enum and set field types)"),
   ui_visibility: OrgUiVisibilitySchema.optional()
     .describe("UI visibility settings (where the field appears in the web UI)"),
@@ -272,13 +278,13 @@ export const DeleteOrganizationFieldSchema = z.object({ field_code: FieldCodeSch
 
 export const UpdateOrganizationFieldOptionsSchema = z.object({
   field_code: FieldCodeSchema,
-  options: z.array(OptionUpdateInputSchema).min(1)
+  options: boundedArray(OptionUpdateInputSchema).min(1)
     .describe("Options to update (at least one). Atomic: fails if any option ID does not exist."),
 });
 
 export const DeleteOrganizationFieldOptionsSchema = z.object({
   field_code: FieldCodeSchema,
-  option_ids: z.array(z.number().int().positive()).min(1)
+  option_ids: boundedArray(z.number().int().positive()).min(1)
     .describe("IDs of the options to delete (at least one). Atomic: fails if any ID does not exist."),
 });
 
@@ -297,7 +303,7 @@ export const ProductUiVisibilitySchema = z.object({
 export const CreateProductFieldSchema = z.object({
   field_name: z.string().min(1).max(255).describe("Field name (required, 1-255 chars)"),
   field_type: FieldTypeSchema.describe("Field type (required). Use 'enum' or 'set' for option fields."),
-  options: z.array(FieldOptionInputSchema).optional()
+  options: boundedArray(FieldOptionInputSchema).optional()
     .describe("Field options (required for enum and set field types)"),
   ui_visibility: ProductUiVisibilitySchema.optional()
     .describe("UI visibility settings (add_visible_flag, details_visible_flag)"),
@@ -314,13 +320,13 @@ export const DeleteProductFieldSchema = z.object({ field_code: FieldCodeSchema }
 
 export const UpdateProductFieldOptionsSchema = z.object({
   field_code: FieldCodeSchema,
-  options: z.array(OptionUpdateInputSchema).min(1)
+  options: boundedArray(OptionUpdateInputSchema).min(1)
     .describe("Options to update (at least one). Atomic: fails if any option ID does not exist."),
 });
 
 export const DeleteProductFieldOptionsSchema = z.object({
   field_code: FieldCodeSchema,
-  option_ids: z.array(z.number().int().positive()).min(1)
+  option_ids: boundedArray(z.number().int().positive()).min(1)
     .describe("IDs of the options to delete (at least one). Atomic: fails if any ID does not exist."),
 });
 

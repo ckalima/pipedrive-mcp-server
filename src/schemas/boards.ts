@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { IdParamSchema } from "./common.js";
+import { IdParamSchema, BoundedNameSchema } from "./common.js";
 
 // ─── Board schemas ─────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ export const GetBoardSchema = IdParamSchema;
  * Create a new board
  */
 export const CreateBoardSchema = z.object({
-  name: z.string().min(1)
+  name: BoundedNameSchema.min(1)
     .describe("Board name (required, must not be empty)"),
   order_nr: z.number().int().min(1).optional()
     .describe("Board order number (integer >= 1)"),
@@ -34,7 +34,7 @@ export const CreateBoardSchema = z.object({
  * Update an existing board. Only id is required.
  */
 export const UpdateBoardSchema = IdParamSchema.extend({
-  name: z.string().min(1).optional()
+  name: BoundedNameSchema.min(1).optional()
     .describe("Board name"),
   order_nr: z.number().int().min(1).optional()
     .describe("Board order number (integer >= 1)"),
@@ -64,7 +64,7 @@ export const GetPhaseSchema = IdParamSchema;
  * Create a new phase
  */
 export const CreatePhaseSchema = z.object({
-  name: z.string().min(1)
+  name: BoundedNameSchema.min(1)
     .describe("Phase name (required, must not be empty)"),
   board_id: z.number().int().positive()
     .describe("ID of the board this phase belongs to (required)"),
@@ -77,7 +77,7 @@ export const CreatePhaseSchema = z.object({
  * board_id can be used to move a phase to a different board.
  */
 export const UpdatePhaseSchema = IdParamSchema.extend({
-  name: z.string().min(1).optional()
+  name: BoundedNameSchema.min(1).optional()
     .describe("Phase name"),
   board_id: z.number().int().positive().optional()
     .describe("ID of the board (set to move this phase to a different board)"),

@@ -10,7 +10,11 @@ import {
   SortDirectionSchema,
   VisibilitySchema,
   CurrencyCodeSchema,
-  CustomFieldValueSchema,
+  BoundedNameSchema,
+  BoundedTextSchema,
+  BoundedQueryParamSchema,
+  BoundedProductCustomFieldsSchema,
+  boundedArray,
 } from "./common.js";
 
 // ─── U1: Read schemas ─────────────────────────────────────────────────────────
@@ -21,7 +25,7 @@ import {
 export const ListProductsSchema = PaginationParamsSchema.extend({
   owner_id: z.number().int().positive().optional()
     .describe("Filter by owner user ID"),
-  ids: z.string().optional()
+  ids: BoundedQueryParamSchema.optional()
     .describe("Comma-separated product IDs to fetch (max 100)"),
   filter_id: z.number().int().positive().optional()
     .describe("Filter by saved filter ID"),
@@ -29,9 +33,9 @@ export const ListProductsSchema = PaginationParamsSchema.extend({
     .optional()
     .describe("Field to sort by (id, name, add_time, update_time)"),
   sort_direction: SortDirectionSchema,
-  updated_since: z.string().optional()
+  updated_since: BoundedQueryParamSchema.optional()
     .describe("Filter products updated after this time (RFC3339 format)"),
-  custom_fields: z.string().optional()
+  custom_fields: BoundedQueryParamSchema.optional()
     .describe("Include custom fields in response (comma-separated field keys, max 15)"),
 });
 
@@ -54,7 +58,7 @@ export const SearchProductsSchema = z.object({
     .describe("Extra fields to include in response (product.price)"),
   limit: z.number().min(1).max(100).optional().default(50)
     .describe("Number of results to return"),
-  cursor: z.string().optional()
+  cursor: BoundedQueryParamSchema.optional()
     .describe("Cursor for pagination (from previous response)"),
 });
 
@@ -90,13 +94,13 @@ export const PriceInputSchema = z.object({
  * Create product parameters
  */
 export const CreateProductSchema = z.object({
-  name: z.string().min(1)
+  name: BoundedNameSchema.min(1)
     .describe("Product name (required)"),
-  code: z.string().optional()
+  code: BoundedNameSchema.optional()
     .describe("Product code"),
-  description: z.string().optional()
+  description: BoundedTextSchema.optional()
     .describe("Product description"),
-  unit: z.string().optional()
+  unit: BoundedNameSchema.optional()
     .describe("Unit of measurement"),
   tax: z.number().optional()
     .describe("Tax percentage (default 0)"),
@@ -107,9 +111,9 @@ export const CreateProductSchema = z.object({
   is_linkable: z.boolean().optional()
     .describe("Whether the product can be linked to deals (default true)"),
   visible_to: VisibilitySchema,
-  prices: z.array(PriceInputSchema).optional()
+  prices: boundedArray(PriceInputSchema).optional()
     .describe("Array of price objects per currency"),
-  custom_fields: z.record(z.string(), CustomFieldValueSchema).optional()
+  custom_fields: BoundedProductCustomFieldsSchema.optional()
     .describe("Custom field values as object with field keys"),
   billing_frequency: BillingFrequencySchema.optional()
     .describe("Billing frequency (default one-time)"),
@@ -121,13 +125,13 @@ export const CreateProductSchema = z.object({
  * Update product parameters
  */
 export const UpdateProductSchema = IdParamSchema.extend({
-  name: z.string().min(1).optional()
+  name: BoundedNameSchema.min(1).optional()
     .describe("Product name"),
-  code: z.string().optional()
+  code: BoundedNameSchema.optional()
     .describe("Product code"),
-  description: z.string().optional()
+  description: BoundedTextSchema.optional()
     .describe("Product description"),
-  unit: z.string().optional()
+  unit: BoundedNameSchema.optional()
     .describe("Unit of measurement"),
   tax: z.number().optional()
     .describe("Tax percentage"),
@@ -138,9 +142,9 @@ export const UpdateProductSchema = IdParamSchema.extend({
   is_linkable: z.boolean().optional()
     .describe("Whether the product can be linked to deals"),
   visible_to: VisibilitySchema,
-  prices: z.array(PriceInputSchema).optional()
+  prices: boundedArray(PriceInputSchema).optional()
     .describe("Array of price objects per currency"),
-  custom_fields: z.record(z.string(), CustomFieldValueSchema).optional()
+  custom_fields: BoundedProductCustomFieldsSchema.optional()
     .describe("Custom field values as object with field keys"),
   billing_frequency: BillingFrequencySchema.optional()
     .describe("Billing frequency"),
@@ -159,7 +163,7 @@ export const DeleteProductSchema = IdParamSchema;
  * Price input for a product variation (extends base price with notes)
  */
 export const VariationPriceInputSchema = PriceInputSchema.extend({
-  notes: z.string().optional().describe("Notes about this price"),
+  notes: BoundedTextSchema.optional().describe("Notes about this price"),
 });
 
 /**
@@ -174,7 +178,7 @@ export const ListProductVariationsSchema = PaginationParamsSchema.extend({
  */
 export const AddProductVariationSchema = IdParamSchema.extend({
   name: z.string().min(1).max(255).describe("Product variation name (required, max 255 chars)"),
-  prices: z.array(VariationPriceInputSchema).optional()
+  prices: boundedArray(VariationPriceInputSchema).optional()
     .describe("Array of price objects per currency"),
 });
 
@@ -184,7 +188,7 @@ export const AddProductVariationSchema = IdParamSchema.extend({
 export const UpdateProductVariationSchema = IdParamSchema.extend({
   product_variation_id: z.number().int().positive().describe("The product variation ID"),
   name: z.string().min(1).max(255).optional().describe("Product variation name (max 255 chars)"),
-  prices: z.array(VariationPriceInputSchema).optional()
+  prices: boundedArray(VariationPriceInputSchema).optional()
     .describe("Array of price objects per currency"),
 });
 
