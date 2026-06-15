@@ -8,7 +8,8 @@
  *     handler runs, and scopes the unknown-tool hint to in-mode tools.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { z } from 'zod';
 
 import { allTools, toolDefinitions } from '../../src/tools/index.js';
 import {
@@ -16,11 +17,35 @@ import {
   isToolAllowedInMode,
   CAPABILITY_MODES,
 } from '../../src/capability-modes.js';
+import { VALID_API_KEY } from '../helpers/mockEnv.js';
+import { mockApiSuccess, fixtures } from '../helpers/mockFetch.js';
 
 /** Live-registry counts; bump in lockstep with tool-annotations.test.ts. */
 const TOTAL_TOOLS = 155;
 const READ_TOOLS = 69;
 const SAFE_WRITE_TOOLS = 124;
+
+// A synthetic write tool whose handler exists but is absent from allTools, to prove the
+// dispatcher's undefined-allowed fall-through (U1/U4): getTool returns undefined for it,
+// so it is not mode-classifiable and is NOT blocked. Hoisted for the vi.mock factory.
+const { syntheticHandler } = vi.hoisted(() => ({
+  syntheticHandler: vi.fn(async () => ({ content: [{ type: 'text', text: 'synthetic ran' }] })),
+}));
+
+vi.mock('../../src/tools/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/tools/index.js')>();
+  return {
+    ...actual, // toolDefinitions, allTools, getTool stay real (getTool returns undefined for the synthetic)
+    getToolHandler: (name: string) =>
+      name === 'pipedrive_create_synthetic' ? syntheticHandler : actual.getToolHandler(name),
+    getToolSchema: (name: string) =>
+      name === 'pipedrive_create_synthetic' ? z.object({}) : actual.getToolSchema(name),
+  };
+});
+
+import { handleCallTool } from '../../src/index.js';
+
+const textOf = (r: { content: { text: string }[] }) => r.content[0].text;
 
 describe('capability modes — tools/list filter (U3)', () => {
   it('returns 69 / 124 / 155 definitions for read-only / safe-write / full', () => {
@@ -75,5 +100,120 @@ describe('capability modes — tools/list filter (U3)', () => {
         );
       }
     }
+  });
+});
+
+describe('capability modes — dispatcher backstop (U4)', () => {
+  beforeEach(() => {
+    process.env.PIPEDRIVE_API_KEY = VALID_API_KEY;
+  });
+
+  it('lets a read tool run in read-only (not blocked, handler reached)', async () => {
+    process.env.PIPEDRIVE_MODE = 'read-only';
+    const fetchMock = mockApiSuccess(fixtures.deal);
+
+    const result = await handleCallTool({ params: { name: 'pipedrive_get_deal', arguments: { id: 1 } } });
+
+    expect(textOf(result)).not.toContain('MODE_RESTRICTED');
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it('blocks a write tool in read-only with MODE_RESTRICTED, handler never runs', async () => {
+    process.env.PIPEDRIVE_MODE = 'read-only';
+    const fetchMock = mockApiSuccess(fixtures.deal);
+
+    const result = await handleCallTool({
+      params: { name: 'pipedrive_create_deal', arguments: { title: 'x' } },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('Error [MODE_RESTRICTED]:');
+    expect(textOf(result)).toContain("'pipedrive_create_deal'");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('blocks a destructive tool in safe-write with MODE_RESTRICTED, handler never runs', async () => {
+    process.env.PIPEDRIVE_MODE = 'safe-write';
+    const fetchMock = mockApiSuccess({});
+
+    const result = await handleCallTool({
+      params: { name: 'pipedrive_delete_lead', arguments: { id: '550e8400-e29b-41d4-a716-446655440000' } },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('Error [MODE_RESTRICTED]:');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('lets a destructive tool past the backstop in full (reaches the guard/handler path)', async () => {
+    process.env.PIPEDRIVE_MODE = 'full';
+    const fetchMock = mockApiSuccess({ id: 1 });
+
+    const result = await handleCallTool({
+      params: { name: 'pipedrive_delete_lead', arguments: { id: '550e8400-e29b-41d4-a716-446655440000' } },
+    });
+
+    expect(textOf(result)).not.toContain('MODE_RESTRICTED');
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it('names the active mode and the PIPEDRIVE_MODE knob in the MODE_RESTRICTED message', async () => {
+    process.env.PIPEDRIVE_MODE = 'read-only';
+    const result = await handleCallTool({
+      params: { name: 'pipedrive_create_deal', arguments: { title: 'x' } },
+    });
+
+    expect(textOf(result)).toContain("'read-only'");
+    expect(textOf(result)).toContain('PIPEDRIVE_MODE');
+  });
+
+  it('blocks nothing under setupValidEnv()-style full mode (back-compat)', async () => {
+    delete process.env.PIPEDRIVE_MODE;
+    process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = 'true'; // → resolves to full
+    const fetchMock = mockApiSuccess({ id: 1 });
+
+    const result = await handleCallTool({
+      params: { name: 'pipedrive_delete_lead', arguments: { id: '550e8400-e29b-41d4-a716-446655440000' } },
+    });
+
+    expect(textOf(result)).not.toContain('MODE_RESTRICTED');
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  describe('unknown-tool hint is scoped to the in-mode surface (R6a)', () => {
+    it('excludes write/destructive tool names from the hint in read-only', async () => {
+      process.env.PIPEDRIVE_MODE = 'read-only';
+      const result = await handleCallTool({ params: { name: 'pipedrive_not_a_tool', arguments: {} } });
+
+      expect(textOf(result)).toContain('Error [VALIDATION_ERROR]:');
+      expect(textOf(result)).toContain('Unknown tool: pipedrive_not_a_tool');
+      // Read tools appear; write/destructive tools do not.
+      expect(textOf(result)).toContain('pipedrive_get_deal');
+      expect(textOf(result)).not.toContain('pipedrive_create_deal');
+      expect(textOf(result)).not.toContain('pipedrive_delete_lead');
+    });
+
+    it('includes write/destructive tool names in the hint in full', async () => {
+      process.env.PIPEDRIVE_MODE = 'full';
+      const result = await handleCallTool({ params: { name: 'pipedrive_not_a_tool', arguments: {} } });
+
+      expect(textOf(result)).toContain('pipedrive_create_deal');
+      expect(textOf(result)).toContain('pipedrive_delete_lead');
+    });
+  });
+
+  it('does NOT block a handler-present-but-unregistered tool (undefined-allowed fall-through)', async () => {
+    // getTool('pipedrive_create_synthetic') is undefined (absent from allTools), so even in
+    // read-only the backstop falls through and the synthetic handler runs.
+    process.env.PIPEDRIVE_MODE = 'read-only';
+    syntheticHandler.mockClear();
+
+    const result = await handleCallTool({
+      params: { name: 'pipedrive_create_synthetic', arguments: {} },
+    });
+
+    expect(textOf(result)).not.toContain('MODE_RESTRICTED');
+    expect(syntheticHandler).toHaveBeenCalled();
+    expect(textOf(result)).toBe('synthetic ran');
   });
 });

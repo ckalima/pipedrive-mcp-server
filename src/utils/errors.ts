@@ -24,7 +24,11 @@ export type ErrorCode =
   | "CAPABILITY_RETIRED"
   // Local breaker fast-fail. Distinct from RATE_LIMITED (R11) so the model and
   // stderr telemetry can tell a local back-off apart from a fresh upstream 429.
-  | "CIRCUIT_OPEN";
+  | "CIRCUIT_OPEN"
+  // Tool blocked by the active capability tier (PIPEDRIVE_MODE). Distinct from
+  // DESTRUCTIVE_DISABLED so the model and telemetry can tell "blocked by the active
+  // mode" apart from "destructive specifically disabled" (KTD7).
+  | "MODE_RESTRICTED";
 
 export type McpToolErrorResult = { content: { type: "text"; text: string }[]; isError: true };
 

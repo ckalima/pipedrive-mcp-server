@@ -77,3 +77,12 @@ export function getToolSchema(name: string) {
   return tool?.schema;
 }
 
+/**
+ * Get a registered tool def (carrying its declared `destructive` field) by name, for
+ * capability-mode classification at dispatch time. Returns undefined for an unregistered
+ * name — the dispatcher treats that as a fall-through (see isToolAllowedInMode).
+ */
+export function getTool(name: string) {
+  return allTools.find(t => t.name === name);
+}
+
