@@ -186,12 +186,12 @@ let breakerState: BreakerState = "Closed";
 let consecutiveTripSignals = 0;
 /** Wall-clock ms when the breaker last opened; cooldown is measured from here. */
 let openedAtMs = 0;
-/**
- * True while a half-open probe is outstanding. Acts as the one-slot gate: set
- * synchronously when the breaker hands out the probe so a second concurrent caller
- * cannot also probe, and always cleared when the probe settles in recordOutcome.
- */
-let probeOutstanding = false;
+
+// The HalfOpen state IS the one-slot probe gate: the Open -> HalfOpen transition is
+// synchronous (no await), so the first caller past the cooldown becomes the probe
+// and every concurrent caller then sees HalfOpen and is refused. recordOutcome
+// leaves HalfOpen the moment the probe settles. No separate "probe outstanding"
+// flag is needed — the state alone enforces exactly one in-flight probe.
 
 /** The outcome the client reports back after an attempt settles. */
 export interface BreakerOutcome {
@@ -222,13 +222,13 @@ export function breakerAllowsRequest(nowMs: number): boolean {
   }
   if (breakerState === "Open") {
     if (nowMs - openedAtMs >= BREAKER_COOLDOWN_MS) {
+      // Synchronously claim the single probe slot for THIS caller.
       breakerState = "HalfOpen";
-      probeOutstanding = true;
       return true;
     }
     return false;
   }
-  // HalfOpen: a probe is outstanding (it always is while in this state).
+  // HalfOpen: a probe is already in flight — only one probe at a time.
   return false;
 }
 
@@ -245,7 +245,7 @@ export function breakerAllowsRequest(nowMs: number): boolean {
  */
 export function recordOutcome(outcome: BreakerOutcome, nowMs: number): void {
   if (breakerState === "HalfOpen") {
-    probeOutstanding = false;
+    // The probe settled: leaving HalfOpen releases the single probe slot.
     if (outcome.isSuccess) {
       breakerState = "Closed";
       consecutiveTripSignals = 0;
@@ -286,7 +286,6 @@ export function resetCircuitBreakerState(): void {
   breakerState = "Closed";
   consecutiveTripSignals = 0;
   openedAtMs = 0;
-  probeOutstanding = false;
 }
 
 /**
