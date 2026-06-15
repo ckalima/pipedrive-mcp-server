@@ -8,20 +8,23 @@ This file is a **drafting and review artifact**. Drafting is done here; **sendin
 separate, human-only step** gated by the checklist below. Nothing fresh is posted until every
 gate item is green, so that every link lands on a product matching its claims.
 
-## Execution status (2026-06-14)
+## Execution status (2026-06-15)
 
-Comms have started. The go/no-go gate is fully green (#84/#85/#86 done, core registries live).
+Comms are mid-flight. The go/no-go gate is fully green (#84/#85/#86 done, core registries live).
 All copy below is the **humanized, postable version** with a client-origin framing ("built for
-a client, open-sourced for anyone") and verified factual claims.
+a client, open-sourced for anyone") and verified factual claims. The devcommunity show-and-tell is
+live; **r/mcp is the next, primary targeted post** (r/ClaudeAI runs the same copy for reach).
 
 | Item | Channel | Status |
 |---|---|---|
 | 1 | Pipedrive devcommunity, own show-and-tell topic in **App Development** | ✅ **Live** at https://devcommunity.pipedrive.com/t/open-source-pipedrive-mcp-server-155-tools-v2-first-mit/20392 |
-| 2 | r/ClaudeAI | Staged; holds until item 1 is live (stagger) |
-| 3 | r/sales | Staged; holds until item 1 is live (stagger) |
-| 4 | r/mcp, update on the stale Glama bot listing | Posting now (independent of the stagger; it is a correction to an existing listing, not a fresh announcement) |
+| 2 | r/mcp, fresh top-level show-and-tell (Draft 2) — primary targeted post | Staged; next to fire |
+| 3 | r/ClaudeAI (Draft 2, same copy) — reach | Staged; holds behind r/mcp (stagger) |
+| 4 | r/sales (Draft 3) — sales-ops / Salt & Wind angle | Staged; holds behind r/ClaudeAI (stagger) |
+| 5 | r/mcp, author-update on the stale Glama bot listing (Draft 4) | ✅ Posted 2026-06-14 (correction to an existing listing; ran independently of the stagger) |
 
-Item 1 is live (URL above). r/ClaudeAI and r/sales can now fire, staggered.
+Items 1 and 5 are done. Next to fire: r/mcp show-and-tell (Draft 2), then r/ClaudeAI (same copy),
+then r/sales (Draft 3), staggered.
 
 ## Decision context
 
@@ -41,10 +44,11 @@ All three rows are satisfied as of 2026-06-14.
 | ✅ README tool table + `bundle/manifest.json` regenerated and on `main` (155 tools, no CI drift) | [#85](https://github.com/ckalima/pipedrive-mcp-server/issues/85) | CI green on `main`; README shows **155 tools** |
 | ✅ Core registry listings live and accurate (scoped package, 155-tool count; Glama no longer shows 38). Smithery is deferred by design and awesome-mcp-servers is an open PR; neither blocks comms, since the copy links to the repo and npm, not to individual registries. | [#86](https://github.com/ckalima/pipedrive-mcp-server/issues/86) | `docs/registry-submissions.md`: #1 Official, #2 Glama, #4 mcp.so, #5 PulseMCP all live (see §3 for the Smithery deferral) |
 
-**Send order once green:** (1) Pipedrive devcommunity show-and-tell → (2) r/ClaudeAI → (3) r/sales →
-(4) any newsletter/HN item, individually, only if it still reads well on the day. The r/mcp listing
-update (Draft 4) is a correction to an existing post and runs independently. Stagger, don't blast:
-post one, watch for replies, then proceed.
+**Send order once green:** (1) Pipedrive devcommunity show-and-tell ✅ → (2) r/mcp show-and-tell
+(Draft 2, primary targeted venue) → (3) r/ClaudeAI (Draft 2, same copy, for reach) → (4) r/sales
+(Draft 3) → (5) any newsletter/HN item, individually, only if it still reads well on the day. The
+r/mcp author-update on the old Glama bot listing (Draft 4) was a correction to an existing post and
+already ran independently. Stagger, don't blast: post one, watch for replies, then proceed.
 
 ---
 
@@ -145,48 +149,49 @@ Happy to answer questions about specific endpoints or the v1 to v2 migration cov
 
 ---
 
-## Draft 2: r/ClaudeAI
+## Draft 2: r/mcp and r/ClaudeAI show-and-tell (same copy, posted to each, staggered)
 
-**Title:** `Open-source Pipedrive MCP server: 155 tools, v2-first, MIT`
+Primary targeted venue is **r/mcp** (the dedicated MCP community; mention you're the author to
+request the `mcp-server-authors` flair). **r/ClaudeAI** runs the same copy for reach but is
+high-volume with short shelf life, so it goes second. This is a fresh top-level submission and is
+distinct from Draft 4 (the author-comment correction on the old Glama bot listing) — don't
+cross-link the two. No config block here; the repo link carries setup. Salt & Wind is left
+unnamed in this post (the named usage story lives in Draft 3).
 
-I built an MCP server that lets Claude (Code or Desktop) work directly against Pipedrive CRM.
-It started as a client project, their team wanted to drive Pipedrive through an AI assistant
-instead of living in the UI, and it turned out general enough that I open-sourced it under MIT
-for anyone who wants the same thing.
+**Title:** `Pipedrive has no official MCP server, so we open-sourced ours — 155 tools, v2-first, MIT`
 
-It covers the day-to-day surface: query, create, and update deals, persons, organizations,
-activities, products, projects, tasks, leads, notes, mail, and fields. 155 tools total.
+Pipedrive doesn't have an official MCP server, so the options today are community-built servers
+or a hosted connector. Ours is one of the community ones — but we built it for real work first,
+then open-sourced it under MIT once it was solid.
 
-A few things I cared about while building it:
+It started on a client engagement. A sales team that basically lives in Pipedrive wanted to do
+their reporting and deal analysis by asking Claude instead of clicking through the UI and
+exporting spreadsheets all day. Once it was working it was obviously useful beyond that one
+account, so we cleaned it up and put it out there.
 
-- **v2-first.** Uses Pipedrive's v2 REST API everywhere it exists; v1 only for the handful of
-  capabilities without a v2 equivalent (notes, mail, users, leads CRUD).
-- **Safe by default.** Deletes and other irreversible writes are gated behind an env flag, so
-  out of the box it is read-and-create only. Every tool carries MCP read/destructive/idempotent hints.
-- **Verified, not vibes.** The v2 tools are contract-tested against Pipedrive's OpenAPI spec, and
-  the surface is smoke-tested against a real account (including Growth+ deal installments). Over
-  1,700 tests in CI. MIT licensed, with npm build provenance.
+It covers most of the CRM surface, 155 tools: deals, persons, organizations, activities, products,
+projects, tasks, leads, notes, mail, fields. In practice we use it read-heavy — stuff like "show
+me open deals over $10k by stage," "which deals slipped this month," "what's the activity history
+on this org" all just work.
 
-Config is a standard `.mcp.json` block with an API key:
+A few things we were deliberate about, mostly because pointing an AI at a live CRM made us nervous:
 
-```json
-{
-  "mcpServers": {
-    "pipedrive": {
-      "command": "npx",
-      "args": ["-y", "@ckalima/pipedrive-mcp-server"],
-      "env": {
-        "PIPEDRIVE_API_KEY": "your-40-character-api-key"
-      }
-    }
-  }
-}
-```
+- It's v2-first. Everything uses Pipedrive's newer REST API v2 where it exists, and only falls
+  back to the old v1 for the few things that still have no v2 equivalent (notes, mail, users,
+  leads CRUD).
+- Nothing destructive happens by default. Deletes and other irreversible writes stay off until
+  you flip an env flag, so out of the box it can only read and create. Each tool also reports MCP
+  read/destructive/idempotent hints, so the client knows what a call is about to do before it does it.
+- We didn't want to trust it blindly. The v2 tools are contract-tested against Pipedrive's
+  published OpenAPI spec, and the whole thing is smoke-tested against a real account (including
+  Growth+ deal installments) — the write tests check the field actually changed on the wire, not
+  just that the API said 200. Around 1,700 tests run in CI, and it's on npm with build provenance.
 
-Repo: https://github.com/ckalima/pipedrive-mcp-server
+Repo and setup: https://github.com/ckalima/pipedrive-mcp-server
 npm: https://www.npmjs.com/package/@ckalima/pipedrive-mcp-server
 
-Feedback and issues welcome.
+Feedback welcome, especially if you've built against the Pipedrive API and have opinions on what's
+missing.
 
 ---
 
