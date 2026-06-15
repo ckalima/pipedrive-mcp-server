@@ -55,24 +55,36 @@ export async function handleCallTool(request: { params: { name: string; argument
     );
   }
 
+  // Fail-closed: never dispatch to a handler with no attached schema. Every
+  // registered tool attaches one (no-arg tools use `z.object({})`), so a missing
+  // schema is a registration bug, not a no-arg tool — passing `args` through
+  // unvalidated would let arbitrary input reach the handler (F7/KTD5). The
+  // schema-presence invariant test in tests/unit/gen-docs.test.ts catches an
+  // un-schema'd tool at build time, so this branch is unreachable in practice.
+  if (!schema) {
+    console.error(`[${SERVER_NAME}] No input schema registered for tool: ${name}`);
+    return mcpErrorFromCode(
+      "VALIDATION_ERROR",
+      `No input schema registered for tool: ${name}`,
+      "This tool cannot be invoked safely; report it as a server bug"
+    );
+  }
+
   try {
-    // Validate arguments with Zod schema
-    let validatedArgs = args || {};
-    if (schema) {
-      const parseResult = schema.safeParse(args);
-      if (!parseResult.success) {
-        const errors = parseResult.error.issues
-          .map(e => `${e.path.join(".")}: ${e.message}`)
-          .join("; ");
-        console.error(`[${SERVER_NAME}] Validation error: ${errors}`);
-        return mcpErrorFromCode(
-          "VALIDATION_ERROR",
-          `Invalid arguments: ${errors}`,
-          "Check the tool's inputSchema for required parameters"
-        );
-      }
-      validatedArgs = parseResult.data;
+    // Validate arguments with the tool's Zod schema (guaranteed present above).
+    const parseResult = schema.safeParse(args);
+    if (!parseResult.success) {
+      const errors = parseResult.error.issues
+        .map(e => `${e.path.join(".")}: ${e.message}`)
+        .join("; ");
+      console.error(`[${SERVER_NAME}] Validation error: ${errors}`);
+      return mcpErrorFromCode(
+        "VALIDATION_ERROR",
+        `Invalid arguments: ${errors}`,
+        "Check the tool's inputSchema for required parameters"
+      );
     }
+    const validatedArgs = parseResult.data;
 
     // Execute handler
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

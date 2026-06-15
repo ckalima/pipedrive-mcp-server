@@ -94,6 +94,24 @@ describe('gen-docs generator', () => {
     });
   });
 
+  describe('schema-presence invariant (fail-closed dispatch, U9)', () => {
+    it('attaches an input schema to every registered tool', () => {
+      // The dispatcher is fail-closed: a tool with no `schema` is rejected at
+      // call time rather than run unvalidated (src/index.ts handleCallTool).
+      // This turns that runtime guard into a build-time invariant, so a tool
+      // added without a schema (no-arg tools must use `z.object({})`) is caught
+      // here before it can ship and silently receive unvalidated args.
+      for (const tool of allTools) {
+        const schema = (tool as { schema?: { safeParse?: unknown } }).schema;
+        expect(schema, `${tool.name} must attach an input schema`).toBeDefined();
+        expect(
+          typeof schema?.safeParse,
+          `${tool.name}'s schema must be a Zod schema (have safeParse)`,
+        ).toBe('function');
+      }
+    });
+  });
+
   describe('Growth+ marking', () => {
     it('flags exactly the 4 deal-installment tools', () => {
       const growth = allTools.filter(isGrowthPlus).map((t) => t.name).sort();
