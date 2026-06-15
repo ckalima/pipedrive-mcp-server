@@ -101,6 +101,24 @@ describe('product image schemas (U6)', () => {
         id: 1, base64_data: 'a'.repeat(MAX_IMAGE_B64_LEN + 1), file_name: 'p.png',
       })).toThrow();
     });
+
+    it('should accept a file_path up to the length cap (U10)', () => {
+      const p = '/' + 'a'.repeat(4095); // 4096 chars total
+      const result = UploadProductImageSchema.parse({ id: 1, file_path: p, file_name: 'p.png' });
+      expect(result.file_path).toBe(p);
+    });
+
+    it('should reject a file_path over the length cap (U10)', () => {
+      expect(() => UploadProductImageSchema.parse({
+        id: 1, file_path: '/' + 'a'.repeat(4096), file_name: 'p.png',
+      })).toThrow();
+    });
+
+    it('should reject a file_path containing a control character (U10)', () => {
+      expect(() => UploadProductImageSchema.parse({
+        id: 1, file_path: '/tmp/p\u0000.png', file_name: 'p.png',
+      })).toThrow();
+    });
   });
 
   describe('UpdateProductImageSchema (#69 U5)', () => {

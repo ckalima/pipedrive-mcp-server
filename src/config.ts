@@ -2,6 +2,8 @@
  * Configuration and environment handling for Pipedrive MCP Server
  */
 
+import { resolve } from "node:path";
+
 export interface Config {
   apiKey: string;
   baseUrlV1: string;
@@ -59,6 +61,26 @@ export function getConfig(): Config {
     baseUrlV2: "https://api.pipedrive.com/api/v2",
     enableDestructive: process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE === "true",
   };
+}
+
+/**
+ * Resolves the operator-configured base directory for product-image `file_path`
+ * reads, or null when filesystem reads are disabled (the default).
+ *
+ * Tool-argument-driven filesystem access is dangerous by default (KTD10): over a
+ * local STDIO transport a manipulated agent can name any path the process can
+ * read. Reads are therefore deny-by-default and confined to a single operator-
+ * chosen directory. Setting `PIPEDRIVE_IMAGE_BASE_DIR` opts in and names the
+ * allowlisted root; callers may only read files that resolve under it. Returns
+ * the lexically resolved absolute base path, or null when the var is unset/blank.
+ *
+ * This mirrors the `PIPEDRIVE_ENABLE_DESTRUCTIVE` opt-in posture: a sensitive
+ * capability stays off until the operator deliberately enables it.
+ */
+export function getImageReadBaseDir(): string | null {
+  const raw = process.env.PIPEDRIVE_IMAGE_BASE_DIR;
+  if (!raw || raw.trim().length === 0) return null;
+  return resolve(raw.trim());
 }
 
 /**

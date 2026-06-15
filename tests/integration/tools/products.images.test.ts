@@ -3,19 +3,27 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import { setupValidEnv } from '../../helpers/mockEnv.js';
 import {
   mockApiSuccess,
   mockApiError,
 } from '../../helpers/mockFetch.js';
+import { MAX_IMAGE_FILE_BYTES } from '../../../src/tools/products.js';
 
-// Mock only readFile from node:fs/promises (preserve all other real exports) so
-// the file_path upload branch can be driven deterministically without touching disk.
+// Mock the filesystem reads the guarded file_path path uses (preserve all other
+// real exports) so the upload branch can be driven deterministically without
+// touching disk. realpath + stat + readFile cover canonicalization, the size
+// cap, and the byte read respectively (U10).
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, readFile: vi.fn() };
+  return { ...actual, readFile: vi.fn(), realpath: vi.fn(), stat: vi.fn() };
 });
+
+/** Identity realpath: no symlinks, so canonical path === input path. */
+function realpathIdentity() {
+  vi.mocked(realpath).mockImplementation(async (p) => p as unknown as string);
+}
 
 const imageFixture = {
   id: 42,
@@ -47,6 +55,10 @@ describe('product image tools (U6)', () => {
     setupValidEnv();
     vi.unstubAllGlobals();
     vi.mocked(readFile).mockReset();
+    vi.mocked(realpath).mockReset();
+    vi.mocked(stat).mockReset();
+    // Reads are deny-by-default; each file_path test opts in explicitly.
+    delete process.env.PIPEDRIVE_IMAGE_BASE_DIR;
   });
 
   describe('getProductImage', () => {
@@ -207,32 +219,23 @@ describe('product image tools (U6)', () => {
       expect(parsed.summary).toContain('123');
     });
 
-    it('should read the file server-side in file_path mode (bytes never passed as base64)', async () => {
+    it('should read the file server-side in file_path mode when reads are enabled (bytes never passed as base64)', async () => {
+      process.env.PIPEDRIVE_IMAGE_BASE_DIR = '/imgbase';
+      realpathIdentity();
+      vi.mocked(stat).mockResolvedValue({ size: 5 } as Awaited<ReturnType<typeof stat>>);
       vi.mocked(readFile).mockResolvedValue(Buffer.from('hello'));
       const mockFn = mockApiSuccess(uploadResult);
       const { uploadProductImage } = await getProductsTools();
 
-      await uploadProductImage({ id: 123, file_path: '/tmp/p.png', file_name: 'p.png' });
+      await uploadProductImage({ id: 123, file_path: '/imgbase/p.png', file_name: 'p.png' });
 
-      expect(vi.mocked(readFile)).toHaveBeenCalledWith('/tmp/p.png');
+      expect(vi.mocked(readFile)).toHaveBeenCalledWith('/imgbase/p.png');
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/products/123/images');
       expect(options.method).toBe('POST');
       expect(options.body).toBeInstanceOf(FormData);
       // No base64 string should appear anywhere in the outbound URL
       expect(url).not.toContain(HELLO_B64);
-    });
-
-    it('should return isError and make NO fetch call when file_path read fails', async () => {
-      vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
-      const fetchMock = vi.fn();
-      vi.stubGlobal('fetch', fetchMock);
-      const { uploadProductImage } = await getProductsTools();
-
-      const result = await uploadProductImage({ id: 123, file_path: '/nope/missing.png', file_name: 'p.png' });
-
-      expect(result.isError).toBe(true);
-      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('should return isError on API failure', async () => {
@@ -267,6 +270,112 @@ describe('product image tools (U6)', () => {
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('updated');
       expect(parsed.summary).toContain('123');
+    });
+  });
+
+  describe('product-image file_path gating (U10)', () => {
+    it('rejects a file_path read when PIPEDRIVE_IMAGE_BASE_DIR is unset and names the enabling mechanism', async () => {
+      delete process.env.PIPEDRIVE_IMAGE_BASE_DIR;
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const { uploadProductImage } = await getProductsTools();
+
+      const result = await uploadProductImage({ id: 123, file_path: '/etc/anything.png', file_name: 'p.png' });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('PIPEDRIVE_IMAGE_BASE_DIR');
+      // Disabled rejection happens before any filesystem call or upload.
+      expect(vi.mocked(realpath)).not.toHaveBeenCalled();
+      expect(vi.mocked(readFile)).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects a traversal path that escapes the base dir before any filesystem call', async () => {
+      process.env.PIPEDRIVE_IMAGE_BASE_DIR = '/imgbase';
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const { uploadProductImage } = await getProductsTools();
+
+      const result = await uploadProductImage({
+        id: 123, file_path: '/imgbase/../etc/passwd', file_name: 'p.png',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('outside the permitted image directory');
+      // Lexical containment rejects before any fs call (no realpath, no read).
+      expect(vi.mocked(realpath)).not.toHaveBeenCalled();
+      expect(vi.mocked(readFile)).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects a path whose canonical target escapes the base dir (symlink defense)', async () => {
+      process.env.PIPEDRIVE_IMAGE_BASE_DIR = '/imgbase';
+      vi.mocked(realpath).mockImplementation(async (p) =>
+        (p === '/imgbase' ? '/imgbase' : '/etc/passwd') as unknown as string
+      );
+      const { uploadProductImage } = await getProductsTools();
+
+      const result = await uploadProductImage({
+        id: 123, file_path: '/imgbase/link.png', file_name: 'p.png',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('outside the permitted image directory');
+      expect(vi.mocked(readFile)).not.toHaveBeenCalled();
+    });
+
+    it('rejects a file exceeding the read-size cap with a structured error and no read', async () => {
+      process.env.PIPEDRIVE_IMAGE_BASE_DIR = '/imgbase';
+      realpathIdentity();
+      vi.mocked(stat).mockResolvedValue(
+        { size: MAX_IMAGE_FILE_BYTES + 1 } as Awaited<ReturnType<typeof stat>>
+      );
+      const { uploadProductImage } = await getProductsTools();
+
+      const result = await uploadProductImage({
+        id: 123, file_path: '/imgbase/big.png', file_name: 'p.png',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('read limit');
+      expect(vi.mocked(readFile)).not.toHaveBeenCalled();
+    });
+
+    it('does not reflect the resolved path or raw fs error when a read fails', async () => {
+      process.env.PIPEDRIVE_IMAGE_BASE_DIR = '/imgbase';
+      realpathIdentity();
+      vi.mocked(stat).mockResolvedValue({ size: 10 } as Awaited<ReturnType<typeof stat>>);
+      vi.mocked(readFile).mockRejectedValue(
+        Object.assign(new Error('EACCES: permission denied, open /imgbase/secret.png'), { code: 'EACCES' })
+      );
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const { uploadProductImage } = await getProductsTools();
+
+      const result = await uploadProductImage({
+        id: 123, file_path: '/imgbase/secret.png', file_name: 'p.png',
+      });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0].text;
+      expect(text).not.toContain('/imgbase/secret.png');
+      expect(text).not.toContain('EACCES');
+      expect(text).not.toContain('permission denied');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('gates updateProductImage file_path reads identically (disabled by default)', async () => {
+      delete process.env.PIPEDRIVE_IMAGE_BASE_DIR;
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const { updateProductImage } = await getProductsTools();
+
+      const result = await updateProductImage({ id: 123, file_path: '/etc/anything.png', file_name: 'p.png' });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('PIPEDRIVE_IMAGE_BASE_DIR');
+      expect(vi.mocked(readFile)).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 });

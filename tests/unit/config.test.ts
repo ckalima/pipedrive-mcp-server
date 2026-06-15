@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getConfig, validateConfig } from '../../src/config.js';
+import { resolve } from 'node:path';
+import { getConfig, validateConfig, getImageReadBaseDir } from '../../src/config.js';
 import { VALID_API_KEY, testApiKeys, clearApiKey, setupEnvWithApiKey } from '../helpers/mockEnv.js';
 
 describe('config', () => {
@@ -84,6 +85,31 @@ describe('config', () => {
         const config = getConfig();
         expect(config.enableDestructive).toBe(false);
       });
+    });
+  });
+
+  describe('getImageReadBaseDir (U10)', () => {
+    beforeEach(() => {
+      delete process.env.PIPEDRIVE_IMAGE_BASE_DIR;
+    });
+
+    it('returns null when the var is unset (reads disabled by default)', () => {
+      expect(getImageReadBaseDir()).toBeNull();
+    });
+
+    it('returns null when the var is blank or whitespace', () => {
+      process.env.PIPEDRIVE_IMAGE_BASE_DIR = '   ';
+      expect(getImageReadBaseDir()).toBeNull();
+    });
+
+    it('returns the resolved absolute base dir when set', () => {
+      process.env.PIPEDRIVE_IMAGE_BASE_DIR = '/srv/images';
+      expect(getImageReadBaseDir()).toBe('/srv/images');
+    });
+
+    it('resolves a relative base dir against the cwd', () => {
+      process.env.PIPEDRIVE_IMAGE_BASE_DIR = 'images';
+      expect(getImageReadBaseDir()).toBe(resolve('images'));
     });
   });
 

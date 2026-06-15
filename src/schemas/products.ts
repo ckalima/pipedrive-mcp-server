@@ -255,8 +255,10 @@ export const MAX_IMAGE_B64_LEN = 6_900_000;
  * `base64_data` (transport-safe over STDIO). Exactly one is required.
  */
 export const UploadProductImageSchema = IdParamSchema.extend({
-  file_path: z.string().min(1).optional()
-    .describe("Path the SERVER reads via fs.readFile (use when the caller shares the server filesystem). Mutually exclusive with base64_data."),
+  file_path: z.string().min(1).max(4096)
+    .refine((p) => !/[\u0000-\u001f]/.test(p), "file_path must not contain control characters")
+    .optional()
+    .describe("Path the SERVER reads via fs.readFile, confined to the PIPEDRIVE_IMAGE_BASE_DIR directory (filesystem reads are disabled unless that variable is set). Mutually exclusive with base64_data."),
   base64_data: z.string().min(1).max(MAX_IMAGE_B64_LEN).optional()
     .describe("Base64-encoded image bytes (transport-safe fallback). Mutually exclusive with file_path."),
   file_name: z.string().min(1).max(255)

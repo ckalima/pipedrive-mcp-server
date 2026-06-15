@@ -227,8 +227,8 @@ Once configured, Claude can access your Pipedrive data:
 | `pipedrive_get_product_followers_changelog` | Get the followers changelog for a product. |
 | `pipedrive_get_product_image` | Get the image of a product (returns a single image with a public URL valid for 7 days). |
 | `pipedrive_delete_product_image` 🔒 | Delete the image of a product. |
-| `pipedrive_upload_product_image` | Upload an image for a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem — only use it when the server shares your filesystem (e.g. a local CLI); otherwise use base64_data, which is transport-safe. |
-| `pipedrive_update_product_image` | Update (replace) the image of a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem — only use it when the server shares your filesystem (e.g. a local CLI); otherwise use base64_data, which is transport-safe. |
+| `pipedrive_upload_product_image` | Upload an image for a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem and is disabled by default — the operator must set PIPEDRIVE_IMAGE_BASE_DIR and the path must resolve within it; otherwise use base64_data, which is transport-safe. |
+| `pipedrive_update_product_image` | Update (replace) the image of a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem and is disabled by default — the operator must set PIPEDRIVE_IMAGE_BASE_DIR and the path must resolve within it; otherwise use base64_data, which is transport-safe. |
 
 ### Tasks
 

@@ -2,8 +2,10 @@
  * Product-related MCP tools for Pipedrive
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
+import { resolve as resolvePath, relative as relativePath, isAbsolute } from "node:path";
 import { getClient } from "../client.js";
+import { getImageReadBaseDir } from "../config.js";
 import {
   ListProductsSchema,
   GetProductSchema,
@@ -62,10 +64,116 @@ function inferImageMimeType(fileName: string, explicit?: string): string {
   return IMAGE_MIME_BY_EXT[ext] ?? "application/octet-stream";
 }
 
+// ─── U10: bounded, operator-gated product-image file reads (F6, KTD10) ─────────
+// A caller-supplied `file_path` is a first-class dangerous surface: over a local
+// STDIO transport a manipulated agent can name any path the process can read.
+// Reads are deny-by-default, confined to the operator's PIPEDRIVE_IMAGE_BASE_DIR,
+// size-capped before allocation, and never reflect the resolved path or raw fs
+// error back to the model (errors route through fixed, path-free strings).
+
+/**
+ * Upper bound on bytes a `file_path` read may return (~5 MB), mirroring the
+ * base64 input cap so neither image input vector can force a huge allocation (OOM).
+ */
+export const MAX_IMAGE_FILE_BYTES = 5_000_000;
+
+/** Fixed error for a path that escapes the allowlisted base directory. */
+function outsideBaseDirError(): McpToolErrorResult {
+  return mcpErrorFromCode(
+    "VALIDATION_ERROR",
+    "The requested file is outside the permitted image directory.",
+    "Place the file under the directory named by PIPEDRIVE_IMAGE_BASE_DIR, or pass base64_data instead."
+  );
+}
+
+/** Fixed, path-free error for any filesystem read failure (no path or raw fs error). */
+function imageReadFailedError(): McpToolErrorResult {
+  return mcpErrorFromCode(
+    "VALIDATION_ERROR",
+    "Could not read the image file.",
+    "Verify the file exists under the permitted directory and is readable, or pass base64_data instead."
+  );
+}
+
+/** True when `target` is the base directory itself or nested within it. */
+function isWithinBaseDir(baseDir: string, target: string): boolean {
+  if (target === baseDir) return true;
+  const rel = relativePath(baseDir, target);
+  return rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel);
+}
+
+/**
+ * Reads an image from a caller-supplied path under the deny-by-default,
+ * base-dir-confined, size-capped policy. Returns the bytes or an MCP error
+ * result; never throws and never reflects the path or raw fs error.
+ */
+async function readGuardedImageFile(
+  filePath: string
+): Promise<{ buffer: Buffer } | { error: McpToolErrorResult }> {
+  const baseDir = getImageReadBaseDir();
+
+  // Deny-by-default: reads stay off until the operator opts in. Emit a stderr
+  // hint naming the enabling mechanism so the documented use is not silently broken.
+  if (!baseDir) {
+    console.error(
+      "[pipedrive-mcp-server] Rejected a product-image file_path read: filesystem reads are disabled. Set PIPEDRIVE_IMAGE_BASE_DIR to an allowed directory to enable them, or pass base64_data."
+    );
+    return {
+      error: mcpErrorFromCode(
+        "VALIDATION_ERROR",
+        "Reading images from a file path is disabled on this server.",
+        "Set PIPEDRIVE_IMAGE_BASE_DIR to an allowed directory to enable file_path reads, or pass base64_data instead."
+      ),
+    };
+  }
+
+  // Lexical containment: reject a traversal path before touching the filesystem.
+  const resolved = resolvePath(baseDir, filePath);
+  if (!isWithinBaseDir(baseDir, resolved)) {
+    return { error: outsideBaseDirError() };
+  }
+
+  // Canonicalize both base and target to defeat symlink escape, then re-check
+  // containment against the canonical base.
+  let canonicalBase: string;
+  let canonicalTarget: string;
+  try {
+    canonicalBase = await realpath(baseDir);
+    canonicalTarget = await realpath(resolved);
+  } catch {
+    return { error: imageReadFailedError() };
+  }
+  if (!isWithinBaseDir(canonicalBase, canonicalTarget)) {
+    return { error: outsideBaseDirError() };
+  }
+
+  // Size cap before reading the bytes (bounds the allocation; OOM defense).
+  try {
+    const info = await stat(canonicalTarget);
+    if (info.size > MAX_IMAGE_FILE_BYTES) {
+      return {
+        error: mcpErrorFromCode(
+          "VALIDATION_ERROR",
+          `Image file exceeds the ${MAX_IMAGE_FILE_BYTES}-byte read limit.`,
+          "Use a smaller image, or pass base64_data within the documented size limit."
+        ),
+      };
+    }
+  } catch {
+    return { error: imageReadFailedError() };
+  }
+
+  try {
+    return { buffer: await readFile(canonicalTarget) };
+  } catch {
+    return { error: imageReadFailedError() };
+  }
+}
+
 /**
  * Resolves the hybrid file_path/base64_data input into a FormData with the image
  * bytes under the `data` field. Returns an MCP error result if a file_path read
- * fails (never throws).
+ * fails or is disallowed (never throws).
  */
 async function buildImageFormData(
   params: UploadProductImageParams
@@ -73,17 +181,9 @@ async function buildImageFormData(
   let buffer: Buffer;
 
   if (params.file_path) {
-    try {
-      buffer = await readFile(params.file_path);
-    } catch (error) {
-      return {
-        error: mcpErrorFromCode(
-          "VALIDATION_ERROR",
-          `Could not read file at "${params.file_path}": ${error instanceof Error ? error.message : "unknown error"}`,
-          "Verify the path exists and is readable by the server process, or pass base64_data instead."
-        ),
-      };
-    }
+    const read = await readGuardedImageFile(params.file_path);
+    if ("error" in read) return { error: read.error };
+    buffer = read.buffer;
   } else {
     buffer = Buffer.from(params.base64_data!, "base64");
   }
@@ -971,12 +1071,12 @@ export const productTools = [
   // Product image upload/update tools (#69 U5)
   {
     name: "pipedrive_upload_product_image",
-    description: "Upload an image for a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem — only use it when the server shares your filesystem (e.g. a local CLI); otherwise use base64_data, which is transport-safe.",
+    description: "Upload an image for a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem and is disabled by default — the operator must set PIPEDRIVE_IMAGE_BASE_DIR and the path must resolve within it; otherwise use base64_data, which is transport-safe.",
     inputSchema: {
       type: "object" as const,
       properties: {
         id: { type: "number", description: "The product ID" },
-        file_path: { type: "string", description: "Path the server reads via fs.readFile. Mutually exclusive with base64_data." },
+        file_path: { type: "string", description: "Path the server reads via fs.readFile, confined to PIPEDRIVE_IMAGE_BASE_DIR (filesystem reads are disabled unless that variable is set). Mutually exclusive with base64_data." },
         base64_data: { type: "string", description: "Base64-encoded image bytes (transport-safe). Mutually exclusive with file_path." },
         file_name: { type: "string", description: "Original filename including extension (e.g. product.png)" },
         mime_type: { type: "string", enum: ["image/png", "image/jpeg", "image/gif", "image/webp"], description: "MIME type. Inferred from file_name if omitted." },
@@ -988,12 +1088,12 @@ export const productTools = [
   },
   {
     name: "pipedrive_update_product_image",
-    description: "Update (replace) the image of a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem — only use it when the server shares your filesystem (e.g. a local CLI); otherwise use base64_data, which is transport-safe.",
+    description: "Update (replace) the image of a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem and is disabled by default — the operator must set PIPEDRIVE_IMAGE_BASE_DIR and the path must resolve within it; otherwise use base64_data, which is transport-safe.",
     inputSchema: {
       type: "object" as const,
       properties: {
         id: { type: "number", description: "The product ID" },
-        file_path: { type: "string", description: "Path the server reads via fs.readFile. Mutually exclusive with base64_data." },
+        file_path: { type: "string", description: "Path the server reads via fs.readFile, confined to PIPEDRIVE_IMAGE_BASE_DIR (filesystem reads are disabled unless that variable is set). Mutually exclusive with base64_data." },
         base64_data: { type: "string", description: "Base64-encoded image bytes (transport-safe). Mutually exclusive with file_path." },
         file_name: { type: "string", description: "Original filename including extension (e.g. product.png)" },
         mime_type: { type: "string", enum: ["image/png", "image/jpeg", "image/gif", "image/webp"], description: "MIME type. Inferred from file_name if omitted." },
