@@ -102,7 +102,10 @@ describe('errors', () => {
 
       expect(result.code).toBe('RATE_LIMITED');
       expect(result.message).toContain('Rate limit');
-      expect(result.suggestion).toContain('Wait 60 seconds');
+      // The client now auto-retries 429s, so the suggestion is softened and no
+      // longer tells the model to "wait 60 seconds" (the wait already happened).
+      expect(result.suggestion).not.toContain('Wait 60 seconds');
+      expect(result.suggestion).toContain('retried automatically');
     });
 
     it('should handle unknown status codes as API_ERROR', () => {

@@ -8,8 +8,10 @@
  * mirroring how `version-routing.ts` separates routing state from transport (KTD1).
  *
  * It never imports `client.ts` (no cycle): the client imports from here. The only
- * dependency is `errors.ts` for the shared error-response shape (added in U2).
+ * dependency is `errors.ts` for the shared error-response shape.
  */
+
+import { createErrorResponse, type ErrorResponse } from "./utils/errors.js";
 
 // ─── Tuning constants (KTD4) ──────────────────────────────────────────────────
 // Hardcoded, centralized expert knobs — NOT env vars. If mis-set they reintroduce
@@ -166,4 +168,139 @@ export function parseRetryAfterMs(headers: Headers, nowMs: number): number | nul
   }
 
   return null;
+}
+
+// ─── Circuit breaker (U2: R6, R7, R9, R10, R11; KTD7) ─────────────────────────
+//
+// Per-process consecutive-count breaker. Valid because one STDIO process == one
+// API token == one account, mirroring version-routing.ts's module state plus its
+// resetVersionRoutingState(). Mutations are synchronous (no await between read and
+// write) so concurrent in-flight tool calls cannot both probe or both miss the
+// threshold (see plan System-Wide Impact: "breaker mutations must be synchronous").
+
+/** The three breaker states (KTD7). */
+export type BreakerState = "Closed" | "Open" | "HalfOpen";
+
+let breakerState: BreakerState = "Closed";
+/** Consecutive trip signals (429/503) seen while Closed. One success resets it. */
+let consecutiveTripSignals = 0;
+/** Wall-clock ms when the breaker last opened; cooldown is measured from here. */
+let openedAtMs = 0;
+/**
+ * True while a half-open probe is outstanding. Acts as the one-slot gate: set
+ * synchronously when the breaker hands out the probe so a second concurrent caller
+ * cannot also probe, and always cleared when the probe settles in recordOutcome.
+ */
+let probeOutstanding = false;
+
+/** The outcome the client reports back after an attempt settles. */
+export interface BreakerOutcome {
+  /** True on a 2xx response. */
+  isSuccess: boolean;
+  /** True on a 429 or 503 (R10). */
+  isTripSignal: boolean;
+}
+
+/**
+ * Gate consulted before every attempt. Returns whether an upstream request is
+ * permitted right now and, as a side effect, drives the Open -> HalfOpen
+ * transition once the cooldown elapses.
+ *
+ *   Closed   -> always true.
+ *   Open      -> false until `nowMs - openedAtMs >= BREAKER_COOLDOWN_MS`, at which
+ *               point it transitions to HalfOpen, hands THIS caller the single
+ *               probe slot, and returns true.
+ *   HalfOpen -> false (a probe is already outstanding; only one probe at a time).
+ *
+ * After a `true` result the caller can read getBreakerState(): a "HalfOpen" state
+ * means this caller holds the probe slot and must run a single attempt with retry
+ * disabled (KTD7).
+ */
+export function breakerAllowsRequest(nowMs: number): boolean {
+  if (breakerState === "Closed") {
+    return true;
+  }
+  if (breakerState === "Open") {
+    if (nowMs - openedAtMs >= BREAKER_COOLDOWN_MS) {
+      breakerState = "HalfOpen";
+      probeOutstanding = true;
+      return true;
+    }
+    return false;
+  }
+  // HalfOpen: a probe is outstanding (it always is while in this state).
+  return false;
+}
+
+/**
+ * Records the outcome of a settled attempt and advances the breaker.
+ *
+ *   HalfOpen (this was the probe): success -> Closed + counter 0; any non-success
+ *     (4xx/5xx/network/timeout, not only 429/503) -> Open + cooldown restart.
+ *     The probe slot is always released.
+ *   Closed: success or any non-trip outcome -> counter 0 (an interleaved success
+ *     or validation error means the stream is not a pure storm). A trip signal
+ *     increments the consecutive counter and opens the breaker at BREAKER_THRESHOLD.
+ *   Open: defensive no-op (no request should have been made while Open).
+ */
+export function recordOutcome(outcome: BreakerOutcome, nowMs: number): void {
+  if (breakerState === "HalfOpen") {
+    probeOutstanding = false;
+    if (outcome.isSuccess) {
+      breakerState = "Closed";
+      consecutiveTripSignals = 0;
+    } else {
+      breakerState = "Open";
+      openedAtMs = nowMs;
+    }
+    return;
+  }
+
+  if (breakerState === "Open") {
+    return;
+  }
+
+  // Closed
+  if (outcome.isSuccess || !outcome.isTripSignal) {
+    consecutiveTripSignals = 0;
+    return;
+  }
+  consecutiveTripSignals += 1;
+  if (consecutiveTripSignals >= BREAKER_THRESHOLD) {
+    breakerState = "Open";
+    openedAtMs = nowMs;
+  }
+}
+
+/** Current breaker state, for the client's probe detection and telemetry. */
+export function getBreakerState(): BreakerState {
+  return breakerState;
+}
+
+/**
+ * Clears the per-process breaker state. For test isolation, mirroring
+ * resetVersionRoutingState() (version-routing.ts). Wired into tests/setup.ts's
+ * global beforeEach because module-level state leaks across tests in a worker.
+ */
+export function resetCircuitBreakerState(): void {
+  breakerState = "Closed";
+  consecutiveTripSignals = 0;
+  openedAtMs = 0;
+  probeOutstanding = false;
+}
+
+/**
+ * The breaker-open fast-fail error (R7, R11). A new distinct code (CIRCUIT_OPEN),
+ * never RATE_LIMITED, so the model and telemetry can tell a local back-off apart
+ * from a fresh upstream 429. The message and suggestion are fully static and
+ * server-authored — no runtime value is interpolated (mirroring
+ * capabilityRetiredError); the "~60 seconds" is a hardcoded approximation of
+ * BREAKER_COOLDOWN_MS, not a computed value.
+ */
+export function circuitOpenError(): ErrorResponse {
+  return createErrorResponse(
+    "CIRCUIT_OPEN",
+    "Requests are being held back to protect the shared Pipedrive rate limit after repeated rate-limit or service-unavailable responses.",
+    "This is a local safeguard, not a fresh upstream rejection. Wait about 60 seconds before retrying; a single probe will test recovery automatically.",
+  );
 }

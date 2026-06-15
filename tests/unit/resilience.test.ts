@@ -6,14 +6,25 @@
  * circuit breaker (U2) is tested in the second half of this file.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   classifyOutcome,
   computeBackoffMs,
   parseRetryAfterMs,
+  breakerAllowsRequest,
+  recordOutcome,
+  getBreakerState,
+  resetCircuitBreakerState,
+  circuitOpenError,
   BACKOFF_BASE_MS,
   BACKOFF_CAP_MS,
+  BREAKER_THRESHOLD,
+  BREAKER_COOLDOWN_MS,
 } from '../../src/resilience.js';
+
+const trip = { isSuccess: false, isTripSignal: true };
+const ok = { isSuccess: true, isTripSignal: false };
+const nonTripFailure = { isSuccess: false, isTripSignal: false };
 
 describe('classifyOutcome (U1)', () => {
   describe('reads (GET)', () => {
@@ -157,5 +168,136 @@ describe('parseRetryAfterMs (U1, KTD6)', () => {
 
   it('header lookup is case-insensitive', () => {
     expect(parseRetryAfterMs(headers({ 'RETRY-AFTER': '4' }), NOW)).toBe(4000);
+  });
+});
+
+describe('circuit breaker (U2, KTD7)', () => {
+  const T0 = 1_000_000; // fixed wall-clock reference (ms)
+
+  beforeEach(() => {
+    resetCircuitBreakerState();
+  });
+
+  it('starts Closed and allows requests', () => {
+    expect(getBreakerState()).toBe('Closed');
+    expect(breakerAllowsRequest(T0)).toBe(true);
+  });
+
+  it('stays Closed for THRESHOLD-1 trip signals; the THRESHOLD-th opens it', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) {
+      recordOutcome(trip, T0);
+      expect(getBreakerState()).toBe('Closed');
+      expect(breakerAllowsRequest(T0)).toBe(true);
+    }
+    recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Open');
+  });
+
+  it('503 increments the counter identically to 429', () => {
+    // Drive the trip with a mix; both 429 and 503 arrive as isTripSignal:true.
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) {
+      recordOutcome(trip, T0);
+    }
+    expect(getBreakerState()).toBe('Open');
+  });
+
+  it('Open fast-fails within cooldown, then half-opens after the cooldown elapses', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Open');
+
+    // Within cooldown: no request allowed, still Open.
+    expect(breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS - 1)).toBe(false);
+    expect(getBreakerState()).toBe('Open');
+
+    // Cooldown elapsed: transitions to HalfOpen and hands out one probe slot.
+    expect(breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS)).toBe(true);
+    expect(getBreakerState()).toBe('HalfOpen');
+  });
+
+  it('half-open allows only one concurrent probe', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    expect(breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS)).toBe(true); // probe slot taken
+    // A second concurrent caller, before the probe settles, is refused.
+    expect(breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS)).toBe(false);
+    expect(breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS + 5)).toBe(false);
+  });
+
+  it('half-open probe success closes the breaker and zeroes the counter', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS); // -> HalfOpen, probe out
+    recordOutcome(ok, T0 + BREAKER_COOLDOWN_MS);
+    expect(getBreakerState()).toBe('Closed');
+    // Counter is zeroed: THRESHOLD-1 fresh trips stay Closed.
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Closed');
+  });
+
+  it('half-open probe 429/503 reopens and restarts the cooldown (AE4)', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    const halfOpenAt = T0 + BREAKER_COOLDOWN_MS;
+    breakerAllowsRequest(halfOpenAt); // -> HalfOpen
+    recordOutcome(trip, halfOpenAt); // probe is itself a trip -> reopen
+    expect(getBreakerState()).toBe('Open');
+    // Cooldown restarts from halfOpenAt, not T0.
+    expect(breakerAllowsRequest(halfOpenAt + BREAKER_COOLDOWN_MS - 1)).toBe(false);
+    expect(breakerAllowsRequest(halfOpenAt + BREAKER_COOLDOWN_MS)).toBe(true);
+    expect(getBreakerState()).toBe('HalfOpen');
+  });
+
+  it.each([
+    ['a 500 (non-trip failure)', nonTripFailure],
+    ['a network error/timeout', nonTripFailure],
+  ])('half-open probe failure via %s reopens, releases the slot, and is allowed after a fresh cooldown', (_label, outcome) => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    const halfOpenAt = T0 + BREAKER_COOLDOWN_MS;
+    breakerAllowsRequest(halfOpenAt); // -> HalfOpen
+    recordOutcome(outcome, halfOpenAt); // any non-success reopens
+    expect(getBreakerState()).toBe('Open');
+    // Slot released: after a fresh cooldown a new probe is handed out.
+    expect(breakerAllowsRequest(halfOpenAt + BREAKER_COOLDOWN_MS)).toBe(true);
+    expect(getBreakerState()).toBe('HalfOpen');
+  });
+
+  it('a success resets the consecutive counter (THRESHOLD-1, success, THRESHOLD-1 -> still Closed)', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
+    recordOutcome(ok, T0);
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Closed');
+  });
+
+  it('a non-trip failure (e.g. validation error) also resets the consecutive counter', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
+    recordOutcome(nonTripFailure, T0);
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Closed');
+  });
+
+  it('resetCircuitBreakerState returns to Closed with a zeroed counter', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Open');
+    resetCircuitBreakerState();
+    expect(getBreakerState()).toBe('Closed');
+    expect(breakerAllowsRequest(T0)).toBe(true);
+  });
+});
+
+describe('circuitOpenError (U2, R11)', () => {
+  it('returns the CIRCUIT_OPEN code, never RATE_LIMITED', () => {
+    const err = circuitOpenError();
+    expect(err.code).toBe('CIRCUIT_OPEN');
+    expect(err.code).not.toBe('RATE_LIMITED');
+  });
+
+  it('has fixed, server-authored message and suggestion with no interpolated runtime/token value', () => {
+    const err = circuitOpenError();
+    expect(typeof err.message).toBe('string');
+    expect(err.message.length).toBeGreaterThan(0);
+    expect(err.suggestion).toBeTruthy();
+    // Identical across calls -> nothing runtime-derived is interpolated.
+    expect(circuitOpenError()).toEqual(err);
+    // No token-like value leaks into the static strings.
+    const blob = `${err.message} ${err.suggestion}`;
+    expect(blob).not.toMatch(/api_token/i);
+    expect(blob).not.toMatch(/[a-f0-9]{40}/i);
   });
 });

@@ -19,7 +19,10 @@ export type ErrorCode =
   | "NETWORK_ERROR"
   | "DESTRUCTIVE_DISABLED"
   | "RESPONSE_TOO_LARGE"
-  | "CAPABILITY_RETIRED";
+  | "CAPABILITY_RETIRED"
+  // Local breaker fast-fail. Distinct from RATE_LIMITED (R11) so the model and
+  // stderr telemetry can tell a local back-off apart from a fresh upstream 429.
+  | "CIRCUIT_OPEN";
 
 export type McpToolErrorResult = { content: { type: "text"; text: string }[]; isError: true };
 
@@ -160,10 +163,14 @@ export function handleApiError(status: number, body: unknown): ErrorResponse {
         "Verify the ID exists in your Pipedrive account"
       );
     case 429:
+      // The client now auto-retries 429s with bounded backoff (resilience.ts), so
+      // this surfaces only after retries were already exhausted. The suggestion is
+      // softened accordingly — telling the model to "wait 60 seconds" would be
+      // misleading now that the wait already happened.
       return createErrorResponse(
         "RATE_LIMITED",
         "Rate limit exceeded",
-        "Wait 60 seconds before retrying or reduce batch size"
+        "The request was retried automatically with backoff but is still rate limited. Pause before retrying and consider reducing batch size."
       );
     default:
       return createErrorResponse(
