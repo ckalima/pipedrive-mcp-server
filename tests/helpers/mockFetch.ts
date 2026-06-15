@@ -9,6 +9,12 @@ export interface MockResponseOptions {
   ok?: boolean;
   data?: unknown;
   error?: string;
+  /**
+   * Extra response headers (case-insensitive). Used by the resilience suite to set
+   * `Retry-After` / `x-ratelimit-reset` so the retry driver's honored-wait path can
+   * be exercised. Merged after the default `Content-Type: application/json`.
+   */
+  headers?: Record<string, string>;
   additional_data?: {
     pagination?: {
       more_items_in_collection?: boolean;
@@ -27,6 +33,7 @@ export function createMockResponse(options: MockResponseOptions = {}): Response 
     ok = status >= 200 && status < 300,
     data,
     error,
+    headers: extraHeaders,
     additional_data,
   } = options;
 
@@ -38,7 +45,7 @@ export function createMockResponse(options: MockResponseOptions = {}): Response 
     ok,
     status,
     statusText: getStatusText(status),
-    headers: new Headers({ 'Content-Type': 'application/json' }),
+    headers: new Headers({ 'Content-Type': 'application/json', ...extraHeaders }),
     json: async () => body,
     text: async () => JSON.stringify(body),
     clone: function() { return this; },
@@ -90,13 +97,15 @@ export function mockApiSuccess<T>(data: T, additionalData?: MockResponseOptions[
 }
 
 /**
- * Creates standard API error response
+ * Creates standard API error response. Optional headers let rate-limit suites
+ * attach `Retry-After` / `x-ratelimit-reset` to a 429/503.
  */
-export function mockApiError(status: number, error: string) {
+export function mockApiError(status: number, error: string, headers?: Record<string, string>) {
   return mockFetch({
     status,
     ok: false,
     error,
+    headers,
   });
 }
 

@@ -304,3 +304,43 @@ export function circuitOpenError(): ErrorResponse {
     "This is a local safeguard, not a fresh upstream rejection. Wait about 60 seconds before retrying; a single probe will test recovery automatically.",
   );
 }
+
+// ─── Backoff sleep seam (KTD9 alternative) ────────────────────────────────────
+//
+// The retry driver (client.ts) awaits resilientSleep() between attempts. The plan
+// (KTD9) weighed vitest fake timers against parameter injection and chose fake
+// timers, but explicitly kept injection as the sanctioned fallback "if fake-timer/
+// async interleaving proves awkward." It is: a single 5xx/429/network response on
+// any GET now read-retries, so dozens of pre-existing tool tests across the suite
+// would otherwise incur real backoff waits. A module-level sleep seam, no-op'd once
+// in tests/setup.ts, neutralizes every backoff wall-clock wait suite-wide and lets
+// the few timing-sensitive resilience tests record requested waits deterministically
+// (the budget is debited by the *computed* wait amount, not by a wall-clock delta).
+// This is the same category of test-only seam as resetCircuitBreakerState() — a
+// reset/override that lives in production for isolation, not a behavior change.
+
+/** Sleep used by the retry driver. Injectable for test isolation. */
+export type SleepFn = (ms: number) => Promise<void>;
+
+const realSleep: SleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let sleepImpl: SleepFn = realSleep;
+
+/** Awaits the (possibly overridden) backoff sleep. Production uses a real timer. */
+export function resilientSleep(ms: number): Promise<void> {
+  return sleepImpl(ms);
+}
+
+/**
+ * Test-only: override the backoff sleep (e.g. a zero-delay no-op or a recorder
+ * that pushes the requested ms onto an array). Wired into tests/setup.ts so no
+ * real backoff wait ever runs in the suite.
+ */
+export function setResilienceSleepForTests(fn: SleepFn): void {
+  sleepImpl = fn;
+}
+
+/** Test-only: restore the real-timer backoff sleep. */
+export function resetResilienceSleepForTests(): void {
+  sleepImpl = realSleep;
+}

@@ -4,6 +4,7 @@
 
 import { vi, beforeEach, afterEach } from 'vitest';
 import { resetVersionRoutingState } from '../src/version-routing.js';
+import { resetCircuitBreakerState, setResilienceSleepForTests } from '../src/resilience.js';
 
 // Store original environment
 const originalEnv = { ...process.env };
@@ -21,6 +22,16 @@ beforeEach(() => {
   // warned set makes the once-per-session assertions order-dependent (see plan
   // Risks: test-isolation footgun).
   resetVersionRoutingState();
+
+  // Clear the resilience circuit breaker's module-level state for the same reason
+  // (R9): without this, a breaker opened by one test bleeds into the next.
+  resetCircuitBreakerState();
+
+  // Neutralize backoff waits suite-wide. Reads now retry transient failures, so a
+  // single 5xx/429/network response on any GET would otherwise incur real backoff
+  // sleeps. A zero-delay sleep keeps the suite fast with no real waits; resilience
+  // tests that need to assert wait amounts install their own recording sleep.
+  setResilienceSleepForTests(() => Promise.resolve());
 });
 
 // Restore original environment after each test
