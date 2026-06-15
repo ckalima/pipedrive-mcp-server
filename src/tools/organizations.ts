@@ -27,7 +27,7 @@ import {
 } from "../schemas/organizations.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 /**
  * List organizations with optional filtering
@@ -56,16 +56,11 @@ export async function listOrganizations(params: ListOrganizationsParams) {
   const orgs = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("organization", orgs.length, pagination.has_more),
-        data: orgs,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("organization", orgs.length, pagination.has_more),
+    data: orgs,
+    pagination,
+  });
 }
 
 /**
@@ -88,15 +83,10 @@ export async function getOrganization(params: GetOrganizationParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Organization ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Organization ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -122,15 +112,10 @@ export async function createOrganization(params: CreateOrganizationParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Organization created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Organization created",
+    data: response.data,
+  });
 }
 
 /**
@@ -155,15 +140,10 @@ export async function updateOrganization(params: UpdateOrganizationParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Organization ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Organization ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -187,16 +167,11 @@ export async function searchOrganizations(params: SearchOrganizationsParams) {
 
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Search results for "${params.term}"`,
-        data: response.data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Search results for "${params.term}"`,
+    data: response.data,
+    pagination,
+  });
 }
 
 /**
@@ -214,15 +189,10 @@ export async function deleteOrganization(params: DeleteOrganizationParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Organization ${params.id} deleted (will be permanently removed after 30 days)`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Organization ${params.id} deleted (will be permanently removed after 30 days)`,
+    data: response.data,
+  });
 }
 
 // ─── Follower handlers (U3, #69) ──────────────────────────────────────────────
@@ -244,16 +214,11 @@ export async function listOrganizationFollowers(params: ListOrganizationFollower
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("follower", data.length, pagination.has_more),
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("follower", data.length, pagination.has_more),
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -270,15 +235,10 @@ export async function addOrganizationFollower(params: AddOrganizationFollowerPar
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Follower added to organization",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Follower added to organization",
+    data: response.data,
+  });
 }
 
 /**
@@ -298,16 +258,11 @@ export async function getOrganizationFollowersChangelog(params: OrganizationFoll
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Followers changelog for organization ${params.id}`,
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Followers changelog for organization ${params.id}`,
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -325,15 +280,10 @@ export async function deleteOrganizationFollower(params: DeleteOrganizationFollo
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Follower ${params.follower_id} removed from organization ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Follower ${params.follower_id} removed from organization ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**

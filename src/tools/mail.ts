@@ -18,7 +18,7 @@ import {
 } from "../schemas/mail.js";
 import { buildPaginationParamsV1, extractPaginationV1 } from "../utils/pagination.js";
 import { mcpErrorResult } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 /**
  * Get mail messages for a person
@@ -44,16 +44,11 @@ export async function getPersonEmails(params: GetPersonEmailsParams) {
   const messages = response.data || [];
   const pagination = extractPaginationV1(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("email", messages.length, pagination.has_more, `for person ${params.id}`),
-        data: messages,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("email", messages.length, pagination.has_more, `for person ${params.id}`),
+    data: messages,
+    pagination,
+  });
 }
 
 /**
@@ -80,16 +75,11 @@ export async function getDealEmails(params: GetDealEmailsParams) {
   const messages = response.data || [];
   const pagination = extractPaginationV1(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("email", messages.length, pagination.has_more, `for deal ${params.id}`),
-        data: messages,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("email", messages.length, pagination.has_more, `for deal ${params.id}`),
+    data: messages,
+    pagination,
+  });
 }
 
 /**
@@ -117,16 +107,11 @@ export async function listMailThreads(params: ListMailThreadsParams) {
   const threads = response.data || [];
   const pagination = extractPaginationV1(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("mail thread", threads.length, pagination.has_more, `in ${params.folder || "inbox"}`),
-        data: threads,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("mail thread", threads.length, pagination.has_more, `in ${params.folder || "inbox"}`),
+    data: threads,
+    pagination,
+  });
 }
 
 /**
@@ -145,15 +130,10 @@ export async function getMailThread(params: GetMailThreadParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Mail thread ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Mail thread ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -177,15 +157,10 @@ export async function getMailMessage(params: GetMailMessageParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Mail message ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Mail message ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**

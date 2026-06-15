@@ -46,7 +46,7 @@ import {
 } from "../schemas/products.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, mcpErrorFromCode, destructiveOperationGuard, type McpToolErrorResult } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 /** Maps a lowercase file extension to an image MIME type for multipart uploads. */
 const IMAGE_MIME_BY_EXT: Record<string, string> = {
@@ -224,16 +224,11 @@ export async function listProducts(params: ListProductsParams) {
   const products = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("product", products.length, pagination.has_more),
-        data: products,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("product", products.length, pagination.has_more),
+    data: products,
+    pagination,
+  });
 }
 
 /**
@@ -254,15 +249,10 @@ export async function getProduct(params: GetProductParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Product ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Product ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -287,16 +277,11 @@ export async function searchProducts(params: SearchProductsParams) {
 
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Search results for "${params.term}"`,
-        data: response.data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Search results for "${params.term}"`,
+    data: response.data,
+    pagination,
+  });
 }
 
 // ─── U2: Write handlers ───────────────────────────────────────────────────────
@@ -330,15 +315,10 @@ export async function createProduct(params: CreateProductParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Product created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Product created",
+    data: response.data,
+  });
 }
 
 /**
@@ -370,15 +350,10 @@ export async function updateProduct(params: UpdateProductParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Product ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Product ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -396,15 +371,10 @@ export async function deleteProduct(params: DeleteProductParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Product ${params.id} deleted (will be permanently removed after 30 days)`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Product ${params.id} deleted (will be permanently removed after 30 days)`,
+    data: response.data,
+  });
 }
 
 // ─── U3: Product variation handlers ──────────────────────────────────────────
@@ -426,16 +396,11 @@ export async function listProductVariations(params: ListProductVariationsParams)
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("product variation", data.length, pagination.has_more),
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("product variation", data.length, pagination.has_more),
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -453,15 +418,10 @@ export async function addProductVariation(params: AddProductVariationParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Product variation created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Product variation created",
+    data: response.data,
+  });
 }
 
 /**
@@ -482,15 +442,10 @@ export async function updateProductVariation(params: UpdateProductVariationParam
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Product variation ${product_variation_id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Product variation ${product_variation_id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -508,15 +463,10 @@ export async function deleteProductVariation(params: DeleteProductVariationParam
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Product variation ${params.product_variation_id} deleted`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Product variation ${params.product_variation_id} deleted`,
+    data: response.data,
+  });
 }
 
 // ─── U4: Product follower handlers ────────────────────────────────────────────
@@ -538,16 +488,11 @@ export async function listProductFollowers(params: ListProductFollowersParams) {
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("follower", data.length, pagination.has_more),
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("follower", data.length, pagination.has_more),
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -564,15 +509,10 @@ export async function addProductFollower(params: AddProductFollowerParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Follower added to product",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Follower added to product",
+    data: response.data,
+  });
 }
 
 /**
@@ -592,16 +532,11 @@ export async function getProductFollowersChangelog(params: ProductFollowersChang
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Followers changelog for product ${params.id}`,
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Followers changelog for product ${params.id}`,
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -619,15 +554,10 @@ export async function deleteProductFollower(params: DeleteProductFollowerParams)
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Follower ${params.follower_id} removed from product ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Follower ${params.follower_id} removed from product ${params.id}`,
+    data: response.data,
+  });
 }
 
 // ─── U6: Product image handlers ───────────────────────────────────────────────
@@ -644,15 +574,10 @@ export async function getProductImage(params: GetProductImageParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Image for product ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Image for product ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -670,15 +595,10 @@ export async function deleteProductImage(params: DeleteProductImageParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Image deleted from product ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Image deleted from product ${params.id}`,
+    data: response.data,
+  });
 }
 
 // ─── Product image upload/update handlers (#69 U5) ────────────────────────────
@@ -698,15 +618,10 @@ export async function uploadProductImage(params: UploadProductImageParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Image uploaded for product ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Image uploaded for product ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -724,15 +639,10 @@ export async function updateProductImage(params: UpdateProductImageParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Image updated for product ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Image updated for product ${params.id}`,
+    data: response.data,
+  });
 }
 
 // ─── Tool definitions for MCP registration ───────────────────────────────────

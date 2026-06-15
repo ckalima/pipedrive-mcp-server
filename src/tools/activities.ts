@@ -17,7 +17,7 @@ import {
 } from "../schemas/activities.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 /**
  * List activities with optional filtering
@@ -50,16 +50,11 @@ export async function listActivities(params: ListActivitiesParams) {
   const activities = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("activity", activities.length, pagination.has_more),
-        data: activities,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("activity", activities.length, pagination.has_more),
+    data: activities,
+    pagination,
+  });
 }
 
 /**
@@ -81,15 +76,10 @@ export async function getActivity(params: GetActivityParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Activity ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Activity ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -127,15 +117,10 @@ export async function createActivity(params: CreateActivityParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Activity created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Activity created",
+    data: response.data,
+  });
 }
 
 /**
@@ -172,15 +157,10 @@ export async function updateActivity(params: UpdateActivityParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Activity ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Activity ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -198,15 +178,10 @@ export async function deleteActivity(params: DeleteActivityParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Activity ${params.id} deleted`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Activity ${params.id} deleted`,
+    data: response.data,
+  });
 }
 
 /**

@@ -17,7 +17,7 @@ import {
 } from "../schemas/notes.js";
 import { buildPaginationParamsV1, extractPaginationV1 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 /**
  * List notes with optional filtering
@@ -56,16 +56,11 @@ export async function listNotes(params: ListNotesParams) {
   const notes = response.data || [];
   const pagination = extractPaginationV1(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("note", notes.length, pagination.has_more),
-        data: notes,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("note", notes.length, pagination.has_more),
+    data: notes,
+    pagination,
+  });
 }
 
 /**
@@ -80,15 +75,10 @@ export async function getNote(params: GetNoteParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Note ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Note ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -121,15 +111,10 @@ export async function createNote(params: CreateNoteParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Note created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Note created",
+    data: response.data,
+  });
 }
 
 /**
@@ -162,15 +147,10 @@ export async function updateNote(params: UpdateNoteParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Note ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Note ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -188,15 +168,10 @@ export async function deleteNote(params: DeleteNoteParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Note ${params.id} deleted`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Note ${params.id} deleted`,
+    data: response.data,
+  });
 }
 
 /**

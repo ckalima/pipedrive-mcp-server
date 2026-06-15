@@ -59,7 +59,7 @@ import {
 } from "../schemas/deals.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 /**
  * List deals with optional filtering
@@ -93,16 +93,11 @@ export async function listDeals(params: ListDealsParams) {
   const deals = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("deal", deals.length, pagination.has_more),
-        data: deals,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("deal", deals.length, pagination.has_more),
+    data: deals,
+    pagination,
+  });
 }
 
 /**
@@ -125,15 +120,10 @@ export async function getDeal(params: GetDealParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Deal ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Deal ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -166,15 +156,10 @@ export async function createDeal(params: CreateDealParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Deal created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Deal created",
+    data: response.data,
+  });
 }
 
 /**
@@ -209,15 +194,10 @@ export async function updateDeal(params: UpdateDealParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Deal ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Deal ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -244,16 +224,11 @@ export async function searchDeals(params: SearchDealsParams) {
 
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Search results for "${params.term}"`,
-        data: response.data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Search results for "${params.term}"`,
+    data: response.data,
+    pagination,
+  });
 }
 
 /**
@@ -271,15 +246,10 @@ export async function deleteDeal(params: DeleteDealParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Deal ${params.id} deleted (will be permanently removed after 30 days)`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Deal ${params.id} deleted (will be permanently removed after 30 days)`,
+    data: response.data,
+  });
 }
 
 // ─── Follower handlers (U1, #69) ──────────────────────────────────────────────
@@ -301,16 +271,11 @@ export async function listDealFollowers(params: ListDealFollowersParams) {
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("follower", data.length, pagination.has_more),
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("follower", data.length, pagination.has_more),
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -327,15 +292,10 @@ export async function addDealFollower(params: AddDealFollowerParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Follower added to deal",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Follower added to deal",
+    data: response.data,
+  });
 }
 
 /**
@@ -355,16 +315,11 @@ export async function getDealFollowersChangelog(params: DealFollowersChangelogPa
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Followers changelog for deal ${params.id}`,
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Followers changelog for deal ${params.id}`,
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -382,15 +337,10 @@ export async function deleteDealFollower(params: DeleteDealFollowerParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Follower ${params.follower_id} removed from deal ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Follower ${params.follower_id} removed from deal ${params.id}`,
+    data: response.data,
+  });
 }
 
 // ─── U1: Deal line-item product handlers ──────────────────────────────────────
@@ -414,16 +364,11 @@ export async function listDealProducts(params: ListDealProductsParams) {
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("deal product", data.length, pagination.has_more),
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("deal product", data.length, pagination.has_more),
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -456,15 +401,10 @@ export async function addDealProduct(params: AddDealProductParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Product added to deal",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Product added to deal",
+    data: response.data,
+  });
 }
 
 /**
@@ -496,15 +436,10 @@ export async function updateDealProduct(params: UpdateDealProductParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Deal product ${product_attachment_id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Deal product ${product_attachment_id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -522,15 +457,10 @@ export async function deleteDealProduct(params: DeleteDealProductParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Product ${params.product_attachment_id} removed from deal ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Product ${params.product_attachment_id} removed from deal ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -547,15 +477,10 @@ export async function bulkAddDealProducts(params: BulkAddDealProductsParams) {
 
   const data = response.data;
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Added ${data.length} product${data.length !== 1 ? "s" : ""} to deal ${params.id}`,
-        data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Added ${data.length} product${data.length !== 1 ? "s" : ""} to deal ${params.id}`,
+    data,
+  });
 }
 
 // ─── U2: Deal discount handlers ───────────────────────────────────────────────
@@ -574,15 +499,10 @@ export async function listDealDiscounts(params: ListDealDiscountsParams) {
 
   const data = response.data;
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("discount", data.length, false),
-        data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("discount", data.length, false),
+    data,
+  });
 }
 
 /**
@@ -603,15 +523,10 @@ export async function addDealDiscount(params: AddDealDiscountParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Discount added to deal",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Discount added to deal",
+    data: response.data,
+  });
 }
 
 /**
@@ -633,15 +548,10 @@ export async function updateDealDiscount(params: UpdateDealDiscountParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Discount ${discount_id} updated on deal ${id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Discount ${discount_id} updated on deal ${id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -662,15 +572,10 @@ export async function deleteDealDiscount(params: DeleteDealDiscountParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Discount ${params.discount_id} deleted from deal ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Discount ${params.discount_id} deleted from deal ${params.id}`,
+    data: response.data,
+  });
 }
 
 // ─── U3: Deal installment handlers (Growth+ plan) ─────────────────────────────
@@ -699,16 +604,11 @@ export async function listDealInstallments(params: ListDealInstallmentsParams) {
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("installment", data.length, pagination.has_more),
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("installment", data.length, pagination.has_more),
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -729,15 +629,10 @@ export async function addDealInstallment(params: AddDealInstallmentParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Installment added to deal",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Installment added to deal",
+    data: response.data,
+  });
 }
 
 /**
@@ -759,15 +654,10 @@ export async function updateDealInstallment(params: UpdateDealInstallmentParams)
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Installment ${installment_id} updated on deal ${id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Installment ${installment_id} updated on deal ${id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -785,15 +675,10 @@ export async function deleteDealInstallment(params: DeleteDealInstallmentParams)
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Installment ${params.installment_id} deleted from deal ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Installment ${params.installment_id} deleted from deal ${params.id}`,
+    data: response.data,
+  });
 }
 
 // ─── U4: Archived deals handler ───────────────────────────────────────────────
@@ -830,16 +715,11 @@ export async function listArchivedDeals(params: ListArchivedDealsParams) {
   const deals = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("archived deal", deals.length, pagination.has_more),
-        data: deals,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("archived deal", deals.length, pagination.has_more),
+    data: deals,
+    pagination,
+  });
 }
 
 // ─── U5: Convert-deal-to-lead handlers ────────────────────────────────────────
@@ -862,15 +742,10 @@ export async function convertDealToLead(params: ConvertDealToLeadParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Deal conversion initiated; poll get_deal_conversion_status with conversion_id until a terminal status",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Deal conversion initiated; poll get_deal_conversion_status with conversion_id until a terminal status",
+    data: response.data,
+  });
 }
 
 /**
@@ -905,15 +780,10 @@ export async function getDealConversionStatus(params: GetDealConversionStatusPar
       break;
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary,
-        data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary,
+    data,
+  });
 }
 
 /**

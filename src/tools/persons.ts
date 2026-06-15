@@ -29,7 +29,7 @@ import {
 } from "../schemas/persons.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 /**
  * List persons with optional filtering
@@ -59,16 +59,11 @@ export async function listPersons(params: ListPersonsParams) {
   const persons = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("person", persons.length, pagination.has_more),
-        data: persons,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("person", persons.length, pagination.has_more),
+    data: persons,
+    pagination,
+  });
 }
 
 /**
@@ -91,15 +86,10 @@ export async function getPerson(params: GetPersonParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Person ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Person ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -128,15 +118,10 @@ export async function createPerson(params: CreatePersonParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Person created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Person created",
+    data: response.data,
+  });
 }
 
 /**
@@ -164,15 +149,10 @@ export async function updatePerson(params: UpdatePersonParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Person ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Person ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -197,16 +177,11 @@ export async function searchPersons(params: SearchPersonsParams) {
 
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Search results for "${params.term}"`,
-        data: response.data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Search results for "${params.term}"`,
+    data: response.data,
+    pagination,
+  });
 }
 
 /**
@@ -224,15 +199,10 @@ export async function deletePerson(params: DeletePersonParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Person ${params.id} deleted (will be permanently removed after 30 days)`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Person ${params.id} deleted (will be permanently removed after 30 days)`,
+    data: response.data,
+  });
 }
 
 // ─── Follower handlers (U2, #69) ──────────────────────────────────────────────
@@ -254,16 +224,11 @@ export async function listPersonFollowers(params: ListPersonFollowersParams) {
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("follower", data.length, pagination.has_more),
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("follower", data.length, pagination.has_more),
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -280,15 +245,10 @@ export async function addPersonFollower(params: AddPersonFollowerParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Follower added to person",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Follower added to person",
+    data: response.data,
+  });
 }
 
 /**
@@ -308,16 +268,11 @@ export async function getPersonFollowersChangelog(params: PersonFollowersChangel
   const data = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Followers changelog for person ${params.id}`,
-        data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Followers changelog for person ${params.id}`,
+    data,
+    pagination,
+  });
 }
 
 /**
@@ -335,15 +290,10 @@ export async function deletePersonFollower(params: DeletePersonFollowerParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Follower ${params.follower_id} removed from person ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Follower ${params.follower_id} removed from person ${params.id}`,
+    data: response.data,
+  });
 }
 
 // ─── Picture handler (U2, #69; read-only — no v2 upload endpoint) ─────────────
@@ -360,15 +310,10 @@ export async function getPersonPicture(params: GetPersonPictureParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Picture for person ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Picture for person ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**

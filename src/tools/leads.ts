@@ -26,7 +26,7 @@ import {
 import { PathSegmentSchema } from "../schemas/common.js";
 import { buildPaginationParamsV1, extractPaginationV1, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, mcpErrorFromCode, destructiveOperationGuard } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 /**
  * Exponential backoff schedule for polling the async lead-to-deal conversion.
@@ -63,16 +63,11 @@ export async function listLeads(params: ListLeadsParams) {
   const leads = response.data || [];
   const pagination = extractPaginationV1(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("lead", leads.length, pagination.has_more),
-        data: leads,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("lead", leads.length, pagination.has_more),
+    data: leads,
+    pagination,
+  });
 }
 
 /**
@@ -99,16 +94,11 @@ export async function listArchivedLeads(params: ListArchivedLeadsParams) {
   const leads = response.data || [];
   const pagination = extractPaginationV1(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("lead", leads.length, pagination.has_more),
-        data: leads,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("lead", leads.length, pagination.has_more),
+    data: leads,
+    pagination,
+  });
 }
 
 /**
@@ -123,15 +113,10 @@ export async function getLead(params: GetLeadParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Lead ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Lead ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -158,15 +143,10 @@ export async function createLead(params: CreateLeadParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Lead created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Lead created",
+    data: response.data,
+  });
 }
 
 /**
@@ -194,15 +174,10 @@ export async function updateLead(params: UpdateLeadParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Lead ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Lead ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -220,15 +195,10 @@ export async function deleteLead(params: DeleteLeadParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Lead ${params.id} deleted`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Lead ${params.id} deleted`,
+    data: response.data,
+  });
 }
 
 /**
@@ -255,16 +225,11 @@ export async function searchLeads(params: SearchLeadsParams) {
 
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Search results for "${params.term}"`,
-        data: response.data,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Search results for "${params.term}"`,
+    data: response.data,
+    pagination,
+  });
 }
 
 /**
@@ -344,20 +309,15 @@ export async function convertLeadToDeal(
 
     if (lastStatus === "completed") {
       const dealId = lastData.deal_id;
-      return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            summary: `Lead ${params.id} converted to deal ${dealId}`,
-            data: {
-              lead_id: params.id,
-              deal_id: dealId,
-              conversion_id: conversionId,
-              status: lastStatus,
-            },
-          }, null, 2),
-        }],
-      };
+      return formatToolResponse({
+        summary: `Lead ${params.id} converted to deal ${dealId}`,
+        data: {
+          lead_id: params.id,
+          deal_id: dealId,
+          conversion_id: conversionId,
+          status: lastStatus,
+        },
+      });
     }
 
     if (lastStatus === "failed" || lastStatus === "rejected") {
@@ -371,20 +331,15 @@ export async function convertLeadToDeal(
   }
 
   // 3. Timeout: still running after the backoff cap was exhausted.
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Lead ${params.id} conversion still in progress after timeout`,
-        data: {
-          lead_id: params.id,
-          conversion_id: conversionId,
-          status: lastStatus,
-          note: "Conversion did not complete within the polling window. Use the conversion_id to check status later.",
-        },
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Lead ${params.id} conversion still in progress after timeout`,
+    data: {
+      lead_id: params.id,
+      conversion_id: conversionId,
+      status: lastStatus,
+      note: "Conversion did not complete within the polling window. Use the conversion_id to check status later.",
+    },
+  });
 }
 
 /**
@@ -400,15 +355,10 @@ export async function getLeadConversionStatus(params: GetLeadConversionStatusPar
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Conversion ${params.conversion_id} status: ${String(response.data.status ?? "unknown")}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Conversion ${params.conversion_id} status: ${String(response.data.status ?? "unknown")}`,
+    data: response.data,
+  });
 }
 
 /**
