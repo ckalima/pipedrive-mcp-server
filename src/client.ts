@@ -438,7 +438,9 @@ export class PipedriveClient {
       const isSuccess = parsed?.success === true;
       const { retryable, isTripSignal } = classifyOutcome({ method, httpStatus, isNetworkError });
       const stateBeforeRecord = getBreakerState();
-      recordOutcome({ isSuccess, isTripSignal }, Date.now());
+      // Pass isProbe so a straggler that only settled during this request's probe
+      // window cannot hijack the half-open verdict (owner-scoped breaker update).
+      recordOutcome({ isSuccess, isTripSignal }, Date.now(), isProbe);
       this.logBreakerTransition(stateBeforeRecord, getBreakerState(), method, logEndpoint);
 
       if (isSuccess) {

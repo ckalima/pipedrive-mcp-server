@@ -233,18 +233,35 @@ export function breakerAllowsRequest(nowMs: number): boolean {
 }
 
 /**
- * Records the outcome of a settled attempt and advances the breaker.
+ * Records the outcome of a settled attempt and advances the breaker. `isProbe`
+ * identifies the request that owns the current half-open probe slot.
  *
- *   HalfOpen (this was the probe): success -> Closed + counter 0; any non-success
- *     (4xx/5xx/network/timeout, not only 429/503) -> Open + cooldown restart.
- *     The probe slot is always released.
+ *   HalfOpen + isProbe (this IS the probe): success -> Closed + counter 0; any
+ *     non-success (4xx/5xx/network/timeout, not only 429/503) -> Open + cooldown
+ *     restart. Leaving HalfOpen releases the single probe slot.
+ *   HalfOpen + !isProbe: NO-OP. This is a request that passed the Closed gate
+ *     before the breaker opened and only settled now, during another request's
+ *     probe (the gate refuses NEW requests while HalfOpen, so this is the sole way
+ *     a non-probe completes here). Its outcome is not the probe's verdict, so it
+ *     must not advance the breaker — otherwise a concurrent straggler could hijack
+ *     or release the probe slot. It still returns its own result to its own caller.
  *   Closed: success or any non-trip outcome -> counter 0 (an interleaved success
  *     or validation error means the stream is not a pure storm). A trip signal
  *     increments the consecutive counter and opens the breaker at BREAKER_THRESHOLD.
+ *     NOTE: under concurrent in-flight calls the consecutive counter is best-effort
+ *     — an interleaved success from a concurrent request can reset it mid-storm, so
+ *     a heavily-interleaved 429 stream may take more than BREAKER_THRESHOLD signals
+ *     to trip. The runaway-loop case this guards (a tight loop of same-endpoint
+ *     failures) has few interleaved successes and still trips promptly.
  *   Open: defensive no-op (no request should have been made while Open).
  */
-export function recordOutcome(outcome: BreakerOutcome, nowMs: number): void {
+export function recordOutcome(outcome: BreakerOutcome, nowMs: number, isProbe = false): void {
   if (breakerState === "HalfOpen") {
+    // Only the probe owner settles the half-open decision; a concurrent straggler
+    // that merely happened to finish during HalfOpen must not touch the breaker.
+    if (!isProbe) {
+      return;
+    }
     // The probe settled: leaving HalfOpen releases the single probe slot.
     if (outcome.isSuccess) {
       breakerState = "Closed";

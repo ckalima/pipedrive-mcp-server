@@ -225,7 +225,7 @@ describe('circuit breaker (U2, KTD7)', () => {
   it('half-open probe success closes the breaker and zeroes the counter', () => {
     for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
     breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS); // -> HalfOpen, probe out
-    recordOutcome(ok, T0 + BREAKER_COOLDOWN_MS);
+    recordOutcome(ok, T0 + BREAKER_COOLDOWN_MS, true); // the probe owner settles
     expect(getBreakerState()).toBe('Closed');
     // Counter is zeroed: THRESHOLD-1 fresh trips stay Closed.
     for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
@@ -236,7 +236,7 @@ describe('circuit breaker (U2, KTD7)', () => {
     for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
     const halfOpenAt = T0 + BREAKER_COOLDOWN_MS;
     breakerAllowsRequest(halfOpenAt); // -> HalfOpen
-    recordOutcome(trip, halfOpenAt); // probe is itself a trip -> reopen
+    recordOutcome(trip, halfOpenAt, true); // probe is itself a trip -> reopen
     expect(getBreakerState()).toBe('Open');
     // Cooldown restarts from halfOpenAt, not T0.
     expect(breakerAllowsRequest(halfOpenAt + BREAKER_COOLDOWN_MS - 1)).toBe(false);
@@ -251,11 +251,30 @@ describe('circuit breaker (U2, KTD7)', () => {
     for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
     const halfOpenAt = T0 + BREAKER_COOLDOWN_MS;
     breakerAllowsRequest(halfOpenAt); // -> HalfOpen
-    recordOutcome(outcome, halfOpenAt); // any non-success reopens
+    recordOutcome(outcome, halfOpenAt, true); // probe non-success reopens
     expect(getBreakerState()).toBe('Open');
     // Slot released: after a fresh cooldown a new probe is handed out.
     expect(breakerAllowsRequest(halfOpenAt + BREAKER_COOLDOWN_MS)).toBe(true);
     expect(getBreakerState()).toBe('HalfOpen');
+  });
+
+  it('a concurrent non-probe completion during HalfOpen does NOT advance the breaker (owner-scoped)', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    const halfOpenAt = T0 + BREAKER_COOLDOWN_MS;
+    breakerAllowsRequest(halfOpenAt); // probe owner claims the slot -> HalfOpen
+
+    // A straggler request (passed the Closed gate before the breaker opened) only
+    // settles now, during the probe window. With isProbe=false it must be a no-op:
+    // neither a straggler success nor a straggler failure may hijack the verdict.
+    recordOutcome(ok, halfOpenAt, false);
+    expect(getBreakerState()).toBe('HalfOpen'); // success did NOT close it
+    recordOutcome(trip, halfOpenAt, false);
+    expect(getBreakerState()).toBe('HalfOpen'); // failure did NOT reopen it
+    expect(breakerAllowsRequest(halfOpenAt)).toBe(false); // slot still held by the probe
+
+    // The probe owner alone settles the half-open decision.
+    recordOutcome(ok, halfOpenAt, true);
+    expect(getBreakerState()).toBe('Closed');
   });
 
   it('a success resets the consecutive counter (THRESHOLD-1, success, THRESHOLD-1 -> still Closed)', () => {

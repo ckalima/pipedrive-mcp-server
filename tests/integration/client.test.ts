@@ -722,6 +722,34 @@ describe('resilience: retry + circuit breaker (U3)', () => {
       const total = waits.reduce((a, b) => a + b, 0);
       expect(total).toBeLessThanOrEqual(RETRY_BUDGET_MS);
     });
+
+    it('debits retry-attempt durations against the budget (slow timeouts stop the loop before the attempt cap)', async () => {
+      // Regression guard for the KTD3 added-wall-clock bound. The rest of the suite
+      // uses instant mocks, so the per-attempt-duration debit is never exercised and
+      // a deletion of it would go unnoticed. Here each attempt "consumes" ~28s of
+      // (faked) wall-clock, so the ~30s budget is spent after a single retry and the
+      // loop bails BEFORE reaching the 4-attempt cap. Without the duration debit the
+      // loop would run the full RETRY_MAX_ATTEMPTS attempts instead.
+      vi.useFakeTimers();
+      try {
+        const base = Date.now();
+        let now = base;
+        const mockFn = vi.fn(async () => {
+          now += 28_000; // simulate a slow attempt that ends in a timeout
+          vi.setSystemTime(now);
+          throw new Error('Request timeout');
+        });
+        vi.stubGlobal('fetch', mockFn);
+        const client = new PipedriveClient();
+
+        const response = await client.get('/deals', undefined, 'v2');
+
+        expect(response.error?.code).toBe('NETWORK_ERROR');
+        expect(mockFn.mock.calls.length).toBeLessThan(RETRY_MAX_ATTEMPTS);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('circuit breaker (R5, R6, R7, AE4, AE5)', () => {
