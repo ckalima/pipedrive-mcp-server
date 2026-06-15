@@ -16,12 +16,12 @@ a client, open-sourced for anyone") and verified factual claims.
 
 | Item | Channel | Status |
 |---|---|---|
-| 1 | Pipedrive devcommunity, own show-and-tell topic in **App Development** | **Submitted, awaiting moderator approval** (not yet live) |
+| 1 | Pipedrive devcommunity, own show-and-tell topic in **App Development** | ✅ **Live** at https://devcommunity.pipedrive.com/t/open-source-pipedrive-mcp-server-155-tools-v2-first-mit/20392 |
 | 2 | r/ClaudeAI | Staged; holds until item 1 is live (stagger) |
 | 3 | r/sales | Staged; holds until item 1 is live (stagger) |
 | 4 | r/mcp, update on the stale Glama bot listing | Posting now (independent of the stagger; it is a correction to an existing listing, not a fresh announcement) |
 
-Once item 1 is approved, paste the live thread URL into Draft 1 below.
+Item 1 is live (URL above). r/ClaudeAI and r/sales can now fire, staggered.
 
 ## Decision context
 
@@ -90,7 +90,7 @@ Every public draft draws only from this list. Nothing here is comparative.
 > v1 usage, and ungated destructive ops, the exact axes where ours differs. Dropping our rubric into
 > his thread would read as an implicit takedown, against this pack's "no competitor comparisons"
 > principle. So we posted our **own standalone show-and-tell topic in App Development** instead. Live
-> URL: _pending moderator approval; fill in once live._
+> URL: https://devcommunity.pipedrive.com/t/open-source-pipedrive-mcp-server-155-tools-v2-first-mit/20392
 
 **Title:** `Open-source Pipedrive MCP server: 155 tools, v2-first, MIT`
 
