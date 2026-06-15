@@ -258,4 +258,65 @@ describe('mail tools', () => {
       expect(url).toContain('include_body=1');
     });
   });
+
+  // All five mail operations — including getPersonEmails / getDealEmails, whose
+  // /persons and /deals prefixes collide with the live v2 tools — route under the
+  // single mail capability (R3), so retirement is capability-scoped, never prefix-scoped.
+  describe('v1 sunset detection (U3, R3)', () => {
+    it('a 410 on getPersonEmails retires mail and short-circuits all five mail operations', async () => {
+      const mockFn = mockApiError(410, 'Gone');
+      const {
+        getPersonEmails,
+        getDealEmails,
+        listMailThreads,
+        getMailThread,
+        getMailMessage,
+      } = await getMailTools();
+
+      const first = await getPersonEmails({ id: 1 });
+      expect(first.content[0].text).toContain('CAPABILITY_RETIRED');
+      expect(first.content[0].text).toContain('Mail');
+      expect(mockFn).toHaveBeenCalledTimes(1);
+
+      const rest = [
+        await getDealEmails({ id: 2 }),
+        await listMailThreads({}),
+        await getMailThread({ id: 3 }),
+        await getMailMessage({ id: 4 }),
+      ];
+      for (const result of rest) {
+        expect(result.content[0].text).toContain('CAPABILITY_RETIRED');
+      }
+      // No further upstream requests once mail is retired.
+      expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('R3: retiring mail does NOT affect the v2 persons tool (capability-scoped, not prefix-scoped)', async () => {
+      mockApiError(410, 'Gone');
+      const { getPersonEmails } = await getMailTools();
+      await getPersonEmails({ id: 1 }); // retires mail
+
+      // The real v2 /persons tool never routes through the mail seam — unaffected.
+      const { getPerson } = await import('../../../src/tools/persons.js');
+      mockApiSuccess({ id: 1, name: 'John' });
+      const personResult = await getPerson({ id: 1 });
+      expect(personResult.isError).toBeFalsy();
+    });
+
+    it('AE4/R7: mail emits its operator warning at most once across operations', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockApiSuccess([]);
+      const { getPersonEmails, listMailThreads } = await getMailTools();
+
+      await getPersonEmails({ id: 1 });
+      await listMailThreads({});
+
+      const warnings = errorSpy.mock.calls
+        .flat()
+        .map(String)
+        .filter((line) => line.includes('no v2 equivalent'));
+      expect(warnings.filter((w) => w.includes('Mail'))).toHaveLength(1);
+      errorSpy.mockRestore();
+    });
+  });
 });

@@ -3,7 +3,7 @@
  * These tools provide access to email communication for analyzing customer engagement.
  */
 
-import { getClient } from "../client.js";
+import { mailV1 } from "../version-routing.js";
 import {
   GetPersonEmailsSchema,
   GetDealEmailsSchema,
@@ -24,14 +24,11 @@ import { createListSummary, formatToolResponse } from "../utils/formatting.js";
  * Get mail messages for a person
  */
 export async function getPersonEmails(params: GetPersonEmailsParams) {
-  const client = getClient();
-
   const queryParams = buildPaginationParamsV1(params.start, params.limit);
 
-  const response = await client.get<unknown[]>(
+  const response = await mailV1.get<unknown[]>(
     `/persons/${params.id}/mailMessages`,
     queryParams,
-    "v1"
   );
 
   // v1 returns { success: true, data: null } for an empty collection, so guard
@@ -55,14 +52,11 @@ export async function getPersonEmails(params: GetPersonEmailsParams) {
  * Get mail messages for a deal
  */
 export async function getDealEmails(params: GetDealEmailsParams) {
-  const client = getClient();
-
   const queryParams = buildPaginationParamsV1(params.start, params.limit);
 
-  const response = await client.get<unknown[]>(
+  const response = await mailV1.get<unknown[]>(
     `/deals/${params.id}/mailMessages`,
     queryParams,
-    "v1"
   );
 
   // v1 returns { success: true, data: null } for an empty collection, so guard
@@ -86,15 +80,12 @@ export async function getDealEmails(params: GetDealEmailsParams) {
  * List mail threads by folder
  */
 export async function listMailThreads(params: ListMailThreadsParams) {
-  const client = getClient();
-
   const queryParams = buildPaginationParamsV1(params.start, params.limit);
   queryParams.set("folder", params.folder || "inbox");
 
-  const response = await client.get<unknown[]>(
+  const response = await mailV1.get<unknown[]>(
     "/mailbox/mailThreads",
     queryParams,
-    "v1"
   );
 
   // v1 returns { success: true, data: null } for an empty folder, so guard on
@@ -118,12 +109,9 @@ export async function listMailThreads(params: ListMailThreadsParams) {
  * Get a mail thread with its messages
  */
 export async function getMailThread(params: GetMailThreadParams) {
-  const client = getClient();
-
-  const response = await client.get<unknown>(
+  const response = await mailV1.get<unknown>(
     `/mailbox/mailThreads/${params.id}`,
     undefined,
-    "v1"
   );
 
   if (!response.success || !response.data) {
@@ -140,17 +128,14 @@ export async function getMailThread(params: GetMailThreadParams) {
  * Get a single mail message with full body
  */
 export async function getMailMessage(params: GetMailMessageParams) {
-  const client = getClient();
-
   const queryParams = new URLSearchParams();
   if (params.include_body) {
     queryParams.set("include_body", "1");
   }
 
-  const response = await client.get<unknown>(
+  const response = await mailV1.get<unknown>(
     `/mailbox/mailMessages/${params.id}`,
     queryParams,
-    "v1"
   );
 
   if (!response.success || !response.data) {

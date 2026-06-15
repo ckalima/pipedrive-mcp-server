@@ -275,4 +275,56 @@ describe('notes tools', () => {
       expect(options.method).toBe('DELETE');
     });
   });
+
+  // The version-routing seam's retired/warned state is reset before each test by
+  // the shared setup (tests/setup.ts), so these are independent.
+  describe('v1 sunset detection (U3)', () => {
+    it('AE1: an ordinary item 404 returns NOT_FOUND and does NOT retire notes', async () => {
+      mockApiError(404, 'Note not found');
+      const { getNote, listNotes } = await getNotesTools();
+
+      const notFound = await getNote({ id: 99999 });
+      expect(notFound.content[0].text).toContain('NOT_FOUND');
+
+      // notes was not marked retired — a follow-up list still hits the network.
+      const listMock = mockApiSuccess([]);
+      const listResult = await listNotes({});
+      expect(listResult.isError).toBeFalsy();
+      expect(listMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('AE2/R6: a 410 on a v1-only list returns the retirement message and marks notes retired', async () => {
+      mockApiError(410, 'Gone');
+      const { listNotes } = await getNotesTools();
+
+      const result = await listNotes({});
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('CAPABILITY_RETIRED');
+      expect(result.content[0].text).toContain('Notes');
+    });
+
+    it('AE2: a collection-root 404 on /notes also marks notes retired', async () => {
+      mockApiError(404, 'Not found');
+      const { listNotes } = await getNotesTools();
+
+      const result = await listNotes({});
+
+      expect(result.content[0].text).toContain('CAPABILITY_RETIRED');
+    });
+
+    it('AE3/R4: once retired, later calls short-circuit with no new upstream request', async () => {
+      const mockFn = mockApiError(410, 'Gone');
+      const { listNotes, getNote } = await getNotesTools();
+
+      const first = await listNotes({});
+      expect(first.content[0].text).toContain('CAPABILITY_RETIRED');
+      expect(mockFn).toHaveBeenCalledTimes(1);
+
+      // A different notes operation also short-circuits, still no new request.
+      const second = await getNote({ id: 1 });
+      expect(second.content[0].text).toContain('CAPABILITY_RETIRED');
+      expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+  });
 });

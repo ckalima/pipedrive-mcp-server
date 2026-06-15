@@ -638,6 +638,51 @@ describe('leads tools', () => {
     });
   });
 
+  // leads is the mixed-version capability: CRUD routes through the seam (v1) while
+  // search/convert/conversion-status stay on the client at v2 (R2, R3).
+  describe('v1 sunset detection (U3, R2/R3)', () => {
+    it('AE2/R6: a 410 on the /leads list returns the retirement message and marks leads CRUD retired', async () => {
+      mockApiError(410, 'Gone');
+      const { listLeads } = await getLeadsTools();
+
+      const result = await listLeads({});
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('CAPABILITY_RETIRED');
+      expect(result.content[0].text).toContain('Leads');
+    });
+
+    it('AE1: an ordinary item 404 on get does NOT retire leads CRUD', async () => {
+      mockApiError(404, 'Lead not found');
+      const { getLead, listLeads } = await getLeadsTools();
+
+      const notFound = await getLead({ id: VALID_UUID });
+      expect(notFound.content[0].text).toContain('NOT_FOUND');
+
+      const listMock = mockApiSuccess([]);
+      const listResult = await listLeads({});
+      expect(listResult.isError).toBeFalsy();
+      expect(listMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('R2/R3: retiring leads CRUD does NOT short-circuit leads search (search stays on v2)', async () => {
+      // Retire CRUD via a 410 on the v1 list.
+      mockApiError(410, 'Gone');
+      const { listLeads, searchLeads } = await getLeadsTools();
+
+      const listResult = await listLeads({});
+      expect(listResult.content[0].text).toContain('CAPABILITY_RETIRED');
+
+      // Search never routes through the leads seam — it still targets v2 and works.
+      const searchMock = mockApiSuccess({ items: [] });
+      const searchResult = await searchLeads({ term: 'acme' });
+      expect(searchResult.isError).toBeFalsy();
+      const [url] = searchMock.mock.calls[0];
+      expect(String(url)).toContain('/api/v2/');
+      expect(String(url)).toContain('/leads/search');
+    });
+  });
+
   describe('tool registration smoke check', () => {
     it('should have all 9 leads tools registered in allTools', async () => {
       const { allTools } = await import('../../../src/tools/index.js');

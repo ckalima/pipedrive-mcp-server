@@ -3,6 +3,7 @@
  */
 
 import { getClient } from "../client.js";
+import { leadsV1 } from "../version-routing.js";
 import {
   ListLeadsSchema,
   ListArchivedLeadsSchema,
@@ -43,8 +44,6 @@ const realSleep: SleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, 
  * List active (non-archived) leads with optional filtering
  */
 export async function listLeads(params: ListLeadsParams) {
-  const client = getClient();
-
   const queryParams = buildPaginationParamsV1(params.start, params.limit);
   queryParams.set("archived_flag", "false");
 
@@ -54,7 +53,7 @@ export async function listLeads(params: ListLeadsParams) {
   if (params.filter_id) queryParams.set("filter_id", String(params.filter_id));
   if (params.sort) queryParams.set("sort", params.sort);
 
-  const response = await client.get<unknown[]>("/leads", queryParams, "v1");
+  const response = await leadsV1.get<unknown[]>("/leads", queryParams);
 
   if (!response.success) {
     return mcpErrorResult(response);
@@ -74,8 +73,6 @@ export async function listLeads(params: ListLeadsParams) {
  * List archived leads with optional filtering
  */
 export async function listArchivedLeads(params: ListArchivedLeadsParams) {
-  const client = getClient();
-
   const queryParams = buildPaginationParamsV1(params.start, params.limit);
   queryParams.set("archived_flag", "true");
 
@@ -85,7 +82,7 @@ export async function listArchivedLeads(params: ListArchivedLeadsParams) {
   if (params.filter_id) queryParams.set("filter_id", String(params.filter_id));
   if (params.sort) queryParams.set("sort", params.sort);
 
-  const response = await client.get<unknown[]>("/leads", queryParams, "v1");
+  const response = await leadsV1.get<unknown[]>("/leads", queryParams);
 
   if (!response.success) {
     return mcpErrorResult(response);
@@ -105,9 +102,7 @@ export async function listArchivedLeads(params: ListArchivedLeadsParams) {
  * Get a single lead by UUID
  */
 export async function getLead(params: GetLeadParams) {
-  const client = getClient();
-
-  const response = await client.get<unknown>(`/leads/${params.id}`, undefined, "v1");
+  const response = await leadsV1.get<unknown>(`/leads/${params.id}`, undefined);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -123,8 +118,6 @@ export async function getLead(params: GetLeadParams) {
  * Create a new lead
  */
 export async function createLead(params: CreateLeadParams) {
-  const client = getClient();
-
   const body: Record<string, unknown> = {
     title: params.title,
   };
@@ -137,7 +130,7 @@ export async function createLead(params: CreateLeadParams) {
   if (params.expected_close_date) body.expected_close_date = params.expected_close_date;
   if (params.visible_to) body.visible_to = params.visible_to;
 
-  const response = await client.post<unknown>("/leads", body, "v1");
+  const response = await leadsV1.post<unknown>("/leads", body);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -153,8 +146,6 @@ export async function createLead(params: CreateLeadParams) {
  * Update an existing lead
  */
 export async function updateLead(params: UpdateLeadParams) {
-  const client = getClient();
-
   const { id, ...updateFields } = params;
   const body: Record<string, unknown> = {};
 
@@ -168,7 +159,7 @@ export async function updateLead(params: UpdateLeadParams) {
   if (updateFields.visible_to) body.visible_to = updateFields.visible_to;
   if (updateFields.is_archived !== undefined) body.is_archived = updateFields.is_archived;
 
-  const response = await client.patch<unknown>(`/leads/${id}`, body, "v1");
+  const response = await leadsV1.patch<unknown>(`/leads/${id}`, body);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -187,9 +178,7 @@ export async function deleteLead(params: DeleteLeadParams) {
   const guard = destructiveOperationGuard();
   if (guard) return guard;
 
-  const client = getClient();
-
-  const response = await client.delete<{ id: string }>(`/leads/${params.id}`, "v1");
+  const response = await leadsV1.delete<{ id: string }>(`/leads/${params.id}`);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);

@@ -2,7 +2,7 @@
  * Note-related MCP tools for Pipedrive
  */
 
-import { getClient } from "../client.js";
+import { notesV1 } from "../version-routing.js";
 import {
   ListNotesSchema,
   GetNoteSchema,
@@ -23,8 +23,6 @@ import { createListSummary, formatToolResponse } from "../utils/formatting.js";
  * List notes with optional filtering
  */
 export async function listNotes(params: ListNotesParams) {
-  const client = getClient();
-
   const queryParams = buildPaginationParamsV1(params.start, params.limit);
 
   if (params.deal_id) queryParams.set("deal_id", String(params.deal_id));
@@ -47,7 +45,7 @@ export async function listNotes(params: ListNotesParams) {
     queryParams.set("sort", `${currentSort} ${params.sort_direction.toUpperCase()}`);
   }
 
-  const response = await client.get<unknown[]>("/notes", queryParams, "v1");
+  const response = await notesV1.get<unknown[]>("/notes", queryParams);
 
   if (!response.success) {
     return mcpErrorResult(response);
@@ -67,9 +65,7 @@ export async function listNotes(params: ListNotesParams) {
  * Get a single note by ID
  */
 export async function getNote(params: GetNoteParams) {
-  const client = getClient();
-
-  const response = await client.get<unknown>(`/notes/${params.id}`, undefined, "v1");
+  const response = await notesV1.get<unknown>(`/notes/${params.id}`, undefined);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -85,8 +81,6 @@ export async function getNote(params: GetNoteParams) {
  * Create a new note
  */
 export async function createNote(params: CreateNoteParams) {
-  const client = getClient();
-
   const body: Record<string, unknown> = {
     content: params.content,
   };
@@ -105,7 +99,7 @@ export async function createNote(params: CreateNoteParams) {
     body.pinned_to_organization_flag = params.pinned_to_organization_flag ? 1 : 0;
   }
 
-  const response = await client.post<unknown>("/notes", body, "v1");
+  const response = await notesV1.post<unknown>("/notes", body);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -121,8 +115,6 @@ export async function createNote(params: CreateNoteParams) {
  * Update an existing note
  */
 export async function updateNote(params: UpdateNoteParams) {
-  const client = getClient();
-
   const { id, ...updateFields } = params;
   const body: Record<string, unknown> = {};
 
@@ -141,7 +133,7 @@ export async function updateNote(params: UpdateNoteParams) {
     body.pinned_to_organization_flag = updateFields.pinned_to_organization_flag ? 1 : 0;
   }
 
-  const response = await client.put<unknown>(`/notes/${id}`, body, "v1");
+  const response = await notesV1.put<unknown>(`/notes/${id}`, body);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
@@ -160,9 +152,7 @@ export async function deleteNote(params: DeleteNoteParams) {
   const guard = destructiveOperationGuard();
   if (guard) return guard;
 
-  const client = getClient();
-
-  const response = await client.delete<{ id: number }>(`/notes/${params.id}`, "v1");
+  const response = await notesV1.delete<{ id: number }>(`/notes/${params.id}`);
 
   if (!response.success || !response.data) {
     return mcpErrorResult(response);

@@ -2,7 +2,7 @@
  * User MCP tools for Pipedrive
  */
 
-import { getClient } from "../client.js";
+import { usersV1 } from "../version-routing.js";
 import {
   ListUsersSchema,
   GetUserSchema,
@@ -18,12 +18,9 @@ import { formatToolResponse } from "../utils/formatting.js";
  * List all users
  */
 export async function listUsers(_params: ListUsersParams) {
-  const client = getClient();
-
-  const response = await client.get<unknown[]>(
+  const response = await usersV1.get<unknown[]>(
     "/users",
     undefined,
-    "v1"
   );
 
   // v1 returns { success: true, data: null } for an empty collection, so guard
@@ -44,12 +41,9 @@ export async function listUsers(_params: ListUsersParams) {
  * Get a single user by ID
  */
 export async function getUser(params: GetUserParams) {
-  const client = getClient();
-
-  const response = await client.get<unknown>(
+  const response = await usersV1.get<unknown>(
     `/users/${params.id}`,
     undefined,
-    "v1"
   );
 
   if (!response.success || !response.data) {
@@ -66,12 +60,9 @@ export async function getUser(params: GetUserParams) {
  * Get the current user (API key owner)
  */
 export async function getCurrentUser(_params: GetCurrentUserParams) {
-  const client = getClient();
-
-  const response = await client.get<unknown>(
+  const response = await usersV1.get<unknown>(
     "/users/me",
     undefined,
-    "v1"
   );
 
   if (!response.success || !response.data) {

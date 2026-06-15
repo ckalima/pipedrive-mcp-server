@@ -3,6 +3,7 @@
  */
 
 import { vi, beforeEach, afterEach } from 'vitest';
+import { resetVersionRoutingState } from '../src/version-routing.js';
 
 // Store original environment
 const originalEnv = { ...process.env };
@@ -14,6 +15,12 @@ beforeEach(() => {
 
   // Reset all mocks
   vi.clearAllMocks();
+
+  // Clear the version-routing seam's module-level retired/warned state. Like the
+  // getClient() singleton, it persists across tests in a worker, so an unreset
+  // warned set makes the once-per-session assertions order-dependent (see plan
+  // Risks: test-isolation footgun).
+  resetVersionRoutingState();
 });
 
 // Restore original environment after each test
