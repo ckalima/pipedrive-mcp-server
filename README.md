@@ -89,7 +89,7 @@ To enable destructive tools, set `PIPEDRIVE_MODE=full` (or, for back-compat, `PI
 
 **Recommended for first-time setup and agent evaluation: `read-only`.** Let the agent look before it can touch anything, then widen the tier as you build trust.
 
-**Backward compatibility.** `PIPEDRIVE_MODE` is authoritative when set. When it is unset, the mode is derived from the legacy `PIPEDRIVE_ENABLE_DESTRUCTIVE` flag (`true` → `full`, otherwise `safe-write`), so existing installs keep their behavior on upgrade. The unset default is `safe-write`, exactly today's out-of-box surface. An unrecognized `PIPEDRIVE_MODE` value falls back to `read-only`.
+**Backward compatibility.** `PIPEDRIVE_MODE` is authoritative when set. When it is unset, the mode is derived from the legacy `PIPEDRIVE_ENABLE_DESTRUCTIVE` flag (`true` → `full`, otherwise `safe-write`), so existing installs keep their *execution* behavior on upgrade: every tool that ran before still runs, and every tool gated before is still gated. The one observable change at the unset default (`safe-write`) is that the 31 destructive tools — already refused at execution unless enabled — are now also hidden from `tools/list` rather than listed-then-refused (so the listed surface is 124, not 155). An unrecognized `PIPEDRIVE_MODE` value falls back to `read-only`.
 
 ### 3. Start Using
 

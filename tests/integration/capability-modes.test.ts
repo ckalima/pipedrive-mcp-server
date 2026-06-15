@@ -15,6 +15,7 @@ import { allTools, toolDefinitions } from '../../src/tools/index.js';
 import {
   filterToolDefinitionsForMode,
   isToolAllowedInMode,
+  resolveCapabilityMode,
   CAPABILITY_MODES,
 } from '../../src/capability-modes.js';
 import { VALID_API_KEY } from '../helpers/mockEnv.js';
@@ -87,6 +88,17 @@ describe('capability modes — tools/list filter (U3)', () => {
     for (const mode of CAPABILITY_MODES) {
       expect(has(mode, 'pipedrive_get_deal'), mode).toBe(true);
     }
+  });
+
+  it('lists 124 tools at the unset default (the back-compat-sensitive composition)', () => {
+    // The ListTools handler is filterToolDefinitionsForMode(toolDefinitions,
+    // resolveCapabilityMode()). Compose those two pieces with no env set to pin the
+    // exact listed surface an existing install sees on upgrade: 124, not 155 — destructive
+    // tools are now hidden by default rather than listed-then-refused. (resolveCapabilityMode
+    // reads no env here because tests/setup.ts clears both vars in beforeEach.)
+    const mode = resolveCapabilityMode({});
+    expect(mode).toBe('safe-write');
+    expect(filterToolDefinitionsForMode(toolDefinitions, mode).length).toBe(SAFE_WRITE_TOOLS);
   });
 
   it('agrees with the dispatch predicate for all tools across all modes', () => {
