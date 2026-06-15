@@ -86,6 +86,54 @@ describe('config', () => {
         expect(config.enableDestructive).toBe(false);
       });
     });
+
+    describe('capability mode (U2)', () => {
+      beforeEach(() => {
+        setupEnvWithApiKey(VALID_API_KEY);
+      });
+
+      it('reflects an explicit PIPEDRIVE_MODE across the three tiers', () => {
+        (['read-only', 'safe-write', 'full'] as const).forEach((mode) => {
+          process.env.PIPEDRIVE_MODE = mode;
+          expect(getConfig().mode).toBe(mode);
+        });
+      });
+
+      it('derives the mode from PIPEDRIVE_ENABLE_DESTRUCTIVE when PIPEDRIVE_MODE is unset', () => {
+        delete process.env.PIPEDRIVE_MODE;
+        process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = 'true';
+        expect(getConfig().mode).toBe('full');
+
+        process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = 'false';
+        expect(getConfig().mode).toBe('safe-write');
+
+        delete process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
+        expect(getConfig().mode).toBe('safe-write');
+      });
+
+      it('falls closed to read-only on an invalid PIPEDRIVE_MODE', () => {
+        process.env.PIPEDRIVE_MODE = 'garbage';
+        expect(getConfig().mode).toBe('read-only');
+      });
+
+      it('keeps enableDestructive in agreement with the resolved mode', () => {
+        // full → true, including PIPEDRIVE_MODE=full with the legacy flag unset.
+        process.env.PIPEDRIVE_MODE = 'full';
+        delete process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
+        let config = getConfig();
+        expect(config.mode).toBe('full');
+        expect(config.enableDestructive).toBe(true);
+
+        // safe-write / read-only → false.
+        process.env.PIPEDRIVE_MODE = 'safe-write';
+        config = getConfig();
+        expect(config.enableDestructive).toBe(false);
+
+        process.env.PIPEDRIVE_MODE = 'read-only';
+        config = getConfig();
+        expect(config.enableDestructive).toBe(false);
+      });
+    });
   });
 
   describe('getImageReadBaseDir (U10)', () => {

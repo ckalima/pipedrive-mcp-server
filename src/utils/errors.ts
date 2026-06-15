@@ -2,6 +2,8 @@
  * Error handling utilities for Pipedrive MCP Server
  */
 
+import { resolveCapabilityMode } from "../capability-modes.js";
+
 export interface ErrorResponse {
   code: string;
   message: string;
@@ -182,10 +184,16 @@ export function handleApiError(status: number, body: unknown): ErrorResponse {
 
 /**
  * Returns an MCP tool error response if destructive operations are disabled, null if allowed.
+ *
+ * Destructive ops are permitted iff the resolved capability mode is `full` (KTD5). This is
+ * the innermost, defense-in-depth layer beneath the dispatcher backstop: sourcing the
+ * decision from `resolveCapabilityMode()` (not the raw `PIPEDRIVE_ENABLE_DESTRUCTIVE`
+ * flag) means the guard can never disagree with the dispatcher under `PIPEDRIVE_MODE=full`
+ * with the legacy flag unset. The resolver is imported from `capability-modes.ts`, never
+ * `config.ts`, preserving the no-`errors.ts → config.ts` dependency rule (see redactSecrets).
  */
 export function destructiveOperationGuard(): McpToolErrorResult | null {
-  const enabled = process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE === "true";
-  if (enabled) return null;
+  if (resolveCapabilityMode() === "full") return null;
 
   return {
     content: [{
@@ -193,7 +201,7 @@ export function destructiveOperationGuard(): McpToolErrorResult | null {
       text: formatErrorForMcp(createErrorResponse(
         "DESTRUCTIVE_DISABLED",
         "Destructive operations are disabled",
-        "Set PIPEDRIVE_ENABLE_DESTRUCTIVE=true in your environment to enable delete operations"
+        "Set PIPEDRIVE_MODE=full (or, for back-compat, PIPEDRIVE_ENABLE_DESTRUCTIVE=true) in your environment to enable delete operations"
       )),
     }],
     isError: true,

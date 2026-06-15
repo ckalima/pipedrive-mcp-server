@@ -4,11 +4,15 @@
 
 import { resolve } from "node:path";
 
+import { resolveCapabilityMode, type CapabilityMode } from "./capability-modes.js";
+
 export interface Config {
   apiKey: string;
   baseUrlV1: string;
   baseUrlV2: string;
   enableDestructive: boolean;
+  /** The resolved capability tier (read-only / safe-write / full). See capability-modes.ts. */
+  mode: CapabilityMode;
 }
 
 /**
@@ -55,11 +59,17 @@ export function getConfig(): Config {
   // Cache the validated token for redaction-only use (see getCachedApiToken()).
   cachedApiToken = apiKey;
 
+  // Derive enableDestructive from the resolved mode (true iff `full`) rather than the raw
+  // flag, so the two Config fields can never disagree under PIPEDRIVE_MODE=full with the
+  // legacy flag unset (KTD5).
+  const mode = resolveCapabilityMode();
+
   return {
     apiKey,
     baseUrlV1: "https://api.pipedrive.com/v1",
     baseUrlV2: "https://api.pipedrive.com/api/v2",
-    enableDestructive: process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE === "true",
+    enableDestructive: mode === "full",
+    mode,
   };
 }
 

@@ -460,6 +460,7 @@ describe('errors', () => {
     const originalEnv = process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
 
     afterEach(() => {
+      delete process.env.PIPEDRIVE_MODE;
       if (originalEnv === undefined) {
         delete process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
       } else {
@@ -536,6 +537,43 @@ describe('errors', () => {
       delete process.env.PIPEDRIVE_API_KEY;
       expect(() => destructiveOperationGuard()).not.toThrow();
       expect(destructiveOperationGuard()).toBeNull();
+    });
+
+    describe('mode-aware (U2, KTD5)', () => {
+      it('allows in full reached via PIPEDRIVE_MODE=full (legacy flag unset)', () => {
+        process.env.PIPEDRIVE_MODE = 'full';
+        delete process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
+        expect(destructiveOperationGuard()).toBeNull();
+      });
+
+      it('allows in full reached via the legacy flag (back-compat)', () => {
+        delete process.env.PIPEDRIVE_MODE;
+        process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = 'true';
+        expect(destructiveOperationGuard()).toBeNull();
+      });
+
+      it('blocks in safe-write with a DESTRUCTIVE_DISABLED error', () => {
+        process.env.PIPEDRIVE_MODE = 'safe-write';
+        const result = destructiveOperationGuard();
+        expect(result).not.toBeNull();
+        expect(result!.isError).toBe(true);
+        expect(result!.content[0].text).toContain('DESTRUCTIVE_DISABLED');
+      });
+
+      it('blocks in read-only with a DESTRUCTIVE_DISABLED error', () => {
+        process.env.PIPEDRIVE_MODE = 'read-only';
+        const result = destructiveOperationGuard();
+        expect(result).not.toBeNull();
+        expect(result!.isError).toBe(true);
+        expect(result!.content[0].text).toContain('DESTRUCTIVE_DISABLED');
+      });
+
+      it('names PIPEDRIVE_MODE=full in the suggestion (and keeps the back-compat hint)', () => {
+        process.env.PIPEDRIVE_MODE = 'safe-write';
+        const result = destructiveOperationGuard();
+        expect(result!.content[0].text).toContain('PIPEDRIVE_MODE=full');
+        expect(result!.content[0].text).toContain('PIPEDRIVE_ENABLE_DESTRUCTIVE=true');
+      });
     });
   });
 });
