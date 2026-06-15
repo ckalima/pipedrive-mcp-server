@@ -172,5 +172,18 @@ describe('gen-docs generator', () => {
         expect(manifest, `manifest missing required key ${key}`).toHaveProperty(key);
       }
     });
+
+    it('surfaces PIPEDRIVE_MODE via user_config + server env (capability modes)', () => {
+      const manifest = buildManifest() as {
+        user_config: Record<string, { type?: string; default?: string }>;
+        server: { mcp_config: { env: Record<string, string> } };
+      };
+      // A `mode` user_config entry the install UI can set (string + default).
+      expect(manifest.user_config).toHaveProperty('mode');
+      expect(manifest.user_config.mode.type).toBe('string');
+      expect(manifest.user_config.mode.default).toBe('safe-write');
+      // …mapped into the server env so the value reaches the process.
+      expect(manifest.server.mcp_config.env.PIPEDRIVE_MODE).toBe('${user_config.mode}');
+    });
   });
 });

@@ -22,7 +22,8 @@
         "${__dirname}/server/index.js"
       ],
       "env": {
-        "PIPEDRIVE_API_KEY": "${user_config.api_key}"
+        "PIPEDRIVE_API_KEY": "${user_config.api_key}",
+        "PIPEDRIVE_MODE": "${user_config.mode}"
       }
     }
   },
@@ -33,6 +34,13 @@
       "description": "Your Pipedrive API token. Find it at Settings > Personal preferences > API in Pipedrive.",
       "sensitive": true,
       "required": true
+    },
+    "mode": {
+      "type": "string",
+      "title": "Capability mode",
+      "description": "Server-enforced safety tier. One of: 'read-only' (reads only), 'safe-write' (reads + non-destructive writes), or 'full' (all tools, including destructive deletes/conversions). Unrecognized values fall back to read-only.",
+      "default": "safe-write",
+      "required": false
     }
   },
   "tools": [

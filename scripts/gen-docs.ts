@@ -136,8 +136,9 @@ export function buildReadmeRegion(): string {
   lines.push("");
   lines.push(
     `**${allTools.length} tools.** ${DESTRUCTIVE_MARK} destructive ` +
-      `(gated by \`PIPEDRIVE_ENABLE_DESTRUCTIVE=true\`, off by default) · ` +
-      `${GROWTH_MARK} requires a Growth+ plan.`,
+      `(require \`PIPEDRIVE_MODE=full\`, off by default) · ` +
+      `${GROWTH_MARK} requires a Growth+ plan. ` +
+      `The active [capability mode](#capability-modes) governs which tools are listed.`,
   );
   lines.push("");
   lines.push(

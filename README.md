@@ -12,7 +12,7 @@ An MCP (Model Context Protocol) server for Pipedrive CRM integration with Claude
 - **API v2-first.** Every entity uses Pipedrive's v2 REST API where it exists; v1 is used only for the capabilities that have no v2 equivalent (notes, mail, users, and leads CRUD). See [API Versioning](#api-versioning).
 - **Contract-tested against the real OpenAPI spec.** Request params, request bodies, and response shapes are checked against the vendored Pipedrive OpenAPI v2 definition (`docs/api/openapi-v2.yaml`) in `tests/contract/`, so the v2 tools can't silently drift from the documented API.
 - **Live-smoke verified.** The tool surface is broadly exercised against a real Pipedrive account (`scripts/smoke-coverage.ts`), with only API-unseedable surfaces (e.g. mail threads, project templates) left to manual checks. Coverage includes plan-gated endpoints such as Growth+ deal installments (`scripts/smoke-installments.ts`). Key write smokes (e.g. the task `is_done` flag) assert the field value actually changed on the wire, not just a 200.
-- **Destructive ops gated by default.** Deletes, conversions, and other irreversible writes (🔒 in the tool table) are disabled until you set `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`, so the server is read-and-create only out of the box. Every tool also carries MCP annotations (`readOnlyHint`/`destructiveHint`/`idempotentHint`) so policy-aware clients can tell reads from writes from deletes.
+- **Server-enforced capability modes.** `PIPEDRIVE_MODE` picks a safety tier — `read-only`, `safe-write` (the default: reads + non-destructive writes), or `full` — and out-of-mode tools are both hidden from `tools/list` and refused if called directly. Deletes, conversions, and other irreversible writes (🔒 in the tool table) require `full`, so the server is read-and-create only out of the box. Every tool also carries MCP annotations (`readOnlyHint`/`destructiveHint`/`idempotentHint`) so policy-aware clients can tell reads from writes from deletes. See [Capability modes](#capability-modes).
 - **MIT licensed**, published with npm build provenance.
 
 **Honest limitations.** Transport is STDIO only today (a Streamable HTTP flag is planned), and auth is via a Pipedrive API key, which matches the local/self-hosted tier this server targets. There is no hosted OAuth offering yet.
@@ -71,10 +71,25 @@ export PIPEDRIVE_API_KEY="your-40-character-api-key"
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `PIPEDRIVE_API_KEY` | Yes | - | Your 40-character Pipedrive API token. |
-| `PIPEDRIVE_ENABLE_DESTRUCTIVE` | No | `false` | Set to `true` to enable destructive tools (🔒 in the table below: deletes, conversions, and other irreversible writes). Off by default so the server is read-and-create only until you opt in. |
+| `PIPEDRIVE_MODE` | No | `safe-write` | Server-enforced capability tier: `read-only` (reads only), `safe-write` (reads + non-destructive writes), or `full` (all tools, including destructive). Out-of-mode tools are hidden from `tools/list` and refused if called directly. Authoritative when set; an unrecognized value falls back to `read-only`. See [Capability modes](#capability-modes). |
+| `PIPEDRIVE_ENABLE_DESTRUCTIVE` | No | `false` | Legacy flag, superseded by `PIPEDRIVE_MODE`. When `PIPEDRIVE_MODE` is unset, `true` is treated as `full` and anything else as `safe-write`. Still honored for back-compat; prefer `PIPEDRIVE_MODE=full`. |
 | `PIPEDRIVE_IMAGE_BASE_DIR` | No | (unset) | Allowlisted directory the server may read product images from when `file_path` is passed to the image-upload tools. Filesystem reads are **disabled** unless this is set, and a `file_path` must resolve within it. Leave unset and pass `base64_data` if the caller cannot share the server's filesystem. See [SECURITY.md](SECURITY.md#operator-best-practices). |
 
-To enable destructive tools, add `"PIPEDRIVE_ENABLE_DESTRUCTIVE": "true"` to the `env` block in your `.mcp.json` (alongside `PIPEDRIVE_API_KEY`), or `export PIPEDRIVE_ENABLE_DESTRUCTIVE=true`. When unset, every 🔒 tool returns a `DESTRUCTIVE_DISABLED` error instead of acting.
+To enable destructive tools, set `PIPEDRIVE_MODE=full` (or, for back-compat, `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`) in the `env` block of your `.mcp.json` alongside `PIPEDRIVE_API_KEY`. Below `full`, every 🔒 tool returns a `DESTRUCTIVE_DISABLED` error instead of acting, and tools above the active tier return a `MODE_RESTRICTED` error.
+
+### Capability modes
+
+`PIPEDRIVE_MODE` sets a server-enforced safety tier. The tier is enforced two ways: out-of-mode tools are filtered out of `tools/list` (so the agent never sees them) and the dispatcher refuses any out-of-mode call by name before its handler runs, so the tier is a real guarantee rather than a UI hint.
+
+| Mode | What's available | Tools | Destructive ops |
+|------|------------------|------:|-----------------|
+| `read-only` | read verbs only (`list`/`get`/`search`) | 69 | no |
+| `safe-write` | reads + non-destructive writes | 124 | no |
+| `full` | all tools | 155 | yes |
+
+**Recommended for first-time setup and agent evaluation: `read-only`.** Let the agent look before it can touch anything, then widen the tier as you build trust.
+
+**Backward compatibility.** `PIPEDRIVE_MODE` is authoritative when set. When it is unset, the mode is derived from the legacy `PIPEDRIVE_ENABLE_DESTRUCTIVE` flag (`true` → `full`, otherwise `safe-write`), so existing installs keep their behavior on upgrade. The unset default is `safe-write`, exactly today's out-of-box surface. An unrecognized `PIPEDRIVE_MODE` value falls back to `read-only`.
 
 ### 3. Start Using
 
@@ -90,7 +105,7 @@ Once configured, Claude can access your Pipedrive data:
 
 <!-- BEGIN GENERATED TOOLS -->
 
-**155 tools.** 🔒 destructive (gated by `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`, off by default) · ⭑ requires a Growth+ plan.
+**155 tools.** 🔒 destructive (require `PIPEDRIVE_MODE=full`, off by default) · ⭑ requires a Growth+ plan. The active [capability mode](#capability-modes) governs which tools are listed.
 
 <sub>This section is generated by `npm run gen:docs` from the live tool registry. Do not edit by hand - CI fails on drift.</sub>
 
