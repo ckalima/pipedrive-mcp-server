@@ -11,6 +11,7 @@ import {
   RETRY_MAX_ATTEMPTS,
   RETRY_BUDGET_MS,
   RETRY_AFTER_CAP_MS,
+  BREAKER_COOLDOWN_MS,
 } from '../../src/resilience.js';
 import { setupValidEnv, clearApiKey, VALID_API_KEY } from '../helpers/mockEnv.js';
 import {
@@ -770,6 +771,47 @@ describe('resilience: retry + circuit breaker (U3)', () => {
       expect(response.error?.code).toBe('CIRCUIT_OPEN');
       expect(afterOpen).not.toHaveBeenCalled();
     });
+
+    it('half-open probe issues exactly one upstream request for a retryable read 500 (internal retry disabled)', async () => {
+      vi.useFakeTimers();
+      try {
+        mockApiError(503, 'unavailable');
+        const client = new PipedriveClient();
+        for (let i = 0; i < 5; i++) await client.post('/deals', { title: 'x' }, 'v2');
+        expect(getBreakerState()).toBe('Open');
+
+        // Cooldown elapses -> the next call becomes the single half-open probe.
+        vi.setSystemTime(Date.now() + BREAKER_COOLDOWN_MS + 1);
+        const probeMock = mockApiError(500, 'boom'); // a read 500 is normally retried...
+
+        const response = await client.get('/deals', undefined, 'v2');
+
+        expect(response.success).toBe(false);
+        expect(probeMock).toHaveBeenCalledTimes(1); // ...but the probe runs once, no retry
+        expect(getBreakerState()).toBe('Open'); // a non-success probe reopens the breaker
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('AE1 ∩ probe: a half-open probe that is a write hitting a network error does not retry and reopens', async () => {
+      vi.useFakeTimers();
+      try {
+        mockApiError(503, 'unavailable');
+        const client = new PipedriveClient();
+        for (let i = 0; i < 5; i++) await client.post('/deals', { title: 'x' }, 'v2');
+        vi.setSystemTime(Date.now() + BREAKER_COOLDOWN_MS + 1);
+        const probeMock = mockFetchNetworkError('Connection refused');
+
+        const response = await client.post('/deals', { title: 'x' }, 'v2');
+
+        expect(response.error?.code).toBe('NETWORK_ERROR');
+        expect(probeMock).toHaveBeenCalledTimes(1); // write never re-sent (AE1)
+        expect(getBreakerState()).toBe('Open'); // probe failure reopens
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('telemetry (R8)', () => {
@@ -789,6 +831,23 @@ describe('resilience: retry + circuit breaker (U3)', () => {
       const stderr = lines.join('\n');
       expect(stderr).not.toContain(VALID_API_KEY);
       expect(stderr).not.toContain('api_token=');
+      errorSpy.mockRestore();
+    });
+
+    it('path-templates a CRM record id out of the logged endpoint (no record id reaches stderr)', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const leadUuid = '550e8400-e29b-41d4-a716-446655440000';
+      mockFetch([
+        { status: 429, ok: false, error: 'rate' },
+        { status: 200, data: fixtures.lead },
+      ]);
+      const client = new PipedriveClient();
+
+      await client.get(`/leads/${leadUuid}`, undefined, 'v1');
+
+      const stderr = errorSpy.mock.calls.flat().map(String).join('\n');
+      expect(stderr).not.toContain(leadUuid); // the record id is templated out
+      expect(stderr).toContain('/leads/:id'); // ...replaced by the static template
       errorSpy.mockRestore();
     });
   });

@@ -51,6 +51,24 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const EMPTY_HEADERS = new Headers();
 
 /**
+ * Path-templates an endpoint for telemetry so no CRM-sourced record identifier can
+ * reach operator stderr through a logged endpoint (R8). Any path segment that is a
+ * record/conversion id — a numeric id or any segment containing a digit (UUIDs,
+ * `conv-…` ids) — is replaced with `:id`; static path words in this API carry no
+ * digits, so they survive (`/leads/{uuid}/convert/status/{id}` -> `/leads/:id/convert/status/:id`).
+ * Anything after a `?`/`#` is dropped defensively. This complements (does not
+ * replace) the token redaction in redactSecrets — the auth token never rides the
+ * `endpoint` (it is applied to the URL), so this is purely about record ids.
+ */
+function sanitizeEndpointForLog(endpoint: string): string {
+  const path = endpoint.split(/[?#]/)[0];
+  return path
+    .split("/")
+    .map((segment) => (/\d/.test(segment) ? ":id" : segment))
+    .join("/");
+}
+
+/**
  * Pipedrive API client with support for both v1 and v2 endpoints
  */
 export class PipedriveClient {
@@ -364,13 +382,18 @@ export class PipedriveClient {
     let budgetUsedMs = 0;
     let lastFailure: ApiResponse<T> | null = null;
 
+    // Telemetry uses a path-templated endpoint so no CRM-sourced record id can
+    // reach operator stderr, even when a handler interpolated one into the path
+    // (e.g. /leads/{uuid}). Composed once and reused for every attempt/transition log.
+    const logEndpoint = sanitizeEndpointForLog(endpoint);
+
     for (let attemptIndex = 0; ; attemptIndex++) {
       // ── Breaker gate (consulted before every attempt) ──
       const stateBeforeGate = getBreakerState();
       const allowed = breakerAllowsRequest(Date.now());
-      this.logBreakerTransition(stateBeforeGate, getBreakerState(), method, endpoint);
+      this.logBreakerTransition(stateBeforeGate, getBreakerState(), method, logEndpoint);
       if (!allowed) {
-        this.logResilience(`${method} ${endpoint} circuit open — fast-failing without a request`);
+        this.logResilience(`${method} ${logEndpoint} circuit open — fast-failing without a request`);
         return { success: false, error: circuitOpenError() };
       }
       const isProbe = getBreakerState() === "HalfOpen";
@@ -387,7 +410,7 @@ export class PipedriveClient {
 
       // ── Attempt ──
       this.logResilience(
-        `${method} ${endpoint}${multipart ? " (multipart)" : ""} attempt ${attemptIndex + 1}/${RETRY_MAX_ATTEMPTS}${isProbe ? " (breaker probe)" : ""}`,
+        `${method} ${logEndpoint}${multipart ? " (multipart)" : ""} attempt ${attemptIndex + 1}/${RETRY_MAX_ATTEMPTS}${isProbe ? " (breaker probe)" : ""}`,
       );
       const attemptStartMs = Date.now();
       let parsed: ApiResponse<T> | undefined;
@@ -416,7 +439,7 @@ export class PipedriveClient {
       const { retryable, isTripSignal } = classifyOutcome({ method, httpStatus, isNetworkError });
       const stateBeforeRecord = getBreakerState();
       recordOutcome({ isSuccess, isTripSignal }, Date.now());
-      this.logBreakerTransition(stateBeforeRecord, getBreakerState(), method, endpoint);
+      this.logBreakerTransition(stateBeforeRecord, getBreakerState(), method, logEndpoint);
 
       if (isSuccess) {
         return parsed!;
@@ -460,7 +483,7 @@ export class PipedriveClient {
       }
 
       this.logResilience(
-        `${method} ${endpoint} retrying in ${waitMs}ms after attempt ${attemptIndex + 1} (${httpStatus ? `status ${httpStatus}` : "network/timeout"})`,
+        `${method} ${logEndpoint} retrying in ${waitMs}ms after attempt ${attemptIndex + 1} (${httpStatus ? `status ${httpStatus}` : "network/timeout"})`,
       );
       budgetUsedMs += waitMs;
       await resilientSleep(waitMs);
