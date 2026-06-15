@@ -98,33 +98,18 @@ Every public draft draws only from this list. Nothing here is comparative.
 
 **Title:** `Open-source Pipedrive MCP server: 155 tools, v2-first, MIT`
 
-I originally built this for a client who wanted their team to work Pipedrive through an
-AI assistant instead of clicking through the UI all day. It turned out general enough that there
-was no reason to keep it locked up, so I've open-sourced it under MIT for anyone who wants the
-same thing.
+I originally built this for a client who wanted their team to work Pipedrive through an AI assistant instead of clicking through the UI all day. It turned out general enough that there was no reason to keep it locked up, so I've open-sourced it under MIT for anyone who wants the same thing.
 
-It's an MCP server for Pipedrive: point Claude (Code or Desktop), or any MCP client, at it
-and you can query, create, and update deals, persons, organizations, activities, products,
-projects, tasks, leads, notes, mail, and fields. 155 tools in total.
+It's an MCP server for Pipedrive: point Claude (Code or Desktop), or any MCP client, at it and you can query, create, and update deals, persons, organizations, activities, products, projects, tasks, leads, notes, mail, and fields. 155 tools in total.
 
-A few things I cared about getting right, which are probably worth checking in any Pipedrive
-MCP server:
+A few things I cared about getting right, which are probably worth checking in any Pipedrive MCP server:
 
-- **License:** MIT, including commercial use, published to npm with build provenance as
-  `@ckalima/pipedrive-mcp-server`.
-- **v2-first:** every entity uses Pipedrive's v2 REST API where it exists. I only fall back
-  to v1 for the handful of things that have no v2 equivalent yet (notes, mail, users, leads CRUD).
-- **Safe by default:** deletes and conversions are off until you explicitly set an env flag,
-  so out of the box it can only read and create. Nothing irreversible happens unless you opt in.
-  Every tool also carries MCP read/destructive/idempotent hints so policy-aware clients can
-  reason about it.
-- **Verified, not vibes:** the v2 tools are contract-tested against Pipedrive's published
-  OpenAPI v2 spec, and I've live-smoke tested the whole surface against a real account
-  (including Growth+ deal installments). Over 1,700 tests run in CI (1,741 currently).
+- **License:** MIT, including commercial use, published to npm with build provenance as `@ckalima/pipedrive-mcp-server`.
+- **v2-first:** every entity uses Pipedrive's v2 REST API where it exists. I only fall back to v1 for the handful of things that have no v2 equivalent yet (notes, mail, users, leads CRUD).
+- **Safe by default:** deletes and conversions are off until you explicitly set an env flag, so out of the box it can only read and create. Nothing irreversible happens unless you opt in. Every tool also carries MCP read/destructive/idempotent hints so policy-aware clients can reason about it.
+- **Verified, not vibes:** the v2 tools are contract-tested against Pipedrive's published OpenAPI v2 spec, and I've live-smoke tested the whole surface against a real account (including Growth+ deal installments). Over 1,700 tests run in CI (1,741 currently).
 
-Honest about the limits: it's STDIO transport today (no remote or HTTP transport yet), and
-auth is a Pipedrive API key rather than hosted OAuth. That matches the local, self-hosted way
-it's meant to run.
+Honest about the limits: it's STDIO transport today (no remote or HTTP transport yet), and auth is a Pipedrive API key rather than hosted OAuth. That matches the local, self-hosted way it's meant to run.
 
 Config is a standard `.mcp.json` block with an API key:
 
@@ -155,45 +140,28 @@ Primary targeted venue is **r/mcp** (the dedicated MCP community). Post it with 
 flair — that is r/mcp's required tag for authors demonstrating their own work (rule 4), and it also
 satisfies the subreddit's self-promo disclosure rule (rule 3). The copy already discloses authorship
 in plain text. **r/ClaudeAI** runs the same copy for reach but is high-volume with short shelf life,
-so it goes second. This is a fresh top-level submission and is
-distinct from Draft 4 (the author-comment correction on the old Glama bot listing) — don't
-cross-link the two. No config block here; the repo link carries setup. Salt & Wind is left
-unnamed in this post (the named usage story lives in Draft 3).
+so it goes second. This is a fresh top-level submission, distinct from Draft 4 (the author-comment
+correction on the old Glama bot listing) — don't cross-link the two. No config block here; the repo
+link carries setup. Salt & Wind is left unnamed in this post (the named usage story lives in Draft 3).
 
 **Title:** `Pipedrive has no official MCP server, so we open-sourced ours — 155 tools, v2-first, MIT`
 
-Pipedrive doesn't have an official MCP server, so the options today are community-built servers
-or a hosted connector. Ours is one of the community ones — but we built it for real work first,
-then open-sourced it under MIT once it was solid.
+Pipedrive doesn't have an official MCP server, so the options today are community-built servers or a hosted connector. Ours is one of the community ones — but we built it for real work first, then open-sourced it under MIT once it was solid.
 
-It started on a client engagement. A sales team that basically lives in Pipedrive wanted to do
-their reporting and deal analysis by asking Claude instead of clicking through the UI and
-exporting spreadsheets all day. Once it was working it was obviously useful beyond that one
-account, so we cleaned it up and put it out there.
+It started on a client engagement. A sales team that basically lives in Pipedrive wanted to do their reporting and deal analysis by asking Claude instead of clicking through the UI and exporting spreadsheets all day. Once it was working it was obviously useful beyond that one account, so we cleaned it up and put it out there.
 
-It covers most of the CRM surface, 155 tools: deals, persons, organizations, activities, products,
-projects, tasks, leads, notes, mail, fields. In practice we use it read-heavy — stuff like "show
-me open deals over $10k by stage," "which deals slipped this month," "what's the activity history
-on this org" all just work.
+It covers most of the CRM surface, 155 tools: deals, persons, organizations, activities, products, projects, tasks, leads, notes, mail, fields. In practice we use it read-heavy — stuff like "show me open deals over $10k by stage," "which deals slipped this month," "what's the activity history on this org" all just work.
 
 A few things we were deliberate about, mostly because pointing an AI at a live CRM made us nervous:
 
-- It's v2-first. Everything uses Pipedrive's newer REST API v2 where it exists, and only falls
-  back to the old v1 for the few things that still have no v2 equivalent (notes, mail, users,
-  leads CRUD).
-- Nothing destructive happens by default. Deletes and other irreversible writes stay off until
-  you flip an env flag, so out of the box it can only read and create. Each tool also reports MCP
-  read/destructive/idempotent hints, so the client knows what a call is about to do before it does it.
-- We didn't want to trust it blindly. The v2 tools are contract-tested against Pipedrive's
-  published OpenAPI spec, and the whole thing is smoke-tested against a real account (including
-  Growth+ deal installments) — the write tests check the field actually changed on the wire, not
-  just that the API said 200. Around 1,700 tests run in CI, and it's on npm with build provenance.
+- It's v2-first. Everything uses Pipedrive's newer REST API v2 where it exists, and only falls back to the old v1 for the few things that still have no v2 equivalent (notes, mail, users, leads CRUD).
+- Nothing destructive happens by default. Deletes and other irreversible writes stay off until you flip an env flag, so out of the box it can only read and create. Each tool also reports MCP read/destructive/idempotent hints, so the client knows what a call is about to do before it does it.
+- We didn't want to trust it blindly. The v2 tools are contract-tested against Pipedrive's published OpenAPI spec, and the whole thing is smoke-tested against a real account (including Growth+ deal installments) — the write tests check the field actually changed on the wire, not just that the API said 200. Around 1,700 tests run in CI, and it's on npm with build provenance.
 
 Repo and setup: https://github.com/ckalima/pipedrive-mcp-server
 npm: https://www.npmjs.com/package/@ckalima/pipedrive-mcp-server
 
-Feedback welcome, especially if you've built against the Pipedrive API and have opinions on what's
-missing.
+Feedback welcome, especially if you've built against the Pipedrive API and have opinions on what's missing.
 
 ---
 
@@ -201,12 +169,9 @@ missing.
 
 **Title:** `Built a free, open-source way to run Pipedrive from an AI assistant (Claude)`
 
-I originally built this for a client whose sales team basically lives in Pipedrive and wanted
-to stop clicking through screens all day. It worked well enough that I cleaned it up and made it
-free and open-source, so I'm sharing it here in case it's useful to anyone else.
+I originally built this for a client whose sales team basically lives in Pipedrive and wanted to stop clicking through screens all day. It worked well enough that I cleaned it up and made it free and open-source, so I'm sharing it here in case it's useful to anyone else.
 
-If you use Pipedrive and an AI assistant like Claude, this connects the two. Once it's set up you
-can just ask things like:
+If you use Pipedrive and an AI assistant like Claude, this connects the two. Once it's set up you can just ask things like:
 
 - "show me open deals over $10k"
 - "create a deal for Acme at $50k"
@@ -216,18 +181,13 @@ and it acts on your actual Pipedrive data.
 
 A few notes for the sales-ops minded:
 
-- It covers the day-to-day surface: deals, contacts, organizations, activities, products, leads,
-  notes, and email threads. 155 tools in total.
-- **It will not delete anything unless you explicitly turn that on.** Out of the box it can only
-  read and create, which is the safe setting for a live CRM you actually rely on.
-- Setup is an API key from Pipedrive (Settings → Personal preferences → API) dropped into a
-  config file. It runs locally on your own machine, with no third-party service sitting in the
-  middle of your data.
+- It covers the day-to-day surface: deals, contacts, organizations, activities, products, leads, notes, and email threads. 155 tools in total.
+- **It will not delete anything unless you explicitly turn that on.** Out of the box it can only read and create, which is the safe setting for a live CRM you actually rely on.
+- Setup is an API key from Pipedrive (Settings → Personal preferences → API) dropped into a config file. It runs locally on your own machine, with no third-party service sitting in the middle of your data.
 
 Repo and setup steps: https://github.com/ckalima/pipedrive-mcp-server
 
-Not selling anything, it's genuinely free (MIT licensed). Happy to answer setup questions in the
-comments.
+Not selling anything, it's genuinely free (MIT licensed). Happy to answer setup questions in the comments.
 
 ---
 
@@ -242,20 +202,12 @@ value is accuracy and discoverability, not a spike.
 
 > **Reply as the author:**
 
-Author here. This was indexed early, so the numbers are out of date. Quick update on where
-it's at now:
+Author here. This was indexed early, so the numbers are out of date. Quick update on where it's at now:
 
-- **155 tools** (up from the 38 in this listing), covering deals, persons, organizations,
-  activities, products, projects, tasks, leads, notes, mail, and fields.
-- **v2-first.** Everything uses Pipedrive's v2 REST API where it exists; v1 only for the few
-  capabilities with no v2 equivalent (notes, mail, users, leads CRUD).
-- **Safe by default.** Deletes and other irreversible writes are gated behind an env flag, so
-  out of the box it's read-and-create only. Every tool also carries MCP
-  read/destructive/idempotent hints.
-- **Verified, not vibes.** The v2 tools are contract-tested against Pipedrive's published
-  OpenAPI spec, and the whole surface is live-smoke tested against a real account (including
-  Growth+ deal installments). Over 1,700 tests in CI. MIT licensed, now on npm with build
-  provenance.
+- **155 tools** (up from the 38 in this listing), covering deals, persons, organizations, activities, products, projects, tasks, leads, notes, mail, and fields.
+- **v2-first.** Everything uses Pipedrive's v2 REST API where it exists; v1 only for the few capabilities with no v2 equivalent (notes, mail, users, leads CRUD).
+- **Safe by default.** Deletes and other irreversible writes are gated behind an env flag, so out of the box it's read-and-create only. Every tool also carries MCP read/destructive/idempotent hints.
+- **Verified, not vibes.** The v2 tools are contract-tested against Pipedrive's published OpenAPI spec, and the whole surface is live-smoke tested against a real account (including Growth+ deal installments). Over 1,700 tests in CI. MIT licensed, now on npm with build provenance.
 
 Repo: https://github.com/ckalima/pipedrive-mcp-server
 npm: https://www.npmjs.com/package/@ckalima/pipedrive-mcp-server
