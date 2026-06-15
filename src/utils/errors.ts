@@ -17,7 +17,8 @@ export type ErrorCode =
   | "PERMISSION_DENIED"
   | "API_ERROR"
   | "NETWORK_ERROR"
-  | "DESTRUCTIVE_DISABLED";
+  | "DESTRUCTIVE_DISABLED"
+  | "RESPONSE_TOO_LARGE";
 
 export type McpToolErrorResult = { content: { type: "text"; text: string }[]; isError: true };
 

@@ -28,6 +28,7 @@ import {
 import { validateConfig, getCachedApiToken } from "./config.js";
 import { toolDefinitions, getToolHandler, getToolSchema } from "./tools/index.js";
 import { mcpErrorFromCode, boundErrorMessage } from "./utils/errors.js";
+import { MAX_TOOL_RESPONSE_CHARS, measureResultTextLength } from "./utils/formatting.js";
 
 // Server metadata
 const SERVER_NAME = "pipedrive-mcp-server";
@@ -89,6 +90,24 @@ export async function handleCallTool(request: { params: { name: string; argument
     // Execute handler
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await handler(validatedArgs as any);
+
+    // Universal size backstop (F5/KTD8): bound the text that crosses into the
+    // model's context even for handlers not yet routed through
+    // `formatToolResponse`. Skip results already marked isError so an error is
+    // never double-wrapped, and return a well-formed structured error (never a
+    // mid-string cut of serialized JSON) so the result stays parseable.
+    if (!(result as { isError?: boolean })?.isError) {
+      const size = measureResultTextLength(result);
+      if (size > MAX_TOOL_RESPONSE_CHARS) {
+        console.error(`[${SERVER_NAME}] Response from ${name} exceeded size cap (${size} chars)`);
+        return mcpErrorFromCode(
+          "RESPONSE_TOO_LARGE",
+          `Tool response too large (${size} characters); it was withheld to protect the model's context window`,
+          "Narrow the query or use pagination (cursor/limit) to retrieve the data in smaller pages"
+        );
+      }
+    }
+
     return result;
   } catch (error) {
     const rawMessage = error instanceof Error ? error.message : "Unknown error occurred";
