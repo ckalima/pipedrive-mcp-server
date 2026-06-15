@@ -151,9 +151,11 @@ Happy to answer questions about specific endpoints or the v1 to v2 migration cov
 
 ## Draft 2: r/mcp and r/ClaudeAI show-and-tell (same copy, posted to each, staggered)
 
-Primary targeted venue is **r/mcp** (the dedicated MCP community; mention you're the author to
-request the `mcp-server-authors` flair). **r/ClaudeAI** runs the same copy for reach but is
-high-volume with short shelf life, so it goes second. This is a fresh top-level submission and is
+Primary targeted venue is **r/mcp** (the dedicated MCP community). Post it with the **`showcase`**
+flair — that is r/mcp's required tag for authors demonstrating their own work (rule 4), and it also
+satisfies the subreddit's self-promo disclosure rule (rule 3). The copy already discloses authorship
+in plain text. **r/ClaudeAI** runs the same copy for reach but is high-volume with short shelf life,
+so it goes second. This is a fresh top-level submission and is
 distinct from Draft 4 (the author-comment correction on the old Glama bot listing) — don't
 cross-link the two. No config block here; the repo link carries setup. Salt & Wind is left
 unnamed in this post (the named usage story lives in Draft 3).
