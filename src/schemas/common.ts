@@ -100,6 +100,27 @@ export const SearchTermSchema = z.string()
   .describe("Search term (1-500 characters)");
 
 /**
+ * Path-segment allowlist primitive (single source of truth for the path-safe
+ * character class).
+ *
+ * Any value interpolated into a request *path* (not a query param) must be
+ * restricted to a strict allowlist so it cannot redirect the request to another
+ * endpoint. A blocklist of just `/` is NOT sufficient: `new URL()` normalizes
+ * backslashes to `/`, collapses `..` dot-segments, and truncates the path at
+ * `?`/`#`, so values like `..`, `a\b`, or `abc?x=1` would still mangle the
+ * resolved path. The allowlist `[A-Za-z0-9_-]` admits 40-char hex hashes,
+ * snake_case keys, and UUIDs (hyphenated hex) while excluding every
+ * URL-significant character. The regex is anchored, linear, and has no nested
+ * quantifiers (no ReDoS surface).
+ *
+ * Entity schemas that constrain a path segment (e.g. `FieldCodeSchema`) build on
+ * this; runtime guards for API-response-sourced segments call `.safeParse()`.
+ */
+export const PathSegmentSchema = z.string().min(1)
+  .regex(/^[A-Za-z0-9_-]+$/, "value may only contain letters, digits, '_' and '-'")
+  .describe("A path-safe segment: letters, digits, '_' and '-' only");
+
+/**
  * Custom field value (can be various types)
  */
 export const CustomFieldValueSchema = z.union([

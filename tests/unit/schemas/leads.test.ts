@@ -419,5 +419,14 @@ describe('leads schemas', () => {
     it('should reject a non-UUID conversion_id', () => {
       expect(() => GetLeadConversionStatusSchema.parse({ id: VALID_UUID, conversion_id: 'not-a-uuid' })).toThrow();
     });
+
+    it('ratifies that hostile path-segment forms are rejected before path build (U3, F2)', () => {
+      // The user-facing conversion_id and id are both z.uuid(), so URL-significant
+      // path-segment payloads never reach the interpolated status path.
+      for (const hostile of ['../../pipelines/7', 'abc?x=1', 'abc#f', 'a\\b', '..']) {
+        expect(() => GetLeadConversionStatusSchema.parse({ id: VALID_UUID, conversion_id: hostile })).toThrow();
+        expect(() => GetLeadConversionStatusSchema.parse({ id: hostile, conversion_id: VALID_UUID })).toThrow();
+      }
+    });
   });
 });

@@ -23,6 +23,7 @@ import {
   type ConvertLeadToDealParams,
   type GetLeadConversionStatusParams,
 } from "../schemas/leads.js";
+import { PathSegmentSchema } from "../schemas/common.js";
 import { buildPaginationParamsV1, extractPaginationV1, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, mcpErrorFromCode, destructiveOperationGuard } from "../utils/errors.js";
 import { createListSummary } from "../utils/formatting.js";
@@ -307,6 +308,20 @@ export async function convertLeadToDeal(
     );
   }
 
+  // The conversion_id is API-response-sourced and is interpolated into the status
+  // polling path below. Validate it against the path-safe allowlist before it can
+  // shape a URL, so a malformed or hostile value returned by the backend cannot
+  // redirect the request to a different endpoint (F2/KTD4).
+  const conversionIdCheck = PathSegmentSchema.safeParse(conversionId);
+  if (!conversionIdCheck.success) {
+    return mcpErrorFromCode(
+      "API_ERROR",
+      "Conversion returned a malformed conversion_id",
+      "Retry the conversion or check the lead in Pipedrive",
+    );
+  }
+  const safeConversionId = conversionIdCheck.data;
+
   // 2. Poll for completion with exponential backoff.
   let lastStatus = "not_started";
   let lastData: Record<string, unknown> | undefined;
@@ -315,7 +330,7 @@ export async function convertLeadToDeal(
     await sleep(delay);
 
     const statusResponse = await client.get<Record<string, unknown>>(
-      `/leads/${params.id}/convert/status/${conversionId}`,
+      `/leads/${params.id}/convert/status/${safeConversionId}`,
       undefined,
       "v2",
     );

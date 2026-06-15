@@ -3,7 +3,7 @@
  */
 
 import { z } from "zod";
-import { PaginationParamsSchema } from "./common.js";
+import { PaginationParamsSchema, PathSegmentSchema } from "./common.js";
 
 /**
  * Field entity types
@@ -75,17 +75,14 @@ export const FieldOptionInputSchema = z.object({
  * passing the field name yields a 404.
  *
  * It is interpolated into the request path (`/dealFields/${field_code}`), so the
- * value is restricted to a strict allowlist to prevent it from redirecting the
- * request to a different endpoint. A blocklist of just `/` is NOT sufficient:
- * `new URL()` normalizes backslashes to `/`, collapses `..` dot-segments, and
- * truncates the path at `?`/`#`, so values like `..`, `a\b`, or `abc?x=1` would
- * still mangle the resolved path. The allowlist `[A-Za-z0-9_-]` admits the
- * 40-char hex hash and snake_case built-in keys (e.g. `title`, `org_id`) while
- * excluding every URL-significant character. The 40-char hex format is
- * deliberately NOT hard-enforced: built-in (non-custom) fields use readable keys.
+ * value is restricted to the shared path-segment allowlist (`PathSegmentSchema`,
+ * `[A-Za-z0-9_-]`) to prevent it from redirecting the request to a different
+ * endpoint. See that schema for why a `/`-only blocklist is insufficient. The
+ * allowlist admits the 40-char hex hash and snake_case built-in keys (e.g.
+ * `title`, `org_id`); the 40-char hex format is deliberately NOT hard-enforced
+ * because built-in (non-custom) fields use readable keys.
  */
-export const FieldCodeSchema = z.string().min(1)
-  .regex(/^[A-Za-z0-9_-]+$/, "field_code may only contain letters, digits, '_' and '-'")
+export const FieldCodeSchema = PathSegmentSchema
   .describe("The field_code (40-char hash for custom fields) from the field create/list response");
 
 // Shared option-list shapes for the bulk options sub-verbs.

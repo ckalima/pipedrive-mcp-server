@@ -569,6 +569,37 @@ describe('leads tools', () => {
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('conversion_id');
     });
+
+    it('rejects a malformed API-sourced conversion_id before building the status path (U3, F2)', async () => {
+      // The backend returns a conversion_id carrying a path-traversal payload.
+      // The handler must reject it with a structured error and must NOT issue a
+      // second (status-poll) request with the mangled path.
+      const mockFn = mockFetch([
+        { status: 200, data: { conversion_id: '../../pipelines/7' } },
+        { status: 200, data: { status: 'completed', deal_id: 1 } },
+      ]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      const result = await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('malformed conversion_id');
+      // Only the initial POST was made; no status GET was attempted.
+      expect(mockFn.mock.calls).toHaveLength(1);
+    });
+
+    it('rejects an API-sourced conversion_id with a query/fragment character (U3, F2)', async () => {
+      const mockFn = mockFetch([
+        { status: 200, data: { conversion_id: 'abc?x=1' } },
+        { status: 200, data: { status: 'completed', deal_id: 1 } },
+      ]);
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      const result = await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      expect(result.isError).toBe(true);
+      expect(mockFn.mock.calls).toHaveLength(1);
+    });
   });
 
   describe('getLeadConversionStatus', () => {

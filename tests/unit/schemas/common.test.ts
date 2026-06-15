@@ -18,6 +18,7 @@ import {
   CurrencyCodeSchema,
   SearchTermSchema,
   CustomFieldValueSchema,
+  PathSegmentSchema,
 } from '../../../src/schemas/common.js';
 
 describe('common schemas', () => {
@@ -359,6 +360,40 @@ describe('common schemas', () => {
 
     it('should reject object', () => {
       expect(() => CustomFieldValueSchema.parse({ key: 'value' })).toThrow();
+    });
+  });
+
+  describe('PathSegmentSchema (U3, F2)', () => {
+    const HASH = '946947d1b02fd3ef20798d6112ec5d895a686a21';
+
+    it('accepts the 40-char hex hash form', () => {
+      expect(PathSegmentSchema.parse(HASH)).toBe(HASH);
+    });
+
+    it('accepts a hyphenated UUID form', () => {
+      const uuid = '550e8400-e29b-41d4-a716-446655440000';
+      expect(PathSegmentSchema.parse(uuid)).toBe(uuid);
+    });
+
+    it('accepts snake_case and hyphenated keys', () => {
+      expect(PathSegmentSchema.parse('add_time')).toBe('add_time');
+      expect(PathSegmentSchema.parse('a-b_c')).toBe('a-b_c');
+    });
+
+    it('rejects empty string', () => {
+      expect(() => PathSegmentSchema.parse('')).toThrow();
+    });
+
+    it('rejects path-traversal and URL-significant characters', () => {
+      // Mirrors the FieldCodeSchema hostile-input vector set: backslash
+      // (rewritten to '/'), dot-segments, query/fragment, percent-encoding,
+      // whitespace/control, scheme separators.
+      for (const hostile of [
+        '..', '.', 'a/b', 'abc/../deals', 'a\\b', '..\\..\\pipelines\\7',
+        'abc?x=1', 'abc#f', '%2e%2e', '%2F', 'a b', 'a\tb', 'a\nb', 'a\0b', 'a:b',
+      ]) {
+        expect(() => PathSegmentSchema.parse(hostile)).toThrow();
+      }
     });
   });
 });
