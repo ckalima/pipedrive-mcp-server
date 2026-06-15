@@ -66,7 +66,9 @@ describe('Error Handling', () => {
 
       expect(result.content[0].text).toContain('RATE_LIMITED');
       expect(result.content[0].text).toContain('Rate limit exceeded');
-      expect(result.content[0].text).toContain('Wait 60 seconds');
+      // The client now auto-retries 429s, so the suggestion is softened (no longer
+      // "wait 60 seconds" — the wait already happened in the retry loop).
+      expect(result.content[0].text).toContain('retried automatically');
     });
 
     it('should handle 500 Internal Server Error', async () => {

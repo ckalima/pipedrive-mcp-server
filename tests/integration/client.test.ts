@@ -4,6 +4,14 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PipedriveClient, getClient } from '../../src/client.js';
+import { leadsV1 } from '../../src/version-routing.js';
+import {
+  getBreakerState,
+  setResilienceSleepForTests,
+  RETRY_MAX_ATTEMPTS,
+  RETRY_BUDGET_MS,
+  RETRY_AFTER_CAP_MS,
+} from '../../src/resilience.js';
 import { setupValidEnv, clearApiKey, VALID_API_KEY } from '../helpers/mockEnv.js';
 import {
   mockFetch,
@@ -519,5 +527,292 @@ describe('getClient', () => {
     const client1 = getClient();
     const client2 = getClient();
     expect(client1).toBe(client2);
+  });
+});
+
+// ─── U3: resilience driver (retry + circuit breaker) ──────────────────────────
+//
+// The global setup (tests/setup.ts) resets the breaker and installs a no-op sleep
+// before every test, so no real backoff wait runs. These tests install a RECORDING
+// sleep so honored-wait amounts can be asserted deterministically — the budget is
+// debited by the computed wait value, not by a wall-clock delta (KTD9 alternative).
+describe('resilience: retry + circuit breaker (U3)', () => {
+  let waits: number[];
+
+  beforeEach(() => {
+    setupValidEnv();
+    vi.unstubAllGlobals();
+    waits = [];
+    // Record (but do not actually wait) each backoff/Retry-After sleep.
+    setResilienceSleepForTests((ms) => {
+      waits.push(ms);
+      return Promise.resolve();
+    });
+  });
+
+  describe('retry decision (R2/R3)', () => {
+    it('AE2: read 429 with Retry-After within cap waits the honored interval, retries, succeeds', async () => {
+      const mockFn = mockFetch([
+        { status: 429, ok: false, error: 'rate', headers: { 'Retry-After': '1' } },
+        { status: 200, data: [fixtures.deal] },
+      ]);
+      const client = new PipedriveClient();
+
+      const response = await client.get('/deals', undefined, 'v2');
+
+      expect(response.success).toBe(true);
+      expect(mockFn).toHaveBeenCalledTimes(2);
+      expect(waits).toEqual([1000]); // Retry-After: 1s honored
+    });
+
+    it('AE1: a write that throws a network error returns NETWORK_ERROR with NO retry', async () => {
+      const mockFn = mockFetchNetworkError('Connection refused');
+      const client = new PipedriveClient();
+
+      const response = await client.post('/deals', { title: 'x' }, 'v2');
+
+      expect(response.success).toBe(false);
+      expect(response.error?.code).toBe('NETWORK_ERROR');
+      expect(mockFn).toHaveBeenCalledTimes(1); // never re-sent (idempotency, KTD2)
+    });
+
+    it('read network error retries then succeeds (2 calls)', async () => {
+      let call = 0;
+      const mockFn = vi.fn(async () => {
+        call += 1;
+        if (call === 1) throw new Error('ECONNRESET');
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers({ 'Content-Type': 'application/json' }),
+          json: async () => ({ success: true, data: [fixtures.deal] }),
+        } as Response;
+      });
+      vi.stubGlobal('fetch', mockFn);
+      const client = new PipedriveClient();
+
+      const response = await client.get('/deals', undefined, 'v2');
+
+      expect(response.success).toBe(true);
+      expect(mockFn).toHaveBeenCalledTimes(2);
+    });
+
+    it('write 429 is retried (POST [429, 200] -> success, 2 calls)', async () => {
+      const mockFn = mockFetch([
+        { status: 429, ok: false, error: 'rate' },
+        { status: 200, data: fixtures.deal },
+      ]);
+      const client = new PipedriveClient();
+
+      const response = await client.post('/deals', { title: 'x' }, 'v2');
+
+      expect(response.success).toBe(true);
+      expect(mockFn).toHaveBeenCalledTimes(2);
+    });
+
+    it('write 503 is NOT retried (POST [503] -> error, 1 call)', async () => {
+      const mockFn = mockApiError(503, 'unavailable');
+      const client = new PipedriveClient();
+
+      const response = await client.post('/deals', { title: 'x' }, 'v2');
+
+      expect(response.success).toBe(false);
+      expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('read 503 is retried (GET [503, 200] -> success, 2 calls)', async () => {
+      const mockFn = mockFetch([
+        { status: 503, ok: false, error: 'unavailable' },
+        { status: 200, data: [fixtures.deal] },
+      ]);
+      const client = new PipedriveClient();
+
+      const response = await client.get('/deals', undefined, 'v2');
+
+      expect(response.success).toBe(true);
+      expect(mockFn).toHaveBeenCalledTimes(2);
+    });
+
+    it('read 5xx is retried (GET [500, 200] -> success, 2 calls)', async () => {
+      const mockFn = mockFetch([
+        { status: 500, ok: false, error: 'boom' },
+        { status: 200, data: [fixtures.deal] },
+      ]);
+      const client = new PipedriveClient();
+
+      const response = await client.get('/deals', undefined, 'v2');
+
+      expect(response.success).toBe(true);
+      expect(mockFn).toHaveBeenCalledTimes(2);
+    });
+
+    it('write 5xx is NOT retried (POST [500] -> error, 1 call)', async () => {
+      const mockFn = mockApiError(500, 'boom');
+      const client = new PipedriveClient();
+
+      const response = await client.post('/deals', { title: 'x' }, 'v2');
+
+      expect(response.success).toBe(false);
+      expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([400, 401, 403, 404])('non-429 4xx (%d) is not retried (1 call)', async (status) => {
+      const mockFn = mockApiError(status, 'nope');
+      const client = new PipedriveClient();
+
+      await client.get('/deals/1', undefined, 'v2');
+
+      expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('budget + attempt caps (R4, KTD3, KTD6)', () => {
+    it('attempt cap: all-429 read stops after RETRY_MAX_ATTEMPTS and returns RATE_LIMITED', async () => {
+      const mockFn = mockApiError(429, 'rate');
+      const client = new PipedriveClient();
+
+      const response = await client.get('/deals', undefined, 'v2');
+
+      expect(response.success).toBe(false);
+      expect(response.error?.code).toBe('RATE_LIMITED');
+      expect(mockFn).toHaveBeenCalledTimes(RETRY_MAX_ATTEMPTS);
+    });
+
+    it('AE3: Retry-After above the cap is clamped, and a still-limited read surfaces RATE_LIMITED within budget', async () => {
+      const mockFn = mockApiError(429, 'rate', { 'Retry-After': '600' });
+      const client = new PipedriveClient();
+
+      const response = await client.get('/deals', undefined, 'v2');
+
+      expect(response.error?.code).toBe('RATE_LIMITED');
+      // Each honored wait is clamped to the cap, and the total stays within budget.
+      for (const w of waits) expect(w).toBeLessThanOrEqual(RETRY_AFTER_CAP_MS);
+      const total = waits.reduce((a, b) => a + b, 0);
+      expect(total).toBeLessThanOrEqual(RETRY_BUDGET_MS);
+      expect(mockFn.mock.calls.length).toBeLessThanOrEqual(RETRY_MAX_ATTEMPTS);
+    });
+
+    it('Retry-After near the remaining budget bails instead of sleeping a truncated wait', async () => {
+      // First wait 16s leaves ~14s; the second hint (15s) exceeds it -> bail.
+      const mockFn = mockFetch([
+        { status: 429, ok: false, error: 'rate', headers: { 'Retry-After': '16' } },
+        { status: 429, ok: false, error: 'rate', headers: { 'Retry-After': '15' } },
+        { status: 200, data: [fixtures.deal] },
+      ]);
+      const client = new PipedriveClient();
+
+      const response = await client.get('/deals', undefined, 'v2');
+
+      expect(response.success).toBe(false);
+      expect(response.error?.code).toBe('RATE_LIMITED');
+      expect(waits).toEqual([16000]); // slept once, then bailed before the 15s hint
+      expect(mockFn).toHaveBeenCalledTimes(2); // never reached the 200
+    });
+
+    it('all-timeout read path is bounded: <= RETRY_MAX_ATTEMPTS calls and waits within budget', async () => {
+      const mockFn = mockFetchNetworkError('Request timeout');
+      const client = new PipedriveClient();
+
+      const response = await client.get('/deals', undefined, 'v2');
+
+      expect(response.error?.code).toBe('NETWORK_ERROR');
+      expect(mockFn.mock.calls.length).toBeLessThanOrEqual(RETRY_MAX_ATTEMPTS);
+      const total = waits.reduce((a, b) => a + b, 0);
+      expect(total).toBeLessThanOrEqual(RETRY_BUDGET_MS);
+    });
+  });
+
+  describe('circuit breaker (R5, R6, R7, AE4, AE5)', () => {
+    it('AE5: a 410 on a registered v1-only endpoint is not retried and surfaces retirement immediately', async () => {
+      const mockFn = mockFetch({ status: 410, ok: false, error: 'gone' });
+
+      const response = await leadsV1.get('/leads', undefined);
+
+      expect(response.success).toBe(false);
+      expect(response.error?.code).toBe('CAPABILITY_RETIRED');
+      expect(mockFn).toHaveBeenCalledTimes(1); // 410 is non-transient (R5)
+    });
+
+    it('AE4: five consecutive trip signals open the breaker; the next call fast-fails with no request', async () => {
+      // POST + 503 is a single-attempt trip signal (writes do not retry 503), so
+      // five such calls accumulate exactly five consecutive trip signals.
+      mockApiError(503, 'unavailable');
+      const client = new PipedriveClient();
+      for (let i = 0; i < 5; i++) {
+        await client.post('/deals', { title: 'x' }, 'v2');
+      }
+      expect(getBreakerState()).toBe('Open');
+
+      // Swap in a fresh spy: the next call must issue ZERO upstream requests.
+      const afterOpen = vi.fn();
+      vi.stubGlobal('fetch', afterOpen);
+
+      const response = await client.get('/deals', undefined, 'v2');
+
+      expect(response.success).toBe(false);
+      expect(response.error?.code).toBe('CIRCUIT_OPEN');
+      expect(afterOpen).not.toHaveBeenCalled();
+    });
+
+    it('repeated 429 reads also open the breaker across calls', async () => {
+      mockApiError(429, 'rate');
+      const client = new PipedriveClient();
+      // Each all-429 read contributes RETRY_MAX_ATTEMPTS trip signals; two calls
+      // exceed the threshold of 5.
+      await client.get('/deals', undefined, 'v2');
+      await client.get('/deals', undefined, 'v2');
+      expect(getBreakerState()).toBe('Open');
+
+      const afterOpen = vi.fn();
+      vi.stubGlobal('fetch', afterOpen);
+      const response = await client.get('/deals', undefined, 'v2');
+      expect(response.error?.code).toBe('CIRCUIT_OPEN');
+      expect(afterOpen).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('telemetry (R8)', () => {
+    it('logs once per attempt on a retried v1 GET and never leaks the token or full URL', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFetch([
+        { status: 429, ok: false, error: 'rate' },
+        { status: 200, data: [fixtures.user] },
+      ]);
+      const client = new PipedriveClient();
+
+      await client.get('/users', undefined, 'v1');
+
+      const lines = errorSpy.mock.calls.flat().map(String);
+      const attemptLines = lines.filter((l) => /\[pipedrive-mcp\].*attempt \d+\//.test(l));
+      expect(attemptLines).toHaveLength(2); // one per attempt
+      const stderr = lines.join('\n');
+      expect(stderr).not.toContain(VALID_API_KEY);
+      expect(stderr).not.toContain('api_token=');
+      errorSpy.mockRestore();
+    });
+  });
+});
+
+// ─── U5 isolation regression: breaker state must not bleed across tests ────────
+// These two tests rely SOLELY on the global beforeEach (tests/setup.ts) resetting
+// the breaker. The first opens it; the second must observe a fresh Closed breaker.
+describe('breaker isolation regression (U5, R9)', () => {
+  beforeEach(() => {
+    setupValidEnv();
+    vi.unstubAllGlobals();
+  });
+
+  it('opens the breaker', async () => {
+    mockApiError(503, 'unavailable');
+    const client = new PipedriveClient();
+    for (let i = 0; i < 5; i++) {
+      await client.post('/deals', { title: 'x' }, 'v2');
+    }
+    expect(getBreakerState()).toBe('Open');
+  });
+
+  it('starts Closed in the next test (global reset cleared the bleed)', () => {
+    expect(getBreakerState()).toBe('Closed');
   });
 });

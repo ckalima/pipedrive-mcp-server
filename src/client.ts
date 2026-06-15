@@ -5,6 +5,20 @@
 
 import { getConfig, type Config } from "./config.js";
 import { handleApiError, createErrorResponse, formatErrorForMcp, redactSecrets, type ErrorResponse } from "./utils/errors.js";
+import {
+  classifyOutcome,
+  computeBackoffMs,
+  parseRetryAfterMs,
+  breakerAllowsRequest,
+  recordOutcome,
+  getBreakerState,
+  circuitOpenError,
+  resilientSleep,
+  RETRY_MAX_ATTEMPTS,
+  RETRY_BUDGET_MS,
+  RETRY_AFTER_CAP_MS,
+  type BreakerState,
+} from "./resilience.js";
 
 export type ApiVersion = "v1" | "v2";
 
@@ -30,8 +44,11 @@ export interface ApiResponse<T> {
   };
 }
 
-/** Request timeout in milliseconds */
+/** Request timeout in milliseconds (per-attempt cap; the initial attempt uses the full value). */
 const REQUEST_TIMEOUT_MS = 30_000;
+
+/** Shared empty Headers for the network/timeout path, where no response headers exist. */
+const EMPTY_HEADERS = new Headers();
 
 /**
  * Pipedrive API client with support for both v1 and v2 endpoints
@@ -241,7 +258,8 @@ export class PipedriveClient {
   }
 
   /**
-   * Core request method (JSON body)
+   * Core request method (JSON body). Builds the URL/auth/headers/body once, then
+   * hands the request to the shared resilience driver (retry + circuit breaker).
    */
   private async request<T>(
     method: string,
@@ -273,29 +291,26 @@ export class PipedriveClient {
       headers["Content-Type"] = "application/json";
     }
 
-    try {
-      // Log to stderr (not stdout) to avoid STDIO protocol corruption
-      console.error(`[pipedrive-mcp] ${method} ${endpoint}`);
-
-      const response = await fetch(url.toString(), {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-
-      return await this.parseResponse<T>(response);
-    } catch (error) {
-      return this.networkError<T>(error);
-    }
+    // The JSON body string is built once and re-sent verbatim on each retry.
+    return this.sendWithResilience<T>(
+      method,
+      endpoint,
+      url,
+      headers,
+      body ? JSON.stringify(body) : undefined,
+      false,
+    );
   }
 
   /**
    * Core request method for multipart/form-data bodies.
    *
-   * Shares URL construction, auth, response parsing, and error handling with
-   * request() via the private helpers. The ONLY differences are the FormData
-   * body and the deliberate omission of a manual Content-Type header.
+   * Shares URL construction, auth, response parsing, retry/breaker handling, and
+   * error handling with request() via the private helpers and the resilience
+   * driver. The ONLY differences are the FormData body and the deliberate omission
+   * of a manual Content-Type header. The same in-memory Blob-backed FormData
+   * instance is re-sent on each retry (KTD8): it is re-readable, so undici
+   * serializes it again and regenerates the boundary cleanly.
    */
   private async requestMultipart<T>(
     method: string,
@@ -317,23 +332,161 @@ export class PipedriveClient {
     // CRITICAL: do NOT set Content-Type. When the body is a FormData instance,
     // fetch (Node.js 18+ undici) generates `multipart/form-data; boundary=…`
     // automatically. A manual Content-Type omits/overrides the boundary and
-    // corrupts the request (silent 400 from the API).
+    // corrupts the request (silent 400 from the API). This holds on every re-send.
 
-    try {
-      // Log to stderr (not stdout) to avoid STDIO protocol corruption
-      console.error(`[pipedrive-mcp] ${method} ${endpoint} (multipart)`);
+    return this.sendWithResilience<T>(method, endpoint, url, headers, formData, true);
+  }
 
-      const response = await fetch(url.toString(), {
-        method,
-        headers,
-        body: formData,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
+  /**
+   * Shared resilience driver: drives the breaker gate and the retry loop for both
+   * request() and requestMultipart(). It is the single place fetch is called.
+   *
+   * Per-attempt order (must be exact — see plan System-Wide Impact): consult the
+   * breaker, attempt, classify + record the outcome, then decide whether to retry
+   * within the attempt cap and the added-wall-clock budget. A half-open probe runs
+   * exactly one attempt with retry disabled (KTD7). Non-transient responses (4xx
+   * other than 429, and the retirement 410) return on the first attempt with their
+   * httpStatus intact, so the version-routing seam's retirement detection stays
+   * immediate (R5).
+   */
+  private async sendWithResilience<T>(
+    method: string,
+    endpoint: string,
+    url: URL,
+    headers: Record<string, string>,
+    body: BodyInit | undefined,
+    multipart: boolean,
+  ): Promise<ApiResponse<T>> {
+    const overallStartMs = Date.now();
+    // Added wall-clock (KTD3): retry-attempt durations plus inter-attempt waits.
+    // The initial attempt is NOT debited here — it is bounded separately by
+    // REQUEST_TIMEOUT_MS, so the total is bounded at ~REQUEST_TIMEOUT_MS + budget.
+    let budgetUsedMs = 0;
+    let lastFailure: ApiResponse<T> | null = null;
 
-      return await this.parseResponse<T>(response);
-    } catch (error) {
-      return this.networkError<T>(error);
+    for (let attemptIndex = 0; ; attemptIndex++) {
+      // ── Breaker gate (consulted before every attempt) ──
+      const stateBeforeGate = getBreakerState();
+      const allowed = breakerAllowsRequest(Date.now());
+      this.logBreakerTransition(stateBeforeGate, getBreakerState(), method, endpoint);
+      if (!allowed) {
+        this.logResilience(`${method} ${endpoint} circuit open — fast-failing without a request`);
+        return { success: false, error: circuitOpenError() };
+      }
+      const isProbe = getBreakerState() === "HalfOpen";
+
+      // ── Per-attempt timeout (KTD3): the initial attempt gets the full timeout;
+      //    retries shrink as the total wall-clock nears REQUEST_TIMEOUT_MS+budget. ──
+      const remainingTotalMs = REQUEST_TIMEOUT_MS + RETRY_BUDGET_MS - (Date.now() - overallStartMs);
+      if (attemptIndex > 0 && remainingTotalMs <= 0 && lastFailure) {
+        return lastFailure;
+      }
+      const attemptTimeoutMs = attemptIndex === 0
+        ? REQUEST_TIMEOUT_MS
+        : Math.min(REQUEST_TIMEOUT_MS, Math.max(1, remainingTotalMs));
+
+      // ── Attempt ──
+      this.logResilience(
+        `${method} ${endpoint}${multipart ? " (multipart)" : ""} attempt ${attemptIndex + 1}/${RETRY_MAX_ATTEMPTS}${isProbe ? " (breaker probe)" : ""}`,
+      );
+      const attemptStartMs = Date.now();
+      let parsed: ApiResponse<T> | undefined;
+      let isNetworkError = false;
+      let responseHeaders: Headers | undefined;
+      try {
+        const response = await fetch(url.toString(), {
+          method,
+          headers,
+          body,
+          signal: AbortSignal.timeout(attemptTimeoutMs),
+        });
+        responseHeaders = response.headers;
+        parsed = await this.parseResponse<T>(response);
+      } catch (error) {
+        isNetworkError = true;
+        lastFailure = this.networkError<T>(error);
+      }
+      if (attemptIndex > 0) {
+        budgetUsedMs += Date.now() - attemptStartMs;
+      }
+
+      // ── Classify + record breaker outcome ──
+      const httpStatus = parsed?.httpStatus;
+      const isSuccess = parsed?.success === true;
+      const { retryable, isTripSignal } = classifyOutcome({ method, httpStatus, isNetworkError });
+      const stateBeforeRecord = getBreakerState();
+      recordOutcome({ isSuccess, isTripSignal }, Date.now());
+      this.logBreakerTransition(stateBeforeRecord, getBreakerState(), method, endpoint);
+
+      if (isSuccess) {
+        return parsed!;
+      }
+      if (!isNetworkError) {
+        // Status-bearing failure (e.g. 410 / 4xx / 5xx): keep it to return on giving up.
+        lastFailure = parsed!;
+      }
+
+      // A half-open probe is a single attempt with internal retry disabled (KTD7):
+      // its outcome alone settled the breaker above; never loop.
+      if (isProbe) {
+        return lastFailure!;
+      }
+
+      // ── Retry decision ──
+      if (!retryable) {
+        return lastFailure!;
+      }
+      if (attemptIndex + 1 >= RETRY_MAX_ATTEMPTS) {
+        return lastFailure!;
+      }
+
+      // ── Compute the wait (KTD6 cap-then-bail order, else backoff + jitter) ──
+      const budgetRemainingMs = RETRY_BUDGET_MS - budgetUsedMs;
+      const hintMs = parseRetryAfterMs(responseHeaders ?? EMPTY_HEADERS, Date.now());
+      let waitMs: number;
+      if (hintMs !== null) {
+        const cappedHint = Math.min(hintMs, RETRY_AFTER_CAP_MS);
+        if (cappedHint > budgetRemainingMs) {
+          // Surfacing now beats sleeping a truncated wait into a likely second 429.
+          return lastFailure!;
+        }
+        waitMs = cappedHint;
+      } else {
+        const backoff = computeBackoffMs(attemptIndex);
+        if (backoff > budgetRemainingMs) {
+          return lastFailure!;
+        }
+        waitMs = backoff;
+      }
+
+      this.logResilience(
+        `${method} ${endpoint} retrying in ${waitMs}ms after attempt ${attemptIndex + 1} (${httpStatus ? `status ${httpStatus}` : "network/timeout"})`,
+      );
+      budgetUsedMs += waitMs;
+      await resilientSleep(waitMs);
     }
+  }
+
+  /**
+   * Emits a resilience telemetry line to stderr (never stdout, which would corrupt
+   * the STDIO protocol). The message is composed ONLY from the method, endpoint
+   * path, attempt index, status, and breaker state — never `url.toString()` (the v1
+   * `?api_token=` value rides the URL) and never a raw error object. It is routed
+   * through redactSecrets for defense-in-depth, consistent with networkError() (R8).
+   */
+  private logResilience(message: string): void {
+    console.error(redactSecrets(`[pipedrive-mcp] ${message}`, this.config?.apiKey));
+  }
+
+  /** Logs a breaker state transition (no-op when the state is unchanged). */
+  private logBreakerTransition(
+    before: BreakerState,
+    after: BreakerState,
+    method: string,
+    endpoint: string,
+  ): void {
+    if (before === after) return;
+    this.logResilience(`${method} ${endpoint} circuit breaker ${before} -> ${after}`);
   }
 
   /**

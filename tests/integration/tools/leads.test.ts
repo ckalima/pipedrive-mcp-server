@@ -549,6 +549,10 @@ describe('leads tools', () => {
     });
 
     it('should return an error result if a status poll fails', async () => {
+      // The status GET is a read, so the client now read-retries the 500 internally
+      // (the mock clamps to the last entry, so every retry also sees 500) before the
+      // poll loop surfaces the error. The no-op backoff sleep (tests/setup.ts) keeps
+      // this instant; the observable contract — an error result — is unchanged.
       mockFetch([
         { status: 200, data: { conversion_id: 'conv-4' } },
         { status: 500, ok: false, error: 'boom' },
