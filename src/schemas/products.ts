@@ -251,7 +251,7 @@ export const MAX_IMAGE_B64_LEN = 6_900_000;
  * Upload product image parameters.
  *
  * Hybrid input: provide EITHER `file_path` (the server reads the bytes via
- * `fs.readFile` — use when the caller shares the server's filesystem) OR
+ * `fs.readFile`, used when the caller shares the server's filesystem) OR
  * `base64_data` (transport-safe over STDIO). Exactly one is required.
  */
 export const UploadProductImageSchema = IdParamSchema.extend({

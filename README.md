@@ -72,6 +72,7 @@ export PIPEDRIVE_API_KEY="your-40-character-api-key"
 |----------|----------|---------|-------------|
 | `PIPEDRIVE_API_KEY` | Yes | - | Your 40-character Pipedrive API token. |
 | `PIPEDRIVE_ENABLE_DESTRUCTIVE` | No | `false` | Set to `true` to enable destructive tools (🔒 in the table below: deletes, conversions, and other irreversible writes). Off by default so the server is read-and-create only until you opt in. |
+| `PIPEDRIVE_IMAGE_BASE_DIR` | No | (unset) | Allowlisted directory the server may read product images from when `file_path` is passed to the image-upload tools. Filesystem reads are **disabled** unless this is set, and a `file_path` must resolve within it. Leave unset and pass `base64_data` if the caller cannot share the server's filesystem. See [SECURITY.md](SECURITY.md#operator-best-practices). |
 
 To enable destructive tools, add `"PIPEDRIVE_ENABLE_DESTRUCTIVE": "true"` to the `env` block in your `.mcp.json` (alongside `PIPEDRIVE_API_KEY`), or `export PIPEDRIVE_ENABLE_DESTRUCTIVE=true`. When unset, every 🔒 tool returns a `DESTRUCTIVE_DISABLED` error instead of acting.
 
@@ -227,8 +228,8 @@ Once configured, Claude can access your Pipedrive data:
 | `pipedrive_get_product_followers_changelog` | Get the followers changelog for a product. |
 | `pipedrive_get_product_image` | Get the image of a product (returns a single image with a public URL valid for 7 days). |
 | `pipedrive_delete_product_image` 🔒 | Delete the image of a product. |
-| `pipedrive_upload_product_image` | Upload an image for a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem and is disabled by default — the operator must set PIPEDRIVE_IMAGE_BASE_DIR and the path must resolve within it; otherwise use base64_data, which is transport-safe. |
-| `pipedrive_update_product_image` | Update (replace) the image of a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem and is disabled by default — the operator must set PIPEDRIVE_IMAGE_BASE_DIR and the path must resolve within it; otherwise use base64_data, which is transport-safe. |
+| `pipedrive_upload_product_image` | Upload an image for a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem and is disabled by default; the operator must set PIPEDRIVE_IMAGE_BASE_DIR and the path must resolve within it; otherwise use base64_data, which is transport-safe. |
+| `pipedrive_update_product_image` | Update (replace) the image of a product. Provide the image via EITHER file_path OR base64_data (exactly one required). Supports png, jpeg, gif, and webp. Note: file_path is read by the SERVER process via the filesystem and is disabled by default; the operator must set PIPEDRIVE_IMAGE_BASE_DIR and the path must resolve within it; otherwise use base64_data, which is transport-safe. |
 
 ### Tasks
 
@@ -416,9 +417,16 @@ Common error codes:
 ## Security
 
 See [SECURITY.md](SECURITY.md) for the threat model (data flows, credential handling,
-prompt-injection honesty, and known limitations) and how to report a vulnerability
-privately. In short: STDIO-only with no network listener, the API token is read from the
-environment and never logged, and destructive operations are gated off by default.
+prompt-injection honesty, the AI/agent attack-surface catalog, operator best practices, and
+known limitations) and how to report a vulnerability privately. In short: STDIO-only with no
+network listener, the API token is read from the environment and never logged, destructive
+operations are gated off by default, and CRM tool output is structurally labeled as
+untrusted (an advisory mitigation, not a guarantee, see the residual-risk note).
+
+For least-privilege deployment, mint the token from a dedicated, restricted Pipedrive user,
+keep destructive ops disabled unless needed, and isolate the agent's context so a prompt
+injection in CRM data has no exfiltration channel. See
+[Operator best practices](SECURITY.md#operator-best-practices).
 
 ## Contributing
 
