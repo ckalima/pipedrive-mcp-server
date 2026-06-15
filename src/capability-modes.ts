@@ -106,3 +106,28 @@ export function isToolAllowedInMode(
   if (tool.destructive === true) return mode === "full"; // destructive needs full
   return true; // non-destructive write: safe-write or full
 }
+
+/** Minimal `tools/list` definition shape this filter reads. */
+export type AnnotatedToolDefinition = {
+  name: string;
+  annotations?: { destructiveHint?: boolean };
+};
+
+/**
+ * Keep only the `tools/list` definitions reachable in the given mode (R5), without
+ * mutating the exported registry (R7).
+ *
+ * Definitions carry MCP `annotations` rather than the raw `destructive` field, so each is
+ * adapted into the `{ name, destructive }` shape via `destructive ← destructiveHint` and
+ * fed through the SAME `isToolAllowedInMode` predicate the dispatcher uses. One predicate
+ * for both layers means the visible surface and the call-time backstop can never diverge,
+ * even for a future tool whose annotation and declared field disagree.
+ */
+export function filterToolDefinitionsForMode<T extends AnnotatedToolDefinition>(
+  defs: readonly T[],
+  mode: CapabilityMode,
+): T[] {
+  return defs.filter((def) =>
+    isToolAllowedInMode({ name: def.name, destructive: def.annotations?.destructiveHint === true }, mode),
+  );
+}

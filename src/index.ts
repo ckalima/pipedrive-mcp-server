@@ -27,6 +27,7 @@ import {
 
 import { validateConfig, getCachedApiToken } from "./config.js";
 import { toolDefinitions, getToolHandler, getToolSchema } from "./tools/index.js";
+import { resolveCapabilityMode, filterToolDefinitionsForMode } from "./capability-modes.js";
 import { mcpErrorFromCode, boundErrorMessage } from "./utils/errors.js";
 import { MAX_TOOL_RESPONSE_CHARS, measureResultTextLength } from "./utils/formatting.js";
 
@@ -153,11 +154,14 @@ async function main() {
     }
   );
 
-  // Register list tools handler
+  // Register list tools handler — expose only the tools reachable in the resolved mode
+  // (R5). The exported registry is left intact; filtering is additive (R7).
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    console.error(`[${SERVER_NAME}] Listing ${toolDefinitions.length} tools`);
+    const mode = resolveCapabilityMode();
+    const tools = filterToolDefinitionsForMode(toolDefinitions, mode);
+    console.error(`[${SERVER_NAME}] Listing ${tools.length} tools (mode: ${mode})`);
     return {
-      tools: toolDefinitions,
+      tools,
     };
   });
 
