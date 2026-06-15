@@ -14,6 +14,14 @@ beforeEach(() => {
   // Clear all environment variables that might affect tests
   delete process.env.PIPEDRIVE_API_KEY;
 
+  // Clear the capability-mode vars so mode resolution is deterministic regardless of the
+  // developer's shell (R11). Both are process-global and read at call time, so a leaked
+  // value would make unrelated suites non-deterministic. Suites that call setupValidEnv()
+  // set PIPEDRIVE_ENABLE_DESTRUCTIVE=true and so resolve to `full`. (Mirrors the
+  // version-routing / circuit-breaker reset footgun documented above.)
+  delete process.env.PIPEDRIVE_MODE;
+  delete process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
+
   // Reset all mocks
   vi.clearAllMocks();
 
