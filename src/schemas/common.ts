@@ -8,7 +8,11 @@ import { z } from "zod";
  * Pagination parameters schema (v2 cursor-based)
  */
 export const PaginationParamsSchema = z.object({
-  cursor: z.string().optional().describe("Cursor for pagination (from previous response)"),
+  // Opaque pagination cursor. Inline length cap (mirrors MAX_QUERY_PARAM_LENGTH,
+  // which is declared later in this file) bounds the inherited base so entities
+  // that do not override `cursor` (products, pipelines, boards, ...) still get a
+  // bounded passthrough value (F3/U4).
+  cursor: z.string().max(2_000).optional().describe("Cursor for pagination (from previous response)"),
   limit: z.number().min(1).max(100).optional().default(50).describe("Number of items to return (1-100, default 50)"),
 });
 
@@ -54,6 +58,9 @@ export const DealStatusSchema = z.enum(["open", "won", "lost", "deleted"])
  * Activity type (Pipedrive built-in types)
  */
 export const ActivityTypeSchema = z.string()
+  // Short type key in practice; inline cap (size constants are declared later in
+  // this file) bounds the free-text passthrough (F3/U4).
+  .max(255)
   .describe("Activity type (e.g., 'call', 'meeting', 'task', 'deadline', 'email', 'lunch')");
 
 /**
@@ -209,11 +216,16 @@ export const BoundedCustomFieldsSchema = z.record(z.string(), z.unknown())
 
 /**
  * Bounded custom_fields record for products, whose values are already the flat
- * scalar/array `CustomFieldValueSchema` (no nesting). Only a key-count cap applies.
+ * scalar/array `CustomFieldValueSchema` (no nesting, so no depth cap is needed).
+ * Bounds the key count AND each value's serialized size, so a single product
+ * call cannot smuggle a huge string or array value past the value type (F3/U4).
  */
 export const BoundedProductCustomFieldsSchema = z.record(z.string(), CustomFieldValueSchema)
   .refine((rec) => Object.keys(rec).length <= MAX_CUSTOM_FIELD_KEYS, {
     message: `custom_fields may not exceed ${MAX_CUSTOM_FIELD_KEYS} keys`,
+  })
+  .refine(valuesWithinSize, {
+    message: `each custom_fields value may not exceed ${MAX_CUSTOM_FIELD_VALUE_LENGTH} serialized characters`,
   });
 
 /**

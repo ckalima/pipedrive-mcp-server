@@ -184,7 +184,11 @@ function isEntrypoint(): boolean {
 
 if (isEntrypoint()) {
   main().catch((error) => {
-    console.error(`[${SERVER_NAME}] Fatal error:`, error);
+    // Redact and length-bound like the dispatcher above; never pass the raw error
+    // object to console.error (its stack/cause can carry the token) (F1/KTD3).
+    const rawMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    const safeMessage = boundErrorMessage(rawMessage, getCachedApiToken() ?? undefined);
+    console.error(`[${SERVER_NAME}] Fatal error: ${safeMessage}`);
     process.exit(1);
   });
 }

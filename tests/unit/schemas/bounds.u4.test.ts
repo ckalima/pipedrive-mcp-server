@@ -24,7 +24,7 @@ import {
 import { ListDealsSchema, UpdateDealSchema, CreateDealSchema, AddDealProductSchema } from '../../../src/schemas/deals.js';
 import { ListPersonsSchema, CreatePersonSchema } from '../../../src/schemas/persons.js';
 import { CreateOrganizationSchema } from '../../../src/schemas/organizations.js';
-import { CreateProductSchema } from '../../../src/schemas/products.js';
+import { CreateProductSchema, ListProductsSchema } from '../../../src/schemas/products.js';
 import { CreateActivitySchema } from '../../../src/schemas/activities.js';
 import { CreateProjectSchema } from '../../../src/schemas/projects.js';
 import { CreateTaskSchema } from '../../../src/schemas/tasks.js';
@@ -118,6 +118,25 @@ describe('U4 input-size bounds (entity-level wiring)', () => {
     });
   });
 
+  describe('inherited base bounds (cursor, activity type)', () => {
+    it('rejects an over-cap cursor on a schema that inherits the base (ListProducts)', () => {
+      // ListProductsSchema does not override `cursor`, so it relies on the base
+      // PaginationParamsSchema bound (mirrors MAX_QUERY_PARAM_LENGTH).
+      expect(() => ListProductsSchema.parse({ cursor: overQuery })).toThrow();
+    });
+
+    it('accepts an at-cap cursor on the inherited base', () => {
+      const atCap = 'x'.repeat(MAX_QUERY_PARAM_LENGTH);
+      expect(ListProductsSchema.parse({ cursor: atCap }).cursor).toHaveLength(MAX_QUERY_PARAM_LENGTH);
+    });
+
+    it('rejects an over-cap activity type', () => {
+      expect(() => CreateActivitySchema.parse({
+        subject: 's', type: 'x'.repeat(256),
+      })).toThrow();
+    });
+  });
+
   describe('bounded arrays (boundedArray)', () => {
     const tooMany = MAX_ARRAY_ITEMS + 1;
 
@@ -198,6 +217,30 @@ describe('U4 input-size bounds (entity-level wiring)', () => {
       expect(() => CreateProductSchema.parse({
         name: 'p', custom_fields: recordWithKeys(MAX_CUSTOM_FIELD_KEYS + 1),
       })).toThrow();
+    });
+
+    it('rejects product custom_fields with an over-size serialized string value', () => {
+      expect(() => CreateProductSchema.parse({
+        name: 'p', custom_fields: { hash: 'x'.repeat(MAX_CUSTOM_FIELD_VALUE_LENGTH + 1) },
+      })).toThrow();
+    });
+
+    it('rejects product custom_fields with an over-size serialized array value', () => {
+      // The product value type permits string arrays; a huge array must still be
+      // caught by the per-value serialized-size cap (F3).
+      const hugeArray = Array.from(
+        { length: MAX_CUSTOM_FIELD_VALUE_LENGTH }, () => 'xx',
+      );
+      expect(() => CreateProductSchema.parse({
+        name: 'p', custom_fields: { hash: hugeArray },
+      })).toThrow();
+    });
+
+    it('accepts a normal product custom_fields map', () => {
+      const result = CreateProductSchema.parse({
+        name: 'p', custom_fields: { hash1: 'value', hash2: 42, hash3: ['a', 'b'] },
+      });
+      expect(result.custom_fields).toEqual({ hash1: 'value', hash2: 42, hash3: ['a', 'b'] });
     });
 
     it('accepts a normal deal custom_fields map', () => {
