@@ -252,7 +252,8 @@ export function breakerAllowsRequest(nowMs: number): boolean {
  *     — an interleaved success from a concurrent request can reset it mid-storm, so
  *     a heavily-interleaved 429 stream may take more than BREAKER_THRESHOLD signals
  *     to trip. The runaway-loop case this guards (a tight loop of same-endpoint
- *     failures) has few interleaved successes and still trips promptly.
+ *     failures) has few interleaved successes and still trips promptly. A
+ *     concurrency-robust windowed/ratio breaker is tracked as a follow-up (#123).
  *   Open: defensive no-op (no request should have been made while Open).
  */
 export function recordOutcome(outcome: BreakerOutcome, nowMs: number, isProbe = false): void {
