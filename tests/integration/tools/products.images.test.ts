@@ -6,6 +6,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { setupValidEnv } from '../../helpers/mockEnv.js';
 import {
+  mockFetch,
+  mockFetchNetworkError,
   mockApiSuccess,
   mockApiError,
 } from '../../helpers/mockFetch.js';
@@ -270,6 +272,66 @@ describe('product image tools (U6)', () => {
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('updated');
       expect(parsed.summary).toContain('123');
+    });
+  });
+
+  // U4: the multipart path runs through the same resilience driver as request().
+  // Writes retry on 429 only; the in-memory Blob-backed FormData is re-readable, so
+  // the same instance is re-sent verbatim on each attempt (KTD8). No public API or
+  // Content-Type change. The global no-op sleep (tests/setup.ts) keeps retries instant.
+  describe('multipart retry (U4)', () => {
+    it('retries a multipart POST once on 429, succeeds, and re-sends the same FormData body', async () => {
+      const mockFn = mockFetch([
+        { status: 429, ok: false, error: 'rate' },
+        { status: 200, data: uploadResult },
+      ]);
+      const { uploadProductImage } = await getProductsTools();
+
+      const result = await uploadProductImage({ id: 123, base64_data: HELLO_B64, file_name: 'p.png' });
+
+      expect(result.isError).toBeUndefined();
+      expect(mockFn).toHaveBeenCalledTimes(2);
+      const firstBody = mockFn.mock.calls[0][1].body as FormData;
+      const secondBody = mockFn.mock.calls[1][1].body as FormData;
+      expect(firstBody).toBeInstanceOf(FormData);
+      // Same in-memory instance re-sent on the retry (re-readable Blob part).
+      expect(secondBody).toBe(firstBody);
+      expect(secondBody.has('data')).toBe(true);
+      // No manual Content-Type on either send (boundary must be auto-generated).
+      expect((mockFn.mock.calls[1][1].headers as Record<string, string>)['Content-Type']).toBeUndefined();
+    });
+
+    it('does not retry a multipart POST on a first-try success (1 call)', async () => {
+      const mockFn = mockApiSuccess(uploadResult);
+      const { uploadProductImage } = await getProductsTools();
+
+      await uploadProductImage({ id: 123, base64_data: HELLO_B64, file_name: 'p.png' });
+
+      expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('AE1 (multipart): a network error on a multipart POST is not retried (1 call)', async () => {
+      const mockFn = mockFetchNetworkError('Connection refused');
+      const { uploadProductImage } = await getProductsTools();
+
+      const result = await uploadProductImage({ id: 123, base64_data: HELLO_B64, file_name: 'p.png' });
+
+      expect(result.isError).toBe(true);
+      expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries a multipart PUT once on 429 identically', async () => {
+      const mockFn = mockFetch([
+        { status: 429, ok: false, error: 'rate' },
+        { status: 200, data: uploadResult },
+      ]);
+      const { updateProductImage } = await getProductsTools();
+
+      const result = await updateProductImage({ id: 123, base64_data: HELLO_B64, file_name: 'p.png' });
+
+      expect(result.isError).toBeUndefined();
+      expect(mockFn).toHaveBeenCalledTimes(2);
+      expect(mockFn.mock.calls[1][1].method).toBe('PUT');
     });
   });
 
