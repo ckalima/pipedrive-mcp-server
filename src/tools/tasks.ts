@@ -17,7 +17,7 @@ import {
 } from "../schemas/tasks.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 // ─── U1: Read handlers ────────────────────────────────────────────────────────
 
@@ -46,16 +46,11 @@ export async function listTasks(params: ListTasksParams) {
   const tasks = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("task", tasks.length, pagination.has_more),
-        data: tasks,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("task", tasks.length, pagination.has_more),
+    data: tasks,
+    pagination,
+  });
 }
 
 /**
@@ -70,15 +65,10 @@ export async function getTask(params: GetTaskParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Task ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Task ${params.id}`,
+    data: response.data,
+  });
 }
 
 // ─── U2: Write handlers ───────────────────────────────────────────────────────
@@ -113,15 +103,10 @@ export async function createTask(params: CreateTaskParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Task created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Task created",
+    data: response.data,
+  });
 }
 
 /**
@@ -154,15 +139,10 @@ export async function updateTask(params: UpdateTaskParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Task ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Task ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -181,15 +161,10 @@ export async function deleteTask(params: DeleteTaskParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Task ${params.id} deleted (subtasks also deleted)`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Task ${params.id} deleted (subtasks also deleted)`,
+    data: response.data,
+  });
 }
 
 // ─── Tool definitions for MCP registration ───────────────────────────────────

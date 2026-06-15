@@ -12,6 +12,7 @@ import {
   type GetCurrentUserParams,
 } from "../schemas/users.js";
 import { mcpErrorResult } from "../utils/errors.js";
+import { formatToolResponse } from "../utils/formatting.js";
 
 /**
  * List all users
@@ -33,15 +34,10 @@ export async function listUsers(_params: ListUsersParams) {
 
   const users = response.data || [];
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Found ${users.length} user${users.length !== 1 ? "s" : ""}.`,
-        data: users,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Found ${users.length} user${users.length !== 1 ? "s" : ""}.`,
+    data: users,
+  });
 }
 
 /**
@@ -60,15 +56,10 @@ export async function getUser(params: GetUserParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `User ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `User ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -87,15 +78,10 @@ export async function getCurrentUser(_params: GetCurrentUserParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Current user",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Current user",
+    data: response.data,
+  });
 }
 
 /**

@@ -63,7 +63,7 @@ import {
   extractPaginationV2,
 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 // ─── U3: Field write shared helpers ───────────────────────────────────────────
 
@@ -114,12 +114,7 @@ function buildFieldUpdateBody(params: FieldUpdateInput): Record<string, unknown>
 
 /** Standard write-handler result envelope. */
 function fieldWriteResult(summary: string, data: unknown) {
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({ summary, data }, null, 2),
-    }],
-  };
+  return formatToolResponse({ summary, data });
 }
 
 /**
@@ -139,16 +134,11 @@ export async function listOrganizationFields(params: ListOrganizationFieldsParam
   const fields = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("organization field", fields.length, pagination.has_more),
-        data: fields,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("organization field", fields.length, pagination.has_more),
+    data: fields,
+    pagination,
+  });
 }
 
 /**
@@ -168,16 +158,11 @@ export async function listDealFields(params: ListDealFieldsParams) {
   const fields = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("deal field", fields.length, pagination.has_more),
-        data: fields,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("deal field", fields.length, pagination.has_more),
+    data: fields,
+    pagination,
+  });
 }
 
 /**
@@ -197,16 +182,11 @@ export async function listPersonFields(params: ListPersonFieldsParams) {
   const fields = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("person field", fields.length, pagination.has_more),
-        data: fields,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("person field", fields.length, pagination.has_more),
+    data: fields,
+    pagination,
+  });
 }
 
 /**
@@ -227,16 +207,11 @@ export async function listProductFields(params: ListProductFieldsParams) {
   const fields = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("product field", fields.length, pagination.has_more),
-        data: fields,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("product field", fields.length, pagination.has_more),
+    data: fields,
+    pagination,
+  });
 }
 
 /**
@@ -256,16 +231,11 @@ export async function listProjectFields(params: ListProjectFieldsParams) {
   const fields = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("project field", fields.length, pagination.has_more),
-        data: fields,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("project field", fields.length, pagination.has_more),
+    data: fields,
+    pagination,
+  });
 }
 
 /**
@@ -330,15 +300,10 @@ export async function getField(params: GetFieldParams) {
     };
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Field: ${params.key}`,
-        data: field,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Field: ${params.key}`,
+    data: field,
+  });
 }
 
 // ─── U3: Deal field write handlers ────────────────────────────────────────────

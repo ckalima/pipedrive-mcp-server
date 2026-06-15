@@ -36,7 +36,7 @@ import {
   extractPaginationV2,
 } from "../utils/pagination.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 /**
  * List projects with optional filtering
@@ -59,16 +59,11 @@ export async function listProjects(params: ListProjectsParams) {
   const projects = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("project", projects.length, pagination.has_more),
-        data: projects,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("project", projects.length, pagination.has_more),
+    data: projects,
+    pagination,
+  });
 }
 
 /**
@@ -83,15 +78,10 @@ export async function getProject(params: GetProjectParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -122,15 +112,10 @@ export async function createProject(params: CreateProjectParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Project created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Project created",
+    data: response.data,
+  });
 }
 
 /**
@@ -161,15 +146,10 @@ export async function updateProject(params: UpdateProjectParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -187,15 +167,10 @@ export async function deleteProject(params: DeleteProjectParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project ${params.id} deleted`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project ${params.id} deleted`,
+    data: response.data,
+  });
 }
 
 /**
@@ -210,15 +185,10 @@ export async function archiveProject(params: ArchiveProjectParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project ${params.id} archived`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project ${params.id} archived`,
+    data: response.data,
+  });
 }
 
 /**
@@ -239,15 +209,10 @@ export async function searchProjects(params: SearchProjectsParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Search results for "${params.term}"`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Search results for "${params.term}"`,
+    data: response.data,
+  });
 }
 
 /**
@@ -268,16 +233,11 @@ export async function listProjectTasks(params: ListProjectTasksParams) {
   const tasks = response.data || [];
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("task", tasks.length, pagination.has_more),
-        data: tasks,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("task", tasks.length, pagination.has_more),
+    data: tasks,
+    pagination,
+  });
 }
 
 /**
@@ -297,16 +257,11 @@ export async function listProjectTemplates(params: ListProjectTemplatesParams) {
   const templates = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("project template", templates.length, pagination.has_more),
-        data: templates,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("project template", templates.length, pagination.has_more),
+    data: templates,
+    pagination,
+  });
 }
 
 /**
@@ -321,15 +276,10 @@ export async function getProjectTemplate(params: GetProjectTemplateParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project template ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project template ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -353,16 +303,11 @@ export async function listArchivedProjects(params: ListArchivedProjectsParams) {
   const projects = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("archived project", projects.length, pagination.has_more),
-        data: projects,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("archived project", projects.length, pagination.has_more),
+    data: projects,
+    pagination,
+  });
 }
 
 /**
@@ -380,15 +325,10 @@ export async function getProjectPermittedUsers(params: GetProjectPermittedUsersP
 
   const data = response.data;
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `${data.length} permitted user(s) for project ${params.id}`,
-        data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `${data.length} permitted user(s) for project ${params.id}`,
+    data,
+  });
 }
 
 /**
@@ -408,16 +348,11 @@ export async function getProjectChangelog(params: GetProjectChangelogParams) {
   const entries = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("changelog entry", entries.length, pagination.has_more),
-        data: entries,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("changelog entry", entries.length, pagination.has_more),
+    data: entries,
+    pagination,
+  });
 }
 
 /**

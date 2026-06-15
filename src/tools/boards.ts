@@ -30,7 +30,7 @@ import {
   type DeletePhaseParams,
 } from "../schemas/boards.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 // ─── Board handlers ───────────────────────────────────────────────────────────
 
@@ -51,15 +51,10 @@ export async function listBoards(_params: ListBoardsParams) {
   const boards = response.data;
 
   // Deliberately no "pagination" key — this endpoint has no cursor pagination (R-2).
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("project board", boards.length, false),
-        data: boards,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("project board", boards.length, false),
+    data: boards,
+  });
 }
 
 /**
@@ -74,15 +69,10 @@ export async function getBoard(params: GetBoardParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project board ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project board ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -103,15 +93,10 @@ export async function createBoard(params: CreateBoardParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Project board created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Project board created",
+    data: response.data,
+  });
 }
 
 /**
@@ -132,15 +117,10 @@ export async function updateBoard(params: UpdateBoardParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project board ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project board ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -158,15 +138,10 @@ export async function deleteBoard(params: DeleteBoardParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project board ${params.id} deleted`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project board ${params.id} deleted`,
+    data: response.data,
+  });
 }
 
 // ─── Phase handlers ───────────────────────────────────────────────────────────
@@ -191,15 +166,10 @@ export async function listPhases(params: ListPhasesParams) {
   const phases = response.data;
 
   // Deliberately no "pagination" key — this endpoint has no cursor pagination (R-2).
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("project phase", phases.length, false),
-        data: phases,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("project phase", phases.length, false),
+    data: phases,
+  });
 }
 
 /**
@@ -214,15 +184,10 @@ export async function getPhase(params: GetPhaseParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project phase ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project phase ${params.id}`,
+    data: response.data,
+  });
 }
 
 /**
@@ -244,15 +209,10 @@ export async function createPhase(params: CreatePhaseParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Project phase created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Project phase created",
+    data: response.data,
+  });
 }
 
 /**
@@ -275,15 +235,10 @@ export async function updatePhase(params: UpdatePhaseParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project phase ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project phase ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -301,15 +256,10 @@ export async function deletePhase(params: DeletePhaseParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Project phase ${params.id} deleted`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Project phase ${params.id} deleted`,
+    data: response.data,
+  });
 }
 
 // ─── Tool definitions for MCP registration ───────────────────────────────────

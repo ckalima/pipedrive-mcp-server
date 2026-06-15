@@ -25,7 +25,7 @@ import {
 } from "../schemas/pipelines.js";
 import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
 import { buildPaginationParamsV2, extractPaginationV2 } from "../utils/pagination.js";
-import { createListSummary } from "../utils/formatting.js";
+import { createListSummary, formatToolResponse } from "../utils/formatting.js";
 
 /**
  * List all pipelines
@@ -45,16 +45,11 @@ export async function listPipelines(params: ListPipelinesParams) {
   const pipelines = response.data;
   const pagination = extractPaginationV2(response);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("pipeline", pipelines.length, pagination.has_more),
-        data: pipelines,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("pipeline", pipelines.length, pagination.has_more),
+    data: pipelines,
+    pagination,
+  });
 }
 
 /**
@@ -82,16 +77,11 @@ export async function listStages(params: ListStagesParams) {
     ? `pipeline ${params.pipeline_id}`
     : undefined;
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: createListSummary("stage", stages.length, pagination.has_more, additionalInfo),
-        data: stages,
-        pagination,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: createListSummary("stage", stages.length, pagination.has_more, additionalInfo),
+    data: stages,
+    pagination,
+  });
 }
 
 /**
@@ -106,15 +96,10 @@ export async function getStage(params: GetStageParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Stage ${params.id}`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Stage ${params.id}`,
+    data: response.data,
+  });
 }
 
 // ─── U1: Pipeline write handlers ──────────────────────────────────────────────
@@ -136,15 +121,10 @@ export async function createPipeline(params: CreatePipelineParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Pipeline created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Pipeline created",
+    data: response.data,
+  });
 }
 
 /**
@@ -167,15 +147,10 @@ export async function updatePipeline(params: UpdatePipelineParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Pipeline ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Pipeline ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -193,15 +168,10 @@ export async function deletePipeline(params: DeletePipelineParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Pipeline ${params.id} deleted`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Pipeline ${params.id} deleted`,
+    data: response.data,
+  });
 }
 
 // ─── U2: Stage write handlers ─────────────────────────────────────────────────
@@ -226,15 +196,10 @@ export async function createStage(params: CreateStageParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: "Stage created",
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: "Stage created",
+    data: response.data,
+  });
 }
 
 /**
@@ -258,15 +223,10 @@ export async function updateStage(params: UpdateStageParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Stage ${id} updated`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Stage ${id} updated`,
+    data: response.data,
+  });
 }
 
 /**
@@ -284,15 +244,10 @@ export async function deleteStage(params: DeleteStageParams) {
     return mcpErrorResult(response);
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        summary: `Stage ${params.id} deleted`,
-        data: response.data,
-      }, null, 2),
-    }],
-  };
+  return formatToolResponse({
+    summary: `Stage ${params.id} deleted`,
+    data: response.data,
+  });
 }
 
 /**
