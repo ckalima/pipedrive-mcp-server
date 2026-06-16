@@ -53,6 +53,9 @@ export interface WriteConfigDeps {
   timestamp?: string;
 }
 
+/** The Claude Code config scopes the installer can emit a command for. */
+const CLAUDE_CODE_SCOPES = new Set(["local", "project", "user"]);
+
 /**
  * Builds the `claude mcp add` invocation for Claude Code local/user scope.
  *
@@ -61,8 +64,16 @@ export interface WriteConfigDeps {
  * launch. The literal key therefore never enters argv or shell history (R15).
  * The server name follows `--scope` (not directly after `--env`) to dodge the
  * CLI's "name read as another env pair" footgun.
+ *
+ * `scope` is validated against the known scope ids HERE, at the boundary that
+ * produces a copy-paste-run command, so a malformed value can never be
+ * interpolated into runnable shell text (M1) even if a future caller forwards
+ * something less constrained than the descriptor table's scope.
  */
 export function claudeMcpAddInvocation(scope: string): { command: string; followUp: string } {
+  if (!CLAUDE_CODE_SCOPES.has(scope)) {
+    throw new Error(`refusing to build a 'claude mcp add' command for unknown scope '${scope}'`);
+  }
   const command =
     `claude mcp add --env '${ENV_VAR_NAME}=\${${ENV_VAR_NAME}}' ` +
     `--scope ${scope} --transport stdio ${SERVER_NAME} -- ${SERVER_COMMAND} ${SERVER_ARGS.join(" ")}`;
@@ -220,7 +231,10 @@ export function writeConfig(
   }
 
   // ── Atomic write at mode 0600 (temp-then-rename), tightening even a 0644 dest ──
-  mkdirSync(dirname(path), { recursive: true });
+  // Any config dir we create fresh is owner-only (0700), for parity with the
+  // relocated-backup dir (L3). `mode` only applies to dirs this call creates;
+  // pre-existing dirs are left as-is.
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   // Unpredictable temp name + exclusive `wx`. A predictable name in the destination
   // dir could be pre-created as a symlink that writeFileSync would FOLLOW, writing
   // the key-bearing config through it to an attacker-chosen path — the same hazard

@@ -51,6 +51,7 @@ describe('writeConfig — file targets (U4)', () => {
     expect(outcome.kind).toBe('written');
     expect(existsSync(path)).toBe(true);
     expect(mode(path)).toBe(0o600);
+    expect(mode(join(dir, 'nested'))).toBe(0o700); // freshly created config dir is owner-only (L3)
     const written = JSON.parse(readFileSync(path, 'utf8'));
     expect(Object.keys(written.mcpServers)).toEqual(['pipedrive']);
   });
@@ -231,5 +232,15 @@ describe('claudeMcpAddInvocation (U4 / R15)', () => {
     expect(command).toContain('${PIPEDRIVE_API_KEY}');
     expect(command).not.toContain('z'.repeat(40));
     expect(command).toContain('@ckalima/pipedrive-mcp-server');
+  });
+
+  it('accepts every known Claude Code scope', () => {
+    for (const scope of ['local', 'project', 'user']) {
+      expect(() => claudeMcpAddInvocation(scope)).not.toThrow();
+    }
+  });
+
+  it('refuses an unknown scope rather than interpolating it into runnable text (M1)', () => {
+    expect(() => claudeMcpAddInvocation('local; rm -rf ~')).toThrow(/unknown scope/);
   });
 });
