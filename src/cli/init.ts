@@ -254,7 +254,10 @@ export interface ReadlineDepsOptions {
  *  seams so the security-critical masking can be exercised against a real
  *  readline interface, not just a wholesale promptSecret mock (M2). */
 export function createReadlineDeps(opts: ReadlineDepsOptions = {}) {
-  const input = opts.input ?? process.stdin;
+  // Annotate as the base stream interface: `process.stdin` (ReadStream) and a
+  // seam-supplied ReadableStream otherwise form a union whose `.once`/`.off`
+  // overloads aren't mutually callable under newer @types/node (TS2349).
+  const input: NodeJS.ReadableStream = opts.input ?? process.stdin;
   const sink = opts.output ?? process.stdout;
   // All readline output (prompt redraws + keystroke echo) flows through this, so
   // muting it hides a typed secret regardless of how readline echoes internally.
