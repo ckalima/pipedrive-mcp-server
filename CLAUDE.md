@@ -21,7 +21,13 @@ src/
   resilience.ts     # Retry classifier, full-jitter backoff, Retry-After parsing, per-process circuit breaker (sits below the client chokepoint)
   version-routing.ts # v1-only capability seam: routes the four v1 capabilities + lazy sunset/retirement detection (sits above the client)
   capability-modes.ts # Resolves PIPEDRIVE_MODE → read-only/safe-write/full; pure tool-reachability classification + tools/list filtering (no new per-tool metadata)
-  config.ts         # Environment validation (PIPEDRIVE_API_KEY, PIPEDRIVE_MODE, PIPEDRIVE_ENABLE_DESTRUCTIVE)
+  config.ts         # Environment validation (PIPEDRIVE_API_KEY, PIPEDRIVE_MODE, PIPEDRIVE_ENABLE_DESTRUCTIVE); shared API-key format predicate + base URLs
+  cli/              # `npx … init` guided installer (subcommand routed from index.ts; not the STDIO server path)
+    init.ts         # Interactive flow orchestration + flag parsing; injectable IO seams (readline/opener/validator/writer)
+    config-targets.ts # Host descriptor table + renderer (per-OS path, top-level key, committed→indirection secret mechanism)
+    verify-key.ts   # Pasted-key validation via createValidationClient → GET /users/me (v1), bypassing the version-routing seam
+    write-config.ts # Non-destructive config writer (read-merge-backup-atomic write, 0600, symlink/TOCTOU-safe) + `claude mcp add` builder
+    open-url.ts     # Best-effort detached browser opener (env scrubbed of PIPEDRIVE_API_KEY)
   tools/            # MCP tool handlers (one file per entity)
     index.ts        # Tool registration, allTools array, getToolHandler/getToolSchema/getTool
   schemas/          # Zod input validation (one file per entity, common.ts for shared)
