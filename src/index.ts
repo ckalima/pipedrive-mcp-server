@@ -38,7 +38,9 @@ import { MAX_TOOL_RESPONSE_CHARS, measureResultTextLength } from "./utils/format
 
 // Server metadata
 const SERVER_NAME = "pipedrive-mcp-server";
-const SERVER_VERSION = "2.0.0";
+// Exported so tests/unit/version-consistency.test.ts can assert it tracks package.json
+// (this string is hand-maintained and the release workflow only checks package.json).
+export const SERVER_VERSION = "2.1.0";
 
 /**
  * Dispatcher for CallToolRequest — extracted so tests can import and invoke it directly

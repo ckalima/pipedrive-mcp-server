@@ -112,6 +112,21 @@ describe('capability modes', () => {
       });
       expect(capabilityModeStartupLines({ PIPEDRIVE_MODE: '' }).join('\n')).not.toMatch(/unrecognized/i);
     });
+
+    // Pin the "blank" boundary (defined by String.prototype.trim()) so a future refactor of
+    // the normalize step can't silently reclassify a control/zero-width char as blank and
+    // route it through legacy derivation. Security invariant holds either way: nothing here
+    // resolves above safe-write without the operator's separate legacy opt-in.
+    // (Chars built via fromCharCode to keep this source pure-ASCII.)
+    it('treats trim()-whitespace (NBSP) as blank but zero-width/control chars as typos', () => {
+      const NBSP = String.fromCharCode(0x00a0); // trim()-whitespace -> blank -> default
+      const ZWSP = String.fromCharCode(0x200b); // NOT trim()-whitespace -> typo
+      const NUL = String.fromCharCode(0x00); //    NOT trim()-whitespace -> typo
+      expect(resolveCapabilityMode({ PIPEDRIVE_MODE: NBSP })).toBe('safe-write');
+      expect(resolveCapabilityMode({ PIPEDRIVE_MODE: ZWSP })).toBe('read-only');
+      expect(resolveCapabilityMode({ PIPEDRIVE_MODE: NUL })).toBe('read-only');
+    });
+
   });
 
   describe('describeCapabilityMode — derivation metadata', () => {

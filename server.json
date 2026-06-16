@@ -7,13 +7,13 @@
     "url": "https://github.com/ckalima/pipedrive-mcp-server",
     "source": "github"
   },
-  "version": "2.0.0",
+  "version": "2.1.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@ckalima/pipedrive-mcp-server",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
@@ -27,8 +27,22 @@
           "format": "string"
         },
         {
+          "name": "PIPEDRIVE_MODE",
+          "description": "Server-enforced capability tier: 'read-only' (reads only), 'safe-write' (reads + non-destructive writes; the default), or 'full' (all tools, including destructive). Out-of-mode tools are hidden from tools/list and refused if called directly. A blank value is treated as unset (defaults to safe-write); an unrecognized value falls back to read-only.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
           "name": "PIPEDRIVE_ENABLE_DESTRUCTIVE",
-          "description": "Set to 'true' to enable delete tools. Disabled by default for safety.",
+          "description": "Legacy flag, superseded by PIPEDRIVE_MODE. When PIPEDRIVE_MODE is unset, 'true' maps to full; otherwise prefer PIPEDRIVE_MODE=full. Still honored for back-compat.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "PIPEDRIVE_IMAGE_BASE_DIR",
+          "description": "Allowlisted directory the server may read product images from when a file_path is passed to the image-upload tools. Filesystem reads are disabled unless this is set, and a file_path must resolve within it.",
           "isRequired": false,
           "isSecret": false,
           "format": "string"
