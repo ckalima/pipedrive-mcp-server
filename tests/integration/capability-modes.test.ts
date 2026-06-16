@@ -8,6 +8,8 @@
  *     handler runs, and scopes the unknown-tool hint to in-mode tools.
  */
 
+import { readFileSync } from 'node:fs';
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { z } from 'zod';
 
@@ -99,6 +101,21 @@ describe('capability modes — tools/list filter (U3)', () => {
     const mode = resolveCapabilityMode({});
     expect(mode).toBe('safe-write');
     expect(filterToolDefinitionsForMode(toolDefinitions, mode).length).toBe(SAFE_WRITE_TOOLS);
+  });
+
+  it('keeps the README capability-mode table counts in sync with the live filter (R10 drift guard)', () => {
+    // The README "Capability modes" table is hand-written (outside the gen:docs generated
+    // region), so the CI drift gate does not cover it. Pin each documented count to the
+    // live filter so a registry change can't leave the table silently stale.
+    const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8').split('\n');
+    for (const mode of CAPABILITY_MODES) {
+      const row = readme.find((l) => l.trimStart().startsWith(`| \`${mode}\``));
+      expect(row, `README capability-modes table has a \`${mode}\` row`).toBeTruthy();
+      const documented = Number(row!.match(/\b(\d+)\b/)?.[1]);
+      expect(documented, `README \`${mode}\` count matches filterToolDefinitionsForMode`).toBe(
+        filterToolDefinitionsForMode(toolDefinitions, mode).length,
+      );
+    }
   });
 
   it('agrees with the dispatch predicate for all tools across all modes', () => {
@@ -202,6 +219,18 @@ describe('capability modes — dispatcher backstop (U4)', () => {
       // Read tools appear; write/destructive tools do not.
       expect(textOf(result)).toContain('pipedrive_get_deal');
       expect(textOf(result)).not.toContain('pipedrive_create_deal');
+      expect(textOf(result)).not.toContain('pipedrive_delete_lead');
+    });
+
+    it('includes non-destructive writes but excludes destructive tool names in safe-write', async () => {
+      // The default tier: the hint must surface reads + non-destructive writes, but never a
+      // destructive tool name (the middle case the read-only and full cases bracket).
+      process.env.PIPEDRIVE_MODE = 'safe-write';
+      const result = await handleCallTool({ params: { name: 'pipedrive_not_a_tool', arguments: {} } });
+
+      expect(textOf(result)).toContain('Error [VALIDATION_ERROR]:');
+      expect(textOf(result)).toContain('pipedrive_get_deal');
+      expect(textOf(result)).toContain('pipedrive_create_deal');
       expect(textOf(result)).not.toContain('pipedrive_delete_lead');
     });
 

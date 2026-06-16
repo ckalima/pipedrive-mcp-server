@@ -77,7 +77,7 @@ export async function handleCallTool(request: { params: { name: string; argument
     return mcpErrorFromCode(
       "MODE_RESTRICTED",
       `Tool '${name}' is not available in capability mode '${mode}'`,
-      "This is an operator policy set via PIPEDRIVE_MODE (read-only < safe-write < full) and cannot be changed by the agent mid-session; ask the operator to widen the mode."
+      "This is an operator policy set via PIPEDRIVE_MODE (read-only < safe-write < full) and cannot be changed by the agent mid-session; ask the operator to widen the mode. Call tools/list to see the tools available in the current mode."
     );
   }
 

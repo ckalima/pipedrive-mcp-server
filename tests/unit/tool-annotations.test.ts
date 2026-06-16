@@ -112,6 +112,23 @@ describe('tool annotations', () => {
       }
     });
 
+    it('never declares a read-verb tool destructive (so the read-verb short-circuit can never under-protect one)', () => {
+      // Both buildToolAnnotations and isToolAllowedInMode (capability-modes.ts) short-circuit
+      // on the read verb BEFORE consulting the declared `destructive` field. A tool that is
+      // both a read verb and `destructive: true` would therefore be silently mislabeled
+      // (destructiveHint forced false) AND reachable in read-only mode. No shipped tool may
+      // sit in that blind spot. (The line-100 hint↔field test fails too if this is violated,
+      // but with a confusing message — this one names the real constraint.)
+      for (const tool of allTools as ToolWithHandler[]) {
+        if (verbSemantics(tool.name).readOnly) {
+          expect(
+            tool.destructive === true,
+            `${tool.name} is a read verb but declares destructive:true`,
+          ).toBe(false);
+        }
+      }
+    });
+
     it('annotates every guard-protected handler destructiveHint=true (static scan, no execution)', () => {
       const guarded = guardedHandlerNames();
       for (const tool of allTools as ToolWithHandler[]) {

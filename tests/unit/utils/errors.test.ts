@@ -45,6 +45,9 @@ describe('errors', () => {
     });
 
     it('should create error response for all error codes', () => {
+      // Keep this list exhaustive against the ErrorCode union in src/utils/errors.ts —
+      // a new code added there must be added here too (the union is a type, so it cannot
+      // be enumerated at runtime to enforce this automatically).
       const codes = [
         'MISSING_API_KEY',
         'INVALID_API_KEY',
@@ -55,6 +58,10 @@ describe('errors', () => {
         'API_ERROR',
         'NETWORK_ERROR',
         'DESTRUCTIVE_DISABLED',
+        'RESPONSE_TOO_LARGE',
+        'CAPABILITY_RETIRED',
+        'CIRCUIT_OPEN',
+        'MODE_RESTRICTED',
       ] as const;
 
       codes.forEach((code) => {

@@ -20,9 +20,10 @@ src/
   client.ts         # Singleton PipedriveClient (lazy init, API calls); drives the resilience retry/breaker loop below fetch
   resilience.ts     # Retry classifier, full-jitter backoff, Retry-After parsing, per-process circuit breaker (sits below the client chokepoint)
   version-routing.ts # v1-only capability seam: routes the four v1 capabilities + lazy sunset/retirement detection (sits above the client)
-  config.ts         # Environment validation (PIPEDRIVE_API_KEY, PIPEDRIVE_ENABLE_DESTRUCTIVE)
+  capability-modes.ts # Resolves PIPEDRIVE_MODE → read-only/safe-write/full; pure tool-reachability classification + tools/list filtering (no new per-tool metadata)
+  config.ts         # Environment validation (PIPEDRIVE_API_KEY, PIPEDRIVE_MODE, PIPEDRIVE_ENABLE_DESTRUCTIVE)
   tools/            # MCP tool handlers (one file per entity)
-    index.ts        # Tool registration, allTools array, getToolHandler/getToolSchema
+    index.ts        # Tool registration, allTools array, getToolHandler/getToolSchema/getTool
   schemas/          # Zod input validation (one file per entity, common.ts for shared)
   utils/
     errors.ts       # Error types, getErrorResponse, destructiveOperationGuard
@@ -62,7 +63,7 @@ Never commit Pipedrive account IDs, API tokens, or real customer data. Test fixt
 
 - Every tool handler returns `{ content: [{ type: "text", text: string }] }` with optional `isError: true`
 - Error responses use `getErrorResponse(response)` from `utils/errors.ts`, never inline fallbacks
-- Delete tools are gated by `PIPEDRIVE_ENABLE_DESTRUCTIVE=true` env var (default: disabled)
+- Delete/destructive tools are gated by capability mode: `PIPEDRIVE_MODE=full` (legacy `PIPEDRIVE_ENABLE_DESTRUCTIVE=true` still maps to `full` for back-compat). Default mode is `safe-write`, so destructive ops are disabled out of the box. See `src/capability-modes.ts`.
 - Destructive tools must both call `destructiveOperationGuard()` as the handler's first statement AND declare `destructive: true` on the tool def (drives the README/manifest 🔒 marker; enforced by the field-guard invariant test in `tests/unit/gen-docs.test.ts`)
 - Schemas use Zod. `visible_to` is always `z.number().int()` with `.refine()`, never string enum
 - Tool files export a `*Tools` array and individual handler functions
