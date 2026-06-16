@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-06-16
+
 ### Changed
 
 - **Minimum supported Node.js is now 22** (was 20). Node 20 ("Iron") reached
@@ -124,6 +126,7 @@ published from GitHub Actions with build provenance.
 - **Destructive operations gated** behind the `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`
   environment variable (disabled by default).
 
+[2.3.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.3.0
 [2.2.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.2.0
 [2.1.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.1.0
 [2.0.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.0.0
