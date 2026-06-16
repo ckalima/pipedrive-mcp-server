@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.1.0] - 2026-06-15
+## [2.2.0] - 2026-06-16
+
+### Added
+
+- **Guided installer (`npx @ckalima/pipedrive-mcp-server init`).** A one-command
+  interactive setup that opens the Pipedrive API-settings page, validates a
+  pasted key against the live API, and writes a working MCP config for the chosen
+  host (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf). It is a CLI
+  subcommand; the STDIO server path is unchanged.
+  - The pasted key is **masked** as you type (never echoed to the terminal or
+    scrollback).
+  - Config writes are **non-destructive**: an existing file is read, merged, and
+    backed up before an atomic `0600` write, with symlink/TOCTOU-safe handling.
+  - For committed or shared targets (e.g. a project-scoped `.mcp.json`), the
+    server entry uses an environment-variable indirection so a literal key never
+    lands in a shared file; the key is shown inline only under `--print-only`.
+  - Flags: `--host`, `--scope`, and `--print-only`. Unrecognized flags warn and
+    continue; a missing or flag-shaped value fails closed before any I/O. A
+    closed stdin (non-interactive/CI) cancels cleanly instead of hanging.
+
+
 
 ### Added
 
@@ -94,5 +114,6 @@ published from GitHub Actions with build provenance.
 - **Destructive operations gated** behind the `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`
   environment variable (disabled by default).
 
+[2.2.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.2.0
 [2.1.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.1.0
 [2.0.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.0.0
