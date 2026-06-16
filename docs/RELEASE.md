@@ -69,8 +69,18 @@ This project follows semver. Judgment calls that have come up:
 
 ## Post-release (separate from the workflow)
 
-- **MCP registry**: run `mcp-publisher` against the bumped `server.json`. Keep
-  `server.json`'s `environmentVariables` accurate (currently `PIPEDRIVE_API_KEY`,
+- **MCP registry**: publish the bumped `server.json` with `mcp-publisher`. Auth is
+  non-interactive - the saved registry JWT (`~/.config/mcp-publisher/token.json`)
+  expires after a few days, so re-login each release using your existing GitHub
+  token (`gh auth token`) rather than the browser device flow:
+
+  ```
+  mcp-publisher validate server.json
+  mcp-publisher login github -token "$(gh auth token)"
+  mcp-publisher publish
+  ```
+
+  Keep `server.json`'s `environmentVariables` accurate (currently `PIPEDRIVE_API_KEY`,
   `PIPEDRIVE_MODE`, `PIPEDRIVE_ENABLE_DESTRUCTIVE`, `PIPEDRIVE_IMAGE_BASE_DIR`).
 - **`.mcpb`**: `npm run bundle:mcpb` from a fresh `npm run build`. `bundle/server/`
   is gitignored and rebuilt at pack time, so always pack from a clean build; a
@@ -83,5 +93,6 @@ This project follows semver. Judgment calls that have come up:
   but could instead be derived from `package.json` at build time to remove the
   manual step entirely.
 - npm publish and the MCP-registry publish are separate actions; the registry step
-  is easy to forget. Consider folding it into the workflow once non-interactive
-  `mcp-publisher` auth is wired up.
+  is easy to forget. Non-interactive auth is confirmed working (via a GitHub token),
+  so this could be folded into the Release workflow using
+  `mcp-publisher login github-oidc` on the tag-push job.
