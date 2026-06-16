@@ -19,7 +19,8 @@ function makeDeps(overrides: Partial<InitDeps> = {}) {
   const base: InitDeps & { prints: string[] } = {
     prints,
     print: (m: string) => prints.push(m),
-    prompt: vi.fn(async (q: string) => (/api key/i.test(q) ? KEY : '1')),
+    prompt: vi.fn(async () => '1'),
+    promptSecret: vi.fn(async () => KEY),
     confirm: vi.fn(async () => true),
     openUrl: vi.fn(),
     verifyApiKey: vi.fn(async () => ({ valid: true, user: { name: 'Jane', email: 'jane@example.com' } })),
@@ -48,6 +49,26 @@ describe('runInit flow (U5)', () => {
     expect(deps.prints.join('\n')).toMatch(/Restart Claude Desktop/);
   });
 
+  it('strips control/escape chars from the API-sourced account name before echoing it (L2)', async () => {
+    const verifyApiKey = vi.fn(async () => ({
+      valid: true,
+      // Crafted display name with CR + ANSI escape; must not reach the terminal raw.
+      user: { name: 'Jane\r\x1b[31mEVIL', email: 'jane@example.com' },
+    }));
+    const deps = makeDeps({ verifyApiKey });
+
+    await runInit(['--host', 'claude-desktop'], deps);
+
+    const validatedLine = deps.prints.find((p) => p.includes('Validated as'))!;
+    // The dangerous bytes are gone: no CR (line forging) and no ESC (the byte that
+    // arms an ANSI sequence). Printable text survives; the residual "[31m" is inert
+    // without its ESC, so it cannot colorize or move the cursor.
+    expect(validatedLine).not.toContain('\r');
+    expect(validatedLine).not.toContain('\x1b');
+    expect(validatedLine).toContain('Jane');
+    expect(validatedLine).toContain('EVIL');
+  });
+
   it('re-prompts once on an invalid key, then proceeds', async () => {
     const verifyApiKey = vi
       .fn()
@@ -62,13 +83,25 @@ describe('runInit flow (U5)', () => {
   });
 
   it('cancels (non-zero) when the user quits the key prompt', async () => {
-    const deps = makeDeps({ prompt: vi.fn(async () => 'q') });
+    const deps = makeDeps({ promptSecret: vi.fn(async () => 'q') });
 
     const code = await runInit(['--host', 'claude-desktop'], deps);
 
     expect(code).toBe(1);
     expect(deps.verifyApiKey).not.toHaveBeenCalled();
     expect(deps.writeConfig).not.toHaveBeenCalled();
+  });
+
+  it('reads the API key via the masked promptSecret seam, not the echoing prompt (M2)', async () => {
+    // If the key ever came through the echoing `prompt`, this sentinel (which is
+    // not a valid key) would reach the validator instead of the masked value.
+    const deps = makeDeps({ prompt: vi.fn(async () => 'NOT_THE_KEY') });
+
+    const code = await runInit(['--host', 'claude-desktop'], deps);
+
+    expect(code).toBe(0);
+    expect(deps.promptSecret).toHaveBeenCalledTimes(1);
+    expect(deps.verifyApiKey).toHaveBeenCalledWith(KEY);
   });
 
   it('continues when the browser opener throws (URL already printed)', async () => {

@@ -110,6 +110,9 @@ export function parseInitArgs(argv: string[]): InitOptions {
 /** Injectable IO/effect seams for {@link runInit} (mocked wholesale in tests). */
 export interface InitDeps {
   prompt: (question: string) => Promise<string>;
+  /** Like {@link prompt} but the typed answer is NOT echoed — used for the API key
+   *  so a pasted secret never lands in terminal scrollback (M2). */
+  promptSecret: (question: string) => Promise<string>;
   confirm: (question: string, defaultYes: boolean) => Promise<boolean>;
   print: (message: string) => void;
   openUrl: (url: string) => void;
@@ -126,14 +129,44 @@ const TOKEN_PAGE_URL = "https://app.pipedrive.com/settings/api";
 const CREDENTIAL_WARNING =
   "⚠ This configuration contains a live Pipedrive API key. Keep it private — never commit or share it.";
 
-/** Builds readline-backed prompt/confirm, creating the interface lazily so that
- *  fully-mocked test runs never open stdin. */
+/** Builds readline-backed prompt/confirm/promptSecret, creating the interface
+ *  lazily so that fully-mocked test runs never open stdin. */
 function createReadlineDeps() {
   let rl: readline.Interface | null = null;
-  const get = () =>
-    (rl ??= readline.createInterface({ input: process.stdin, output: process.stdout }));
+  // While set, the interface swallows the characters it would normally echo, so a
+  // secret typed/pasted at a masked prompt never reaches the terminal (M2).
+  let muted = false;
+  const get = () => {
+    if (rl) return rl;
+    const iface = readline.createInterface({ input: process.stdin, output: process.stdout });
+    // `_writeToOutput` is the single chokepoint readline uses to echo input; wrap
+    // it so masked answers emit nothing but the closing newline. Guarded so a host
+    // without the internal simply degrades to a normal (echoing) prompt.
+    const writable = iface as unknown as { _writeToOutput?: (s: string) => void };
+    const original = writable._writeToOutput?.bind(iface);
+    if (original) {
+      writable._writeToOutput = (s: string) => {
+        if (!muted) return original(s);
+        if (s.includes("\n") || s.includes("\r")) original("\n");
+      };
+    }
+    rl = iface;
+    return rl;
+  };
   return {
     prompt: async (q: string) => (await get().question(q)).trim(),
+    promptSecret: async (q: string) => {
+      const iface = get();
+      // Print the label unmuted, then mute while the answer is read so the prompt
+      // text shows but the key does not.
+      process.stdout.write(q);
+      muted = true;
+      try {
+        return (await iface.question("")).trim();
+      } finally {
+        muted = false;
+      }
+    },
     confirm: async (q: string, defaultYes: boolean) => {
       const ans = (await get().question(`${q}${defaultYes ? "[Y/n] " : "[y/N] "}`)).trim().toLowerCase();
       if (ans === "") return defaultYes;
@@ -162,6 +195,7 @@ export async function runInit(argv: string[], overrides: Partial<InitDeps> = {})
   const rl = createReadlineDeps();
   const deps: InitDeps = {
     prompt: rl.prompt,
+    promptSecret: rl.promptSecret,
     confirm: rl.confirm,
     print: (message) => console.log(message),
     openUrl,
@@ -321,11 +355,13 @@ function printDelivery(
   if (target.secret.kind === "literal" && options.printOnly) {
     const rendered = renderConfig(target, key);
     deps.print(CREDENTIAL_WARNING);
-    deps.print(`\nPaste this into ${where}:\n${formatBlock(rendered.block!)}`);
+    // Guarded rather than asserted: a CLI-delivered target has no block and is
+    // routed away earlier, but this keeps printDelivery total if that ever changes (L1).
+    if (rendered.block) deps.print(`\nPaste this into ${where}:\n${formatBlock(rendered.block)}`);
     if (rendered.followUp) deps.print(rendered.followUp);
   } else {
     const display = renderForDisplay(target);
-    deps.print(`\nPaste this into ${where}:\n${formatBlock(display.block!)}`);
+    if (display.block) deps.print(`\nPaste this into ${where}:\n${formatBlock(display.block)}`);
     if (display.followUp) deps.print(display.followUp);
     if (target.secret.kind === "literal") {
       deps.print(
@@ -346,7 +382,8 @@ async function promptForValidKey(
   for (;;) {
     let raw: string;
     try {
-      raw = await deps.prompt("Paste your Pipedrive API key (or 'q' to quit): ");
+      // Masked: the key must not be echoed into terminal scrollback (M2).
+      raw = await deps.promptSecret("Paste your Pipedrive API key (or 'q' to quit): ");
     } catch {
       return null; // stdin closed / EOF (Ctrl-D)
     }
@@ -386,9 +423,18 @@ async function promptScope(deps: InitDeps, hostInfo: HostInfo): Promise<string> 
 
 // ─── Presentation helpers ────────────────────────────────────────────────────
 
+/** Strips control + escape characters so an API-sourced display string cannot
+ *  forge terminal output (CR/LF/ANSI injection) when echoed back (L2). */
+function sanitizeForTerminal(value: string): string {
+  return value.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+}
+
 function formatUser(user: VerifiedUser): string {
-  const parts = [user.name, user.email].filter((v): v is string => Boolean(v));
-  return parts.length > 0 ? parts.join(" — ") : "your Pipedrive account";
+  const parts = [user.name, user.email]
+    .filter((v): v is string => Boolean(v))
+    .map(sanitizeForTerminal)
+    .filter((v) => v.length > 0);
+  return parts.length > 0 ? parts.join(" - ") : "your Pipedrive account";
 }
 
 function formatBlock(block: Record<string, unknown>): string {
