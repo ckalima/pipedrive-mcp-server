@@ -24,8 +24,22 @@ const readJson = (rel: string) =>
 const pkg = readJson('../../package.json') as { version: string };
 const serverJson = readJson('../../server.json') as {
   version: string;
-  packages: { version: string; environmentVariables: { name: string }[] }[];
+  packages: {
+    registryType: string;
+    identifier?: string;
+    version: string;
+    fileSha256?: string;
+    transport?: { type?: string };
+    environmentVariables?: { name: string }[];
+  }[];
 };
+
+// The committed mcpb fileSha256 is an all-zeros sentinel: the real hash is per-build and
+// injected by CI (scripts/registry-inject.ts) immediately before publish. Asserting the
+// sentinel guarantees no stale real hash is ever committed and mistaken for live.
+const SENTINEL_SHA256 = '0'.repeat(64);
+const expectedMcpbUrl = (version: string) =>
+  `https://github.com/ckalima/pipedrive-mcp-server/releases/download/v${version}/pipedrive-mcp-server-${version}.mcpb`;
 
 describe('version consistency', () => {
   it('SERVER_VERSION (src/index.ts) matches package.json', () => {
@@ -41,8 +55,28 @@ describe('version consistency', () => {
 
   it('server.json advertises PIPEDRIVE_MODE so the registry entry tracks the feature', () => {
     const names = serverJson.packages.flatMap((p) =>
-      p.environmentVariables.map((e) => e.name),
+      (p.environmentVariables ?? []).map((e) => e.name),
     );
     expect(names).toContain('PIPEDRIVE_MODE');
+  });
+});
+
+describe('mcpb registry descriptor', () => {
+  const mcpb = serverJson.packages.filter((p) => p.registryType === 'mcpb');
+
+  it('exactly one mcpb package over stdio transport', () => {
+    expect(mcpb).toHaveLength(1);
+    expect(mcpb[0].transport?.type).toBe('stdio');
+  });
+
+  it('identifier is the version-templated Release URL and contains "mcp"', () => {
+    // Drift guard: forces the release-prep version bump to also bump the mcpb URL, the same
+    // way SERVER_VERSION and server.json versions are pinned to package.json.
+    expect(mcpb[0].identifier).toBe(expectedMcpbUrl(pkg.version));
+    expect(mcpb[0].identifier?.toLowerCase()).toContain('mcp'); // registry MCPB URL rule
+  });
+
+  it('committed fileSha256 is the all-zeros sentinel (CI injects the real hash)', () => {
+    expect(mcpb[0].fileSha256).toBe(SENTINEL_SHA256);
   });
 });

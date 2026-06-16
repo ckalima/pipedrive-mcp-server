@@ -9,12 +9,18 @@ runbook: when a release teaches us something, update it here.
 |--------|-----|---------|
 | npm (`@ckalima/pipedrive-mcp-server`, with provenance) | `.github/workflows/release.yml` via OIDC trusted publishing (no token) | Pushing a `v*.*.*` tag (admin-only ruleset) |
 | GitHub Release | same workflow, notes pulled from the matching `## [x.y.z]` CHANGELOG section | same tag push |
-| Official MCP registry | `mcp-publisher` CLI against `server.json` | manual, after npm publish |
-| `.mcpb` bundle (optional) | `npm run bundle:mcpb` (`scripts/build-mcpb.ts`) | manual |
+| `.mcpb` bundle + `.sha256`, attached to the GitHub Release | `release.yml` builds it (`npm run bundle:mcpb`) and attaches it | same tag push |
+| Official MCP registry (npm **and** mcpb packages) | `release.yml` `registry` job: `mcp-publisher` via OIDC; the real `fileSha256` is injected from the attached bundle by `scripts/registry-inject.ts` | same tag push (after `publish` succeeds) |
 
-The workflow is the only thing that touches npm, and it is the irreversible
+The `publish` job is the only thing that touches npm, and it is the irreversible
 step. It hard-checks that the pushed tag equals `package.json`'s version and that
 the tarball actually contains `dist/index.js` before publishing.
+
+The `registry` job runs only after `publish` succeeds. It publishes the registry entry (both
+the npm and mcpb packages) via OIDC, with the mcpb `fileSha256` injected from the exact `.mcpb`
+the `publish` job attached — so the registry never advertises a hash that disagrees with the
+downloadable bundle. The registry does **not** validate that hash itself; MCP clients do, at
+install time, which is why getting it from the attached artifact (never hand-typed) matters.
 
 ## Version is single-sourced to package.json
 
@@ -26,7 +32,7 @@ tag points at; `tests/unit/version-consistency.test.ts` and
 |--------|--------------|-----------|
 | `package.json` | edit by hand | release workflow (tag == version) |
 | `src/index.ts` `SERVER_VERSION` | edit by hand | `version-consistency.test.ts` |
-| `server.json` (root + `packages[0].version`) | edit by hand | `version-consistency.test.ts` |
+| `server.json` (root version, both package `version`s, and the mcpb download URL) | edit by hand | `version-consistency.test.ts` |
 | `bundle/manifest.json` `version` | **do not hand-edit** - `npm run gen:docs` derives it from `package.json` | `gen-docs.test.ts` |
 
 ## Versioning policy (semver)
@@ -67,32 +73,40 @@ This project follows semver. Judgment calls that have come up:
 6. **Verify**: npm shows the version with a provenance badge; the GitHub Release
    exists with the CHANGELOG notes.
 
-## Post-release (separate from the workflow)
+## Post-release (now automated by the workflow)
 
-- **MCP registry**: publish the bumped `server.json` with `mcp-publisher`. Auth is
-  non-interactive - the saved registry JWT (`~/.config/mcp-publisher/token.json`)
-  expires after a few days, so re-login each release using your existing GitHub
-  token (`gh auth token`) rather than the browser device flow:
+Both used to be manual; the Release workflow now does them on the tag push:
 
-  ```
-  mcp-publisher validate server.json
-  mcp-publisher login github -token "$(gh auth token)"
-  mcp-publisher publish
-  ```
-
-  Keep `server.json`'s `environmentVariables` accurate (currently `PIPEDRIVE_API_KEY`,
+- **`.mcpb` bundle**: the `publish` job builds it (`npm run bundle:mcpb` from a fresh build;
+  `bundle/server/` is gitignored and rebuilt at pack time) and attaches the `.mcpb` plus a
+  `.sha256` sidecar to the GitHub Release.
+- **MCP registry**: the `registry` job publishes the bumped `server.json` (npm + mcpb packages)
+  via `mcp-publisher login github-oidc`, after injecting the attached bundle's real hash. Keep
+  `server.json`'s `environmentVariables` accurate (currently `PIPEDRIVE_API_KEY`,
   `PIPEDRIVE_MODE`, `PIPEDRIVE_ENABLE_DESTRUCTIVE`, `PIPEDRIVE_IMAGE_BASE_DIR`).
-- **`.mcpb`**: `npm run bundle:mcpb` from a fresh `npm run build`. `bundle/server/`
-  is gitignored and rebuilt at pack time, so always pack from a clean build; a
-  stale local `bundle/server/` is not a shipping risk but must not be packed.
+
+### Manual fallback / back-publishing a missed version
+
+If the `registry` job did not run (e.g. it predates a release) or you need to publish a version
+whose entry was never created, run the local fallback. The registry version is immutable, so the
+published `fileSha256` MUST match the bytes clients download — fetch the target release's `.mcpb`
+asset and pass its path so the hash comes from that exact file (never a rebuild, never hand-typed):
+
+```
+gh release download vX.Y.Z --pattern '*.mcpb'      # the durable asset for that version
+npm run registry:publish -- ./pipedrive-mcp-server-X.Y.Z.mcpb
+git checkout server.json                           # restore the committed sentinel hash
+```
+
+`registry:publish` authenticates with `gh auth token` and runs `mcp-publisher validate && publish`.
+A version published with the WRONG hash is unrecoverable (immutable) — you would have to cut a new
+version.
 
 ## Known improvements / TODO
 
-- The Release workflow attaches no `.mcpb` asset yet (TODO(#85) in `release.yml`).
-- `SERVER_VERSION` and `server.json` are hand-maintained; they are now drift-tested
-  but could instead be derived from `package.json` at build time to remove the
-  manual step entirely.
-- npm publish and the MCP-registry publish are separate actions; the registry step
-  is easy to forget. Non-interactive auth is confirmed working (via a GitHub token),
-  so this could be folded into the Release workflow using
-  `mcp-publisher login github-oidc` on the tag-push job.
+- `SERVER_VERSION`, `server.json`'s versions, and the mcpb download URL are hand-maintained;
+  they are drift-tested (`version-consistency.test.ts`) but could be derived from
+  `package.json` at build time to remove the manual step entirely.
+- The committed mcpb `fileSha256` is an all-zeros sentinel that CI overwrites at publish. The
+  OIDC → `io.github.ckalima` namespace mapping is proven only on a real tag push;
+  `npm run registry:publish` (GitHub-token auth) is the fallback if it ever needs troubleshooting.

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The `.mcpb` desktop bundle is now released automatically.** Each `v*` tag push attaches
+  the one-click `.mcpb` bundle (plus a `.sha256`) to the GitHub Release, and the MCP registry
+  entry now advertises a second `registryType: "mcpb"` package pointing at that asset so
+  desktop/registry clients can discover it. The registry entry (npm and mcpb packages) is
+  published in CI via OIDC instead of a manual step, with the mcpb `fileSha256` injected from
+  the exact attached bundle (the committed value is an all-zeros sentinel). Adds
+  `npm run registry:publish` as a back-publish/recovery fallback. No change to the server's
+  tools or runtime behavior. (#137)
+
 ## [2.3.1] - 2026-06-16
 
 ### Fixed

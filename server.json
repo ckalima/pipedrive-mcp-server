@@ -48,6 +48,15 @@
           "format": "string"
         }
       ]
+    },
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/ckalima/pipedrive-mcp-server/releases/download/v2.3.1/pipedrive-mcp-server-2.3.1.mcpb",
+      "version": "2.3.1",
+      "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "transport": {
+        "type": "stdio"
+      }
     }
   ]
 }

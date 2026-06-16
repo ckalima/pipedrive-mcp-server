@@ -77,7 +77,7 @@ Counts are grouped by the primary entity in each tool name and sum to 155.
 
 | # | Registry | Mechanism | Status |
 |---|---|---|---|
-| 1 | Official MCP registry | `mcp-publisher` CLI + `server.json` | ✅ **Live** (2026-06-13, status `active`) |
+| 1 | Official MCP registry | `mcp-publisher` + `server.json`, **auto-published on tag push** (npm **and** mcpb packages) | ✅ **Live** (2026-06-13, status `active`) |
 | 2 | Glama | Web listing refresh (re-index/claim) | ✅ **Live** (2026-06-14; claimed, scoped pkg, 155 tools, ratings A/A/A) |
 | 3 | Smithery | `.mcpb` bundle / hosted URL (model changed) | ⏸️ **Deferred** (MCPB vs. Smithery schema conflict; see §3) |
 | 4 | mcp.so | Self-registration form | ✅ **Live** (2026-06-14, [`/server/pipedrive-crm`](https://mcp.so/server/pipedrive-crm)) |
@@ -101,7 +101,14 @@ Update this table as each listing goes live.
 > true`. Verify with the `curl` below.
 
 The official registry feeds client-side discovery (Claude Desktop, Cursor, VS Code). It hosts
-**metadata only** — the package itself lives on npm.
+**metadata only** — the package itself lives on npm (and, for the mcpb package, as a `.mcpb`
+asset on the GitHub Release).
+
+> **Now automated.** As of the `.mcpb` release-automation change, the `registry` job in
+> `.github/workflows/release.yml` publishes this entry on every `v*` tag push (after the npm
+> publish succeeds). `server.json` carries two packages — the npm package and a `registryType:
+> "mcpb"` package pointing at the Release's `.mcpb` asset; CI injects the asset's real
+> `fileSha256` (committed as an all-zeros sentinel) before publishing. See `docs/RELEASE.md`.
 
 **Prerequisite — already met (no patch release needed).** The registry verifies ownership by
 fetching the published package's `package.json` and checking that `mcpName` matches

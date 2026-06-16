@@ -20,6 +20,8 @@
     "smoke:coverage": "tsx scripts/smoke-coverage.ts",
     "gen:docs": "tsx scripts/gen-docs.ts",
     "bundle:mcpb": "tsx scripts/build-mcpb.ts",
+    "registry:inject": "tsx scripts/registry-inject.ts",
+    "registry:publish": "tsx scripts/registry-publish.ts",
     "lint": "eslint src/",
     "prepublishOnly": "npm run build"
   },
