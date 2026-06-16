@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20, 22]
+        node-version: [22, 24]
 
     steps:
       - uses: actions/checkout@v6
@@ -34,7 +34,7 @@ jobs:
       # registry and fail if they differ from what's committed. Pinned to a single
       # Node leg (the generator output is platform-independent, so one run suffices).
       - name: Check generated docs are up to date
-        if: matrix.node-version == 20
+        if: matrix.node-version == 22
         run: |
           npm run gen:docs
           git diff --exit-code -- README.md bundle/manifest.json \

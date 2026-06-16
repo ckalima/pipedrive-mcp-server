@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Minimum supported Node.js is now 22** (was 20). Node 20 ("Iron") reached
+  end-of-life in April 2026; Node 22 ("Jod") is the oldest LTS still receiving
+  support. `engines.node` is advisory (npm only warns), so existing installs on
+  older Node keep working, but 22+ is what we test and support. CI now runs the
+  Node 22 (floor) and 24 (current LTS) lines; `@types/node` is aligned to the 22
+  floor so the build typechecks against the API surface we actually support, and
+  a `.nvmrc` pins local development to 22.
+
 ## [2.2.0] - 2026-06-16
 
 ### Added
