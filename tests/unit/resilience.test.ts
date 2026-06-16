@@ -19,6 +19,7 @@ import {
   BACKOFF_BASE_MS,
   BACKOFF_CAP_MS,
   BREAKER_THRESHOLD,
+  BREAKER_WINDOW_MS,
   BREAKER_COOLDOWN_MS,
 } from '../../src/resilience.js';
 
@@ -222,12 +223,12 @@ describe('circuit breaker (U2, KTD7)', () => {
     expect(breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS + 5)).toBe(false);
   });
 
-  it('half-open probe success closes the breaker and zeroes the counter', () => {
+  it('half-open probe success closes the breaker and clears the window', () => {
     for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
     breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS); // -> HalfOpen, probe out
     recordOutcome(ok, T0 + BREAKER_COOLDOWN_MS, true); // the probe owner settles
     expect(getBreakerState()).toBe('Closed');
-    // Counter is zeroed: THRESHOLD-1 fresh trips stay Closed.
+    // Window is cleared: THRESHOLD-1 fresh trips stay Closed.
     for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
     expect(getBreakerState()).toBe('Closed');
   });
@@ -277,18 +278,61 @@ describe('circuit breaker (U2, KTD7)', () => {
     expect(getBreakerState()).toBe('Closed');
   });
 
-  it('a success resets the consecutive counter (THRESHOLD-1, success, THRESHOLD-1 -> still Closed)', () => {
+  it('an interleaved success does NOT reset progress toward tripping (windowed; #123)', () => {
+    // The concurrency fix: a success from a concurrent healthy request is a no-op
+    // while Closed, so it cannot zero progress mid-storm. Under the old consecutive
+    // counter this reset to 0 and the final trip would have left it Closed.
     for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
-    recordOutcome(ok, T0);
+    expect(getBreakerState()).toBe('Closed');
+    recordOutcome(ok, T0); // interleaved success — no-op under the window
+    recordOutcome(trip, T0); // the THRESHOLD-th trip signal still opens the breaker
+    expect(getBreakerState()).toBe('Open');
+  });
+
+  it('an interleaved non-trip failure (e.g. validation error) also does NOT reset progress (windowed; #123)', () => {
     for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
+    recordOutcome(nonTripFailure, T0); // e.g. a 500 / 4xx validation error — no-op under the window
+    recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Open');
+  });
+
+  it('opens when THRESHOLD trip signals fall within the window, spanning real time (R2, runaway loop)', () => {
+    // Signals spread across the window (not all at one instant) still trip at THRESHOLD,
+    // so the runaway-single-endpoint case trips at the same signal budget as before.
+    const span = BREAKER_WINDOW_MS - 1;
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) {
+      recordOutcome(trip, T0 + Math.floor((span * i) / BREAKER_THRESHOLD));
+      expect(getBreakerState()).toBe('Closed');
+    }
+    recordOutcome(trip, T0 + span); // THRESHOLD-th, still inside the window
+    expect(getBreakerState()).toBe('Open');
+  });
+
+  it('ages out trip signals older than the window so they do not accumulate', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
+    // A trip just past the window evicts every T0 signal; only it remains in-window.
+    recordOutcome(trip, T0 + BREAKER_WINDOW_MS + 1);
     expect(getBreakerState()).toBe('Closed');
   });
 
-  it('a non-trip failure (e.g. validation error) also resets the consecutive counter', () => {
-    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
-    recordOutcome(nonTripFailure, T0);
-    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
-    expect(getBreakerState()).toBe('Closed');
+  it('isolated 429s spaced beyond the window never accumulate to a trip', () => {
+    // Each trip is more than a window apart, so each eviction pass clears the prior
+    // one and the in-window count never exceeds 1 — no trip even across many signals.
+    for (let i = 0; i < 10; i++) {
+      recordOutcome(trip, T0 + i * (BREAKER_WINDOW_MS + 1));
+      expect(getBreakerState()).toBe('Closed');
+    }
+  });
+
+  it('counts a signal at exactly the trailing window edge (inclusive boundary)', () => {
+    // The trailing edge is inclusive: a signal at T0 still counts when a later signal
+    // arrives at exactly T0 + BREAKER_WINDOW_MS (age == window). Paired with the
+    // "ages out" test above (age > window evicts), this pins the >= boundary intentionally.
+    recordOutcome(trip, T0);
+    for (let i = 0; i < BREAKER_THRESHOLD - 2; i++) recordOutcome(trip, T0 + 1);
+    expect(getBreakerState()).toBe('Closed'); // THRESHOLD-1 signals so far
+    recordOutcome(trip, T0 + BREAKER_WINDOW_MS); // T0 is exactly at the edge, still counted
+    expect(getBreakerState()).toBe('Open');
   });
 
   it('resetCircuitBreakerState returns to Closed with a zeroed counter', () => {

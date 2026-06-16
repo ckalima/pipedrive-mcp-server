@@ -33,8 +33,18 @@ export const BACKOFF_BASE_MS = 500;
 export const BACKOFF_CAP_MS = 8_000;
 /** Cap on any single honored `Retry-After` / `x-ratelimit-reset` wait. */
 export const RETRY_AFTER_CAP_MS = 20_000;
-/** Consecutive trip signals (429 / 503) that open the breaker. */
+/** Trip signals (429 / 503) within BREAKER_WINDOW_MS that open the breaker. */
 export const BREAKER_THRESHOLD = 5;
+/**
+ * Sliding window over which BREAKER_THRESHOLD trip signals open the breaker.
+ * Counting within a window (rather than requiring strictly-consecutive signals)
+ * makes the breaker robust to concurrent in-flight calls: an interleaved success
+ * from a healthy concurrent request can no longer zero progress mid-storm (#123).
+ * 30s comfortably exceeds a dense storm's timescale (it aligns with RETRY_BUDGET_MS,
+ * roughly one logical request's retry lifetime) while still aging out the minutes-
+ * apart spacing of isolated 429s under healthy traffic, so they never accumulate.
+ */
+export const BREAKER_WINDOW_MS = 30_000;
 /** How long the breaker stays Open before allowing a single half-open probe. */
 export const BREAKER_COOLDOWN_MS = 60_000;
 
@@ -172,18 +182,27 @@ export function parseRetryAfterMs(headers: Headers, nowMs: number): number | nul
 
 // ─── Circuit breaker (U2: R6, R7, R9, R10, R11; KTD7) ─────────────────────────
 //
-// Per-process consecutive-count breaker. Valid because one STDIO process == one
+// Per-process windowed-count breaker. Valid because one STDIO process == one
 // API token == one account, mirroring version-routing.ts's module state plus its
 // resetVersionRoutingState(). Mutations are synchronous (no await between read and
-// write) so concurrent in-flight tool calls cannot both probe or both miss the
-// threshold (see plan System-Wide Impact: "breaker mutations must be synchronous").
+// write) so concurrent in-flight tool calls cannot both probe (see plan System-Wide
+// Impact: "breaker mutations must be synchronous"). The Closed-state trip count is a
+// sliding window of recent trip-signal timestamps rather than a consecutive counter:
+// a success no longer participates in Closed-state mutation, so interleaving from
+// concurrent calls can only advance the count toward tripping, never suppress it
+// (#123). Isolated 429s age out of the window over time.
 
 /** The three breaker states (KTD7). */
 export type BreakerState = "Closed" | "Open" | "HalfOpen";
 
 let breakerState: BreakerState = "Closed";
-/** Consecutive trip signals (429/503) seen while Closed. One success resets it. */
-let consecutiveTripSignals = 0;
+/**
+ * Wall-clock ms timestamps of trip signals (429/503) seen while Closed, within the
+ * current BREAKER_WINDOW_MS window. Evicted by age on each new trip signal; the
+ * breaker opens when this reaches BREAKER_THRESHOLD entries. A success or non-trip
+ * outcome is a no-op (it does NOT clear this) — that is the concurrency fix (#123).
+ */
+let tripSignalTimestamps: number[] = [];
 /** Wall-clock ms when the breaker last opened; cooldown is measured from here. */
 let openedAtMs = 0;
 
@@ -236,7 +255,7 @@ export function breakerAllowsRequest(nowMs: number): boolean {
  * Records the outcome of a settled attempt and advances the breaker. `isProbe`
  * identifies the request that owns the current half-open probe slot.
  *
- *   HalfOpen + isProbe (this IS the probe): success -> Closed + counter 0; any
+ *   HalfOpen + isProbe (this IS the probe): success -> Closed + window cleared; any
  *     non-success (4xx/5xx/network/timeout, not only 429/503) -> Open + cooldown
  *     restart. Leaving HalfOpen releases the single probe slot.
  *   HalfOpen + !isProbe: NO-OP. This is a request that passed the Closed gate
@@ -245,15 +264,15 @@ export function breakerAllowsRequest(nowMs: number): boolean {
  *     a non-probe completes here). Its outcome is not the probe's verdict, so it
  *     must not advance the breaker — otherwise a concurrent straggler could hijack
  *     or release the probe slot. It still returns its own result to its own caller.
- *   Closed: success or any non-trip outcome -> counter 0 (an interleaved success
- *     or validation error means the stream is not a pure storm). A trip signal
- *     increments the consecutive counter and opens the breaker at BREAKER_THRESHOLD.
- *     NOTE: under concurrent in-flight calls the consecutive counter is best-effort
- *     — an interleaved success from a concurrent request can reset it mid-storm, so
- *     a heavily-interleaved 429 stream may take more than BREAKER_THRESHOLD signals
- *     to trip. The runaway-loop case this guards (a tight loop of same-endpoint
- *     failures) has few interleaved successes and still trips promptly. A
- *     concurrency-robust windowed/ratio breaker is tracked as a follow-up (#123).
+ *   Closed: success or any non-trip outcome -> NO-OP. A trip signal evicts window
+ *     entries older than BREAKER_WINDOW_MS, records its own timestamp, and opens the
+ *     breaker once BREAKER_THRESHOLD trip signals fall within the window. Counting
+ *     within a sliding window (rather than requiring consecutive signals) is robust
+ *     to concurrent interleaving: a success from a concurrent healthy request is a
+ *     no-op, so it cannot zero progress mid-storm, and isolated 429s spaced beyond
+ *     the window age out instead of accumulating (#123). The runaway-loop case this
+ *     guards (a tight stream of same-endpoint failures) lands BREAKER_THRESHOLD
+ *     signals well within the window and still trips at the same signal budget.
  *   Open: defensive no-op (no request should have been made while Open).
  */
 export function recordOutcome(outcome: BreakerOutcome, nowMs: number, isProbe = false): void {
@@ -266,7 +285,7 @@ export function recordOutcome(outcome: BreakerOutcome, nowMs: number, isProbe = 
     // The probe settled: leaving HalfOpen releases the single probe slot.
     if (outcome.isSuccess) {
       breakerState = "Closed";
-      consecutiveTripSignals = 0;
+      tripSignalTimestamps = [];
     } else {
       breakerState = "Open";
       openedAtMs = nowMs;
@@ -278,13 +297,21 @@ export function recordOutcome(outcome: BreakerOutcome, nowMs: number, isProbe = 
     return;
   }
 
-  // Closed
+  // Closed: a success or non-trip outcome is a no-op — it must NOT reset progress,
+  // or a single interleaved success from a concurrent call could suppress the trip
+  // mid-storm (#123). Only trip signals mutate the window.
   if (outcome.isSuccess || !outcome.isTripSignal) {
-    consecutiveTripSignals = 0;
     return;
   }
-  consecutiveTripSignals += 1;
-  if (consecutiveTripSignals >= BREAKER_THRESHOLD) {
+  // Evict signals older than the window, then record this one. Counting within
+  // BREAKER_WINDOW_MS (not strictly-consecutive signals) is the concurrency fix:
+  // interleaving can only push the in-window count up. Eviction runs only here, on
+  // the record path; any stale timestamps left when trips stop are harmless and tiny
+  // (never read again until the next trip's eviction pass).
+  const windowStartMs = nowMs - BREAKER_WINDOW_MS;
+  tripSignalTimestamps = tripSignalTimestamps.filter((ts) => ts >= windowStartMs);
+  tripSignalTimestamps.push(nowMs);
+  if (tripSignalTimestamps.length >= BREAKER_THRESHOLD) {
     breakerState = "Open";
     openedAtMs = nowMs;
   }
@@ -302,7 +329,7 @@ export function getBreakerState(): BreakerState {
  */
 export function resetCircuitBreakerState(): void {
   breakerState = "Closed";
-  consecutiveTripSignals = 0;
+  tripSignalTimestamps = [];
   openedAtMs = 0;
 }
 

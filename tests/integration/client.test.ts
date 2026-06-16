@@ -840,6 +840,43 @@ describe('resilience: retry + circuit breaker (U3)', () => {
         vi.useRealTimers();
       }
     });
+
+    it('#123: concurrent interleaved 429/503 load opens the breaker reliably despite an interleaved success', async () => {
+      // Fire several un-awaited in-flight writes at once — the concurrency the breaker
+      // guards, which the rest of the suite never exercised. POST + 503 is a single-
+      // attempt trip signal and POST + 200 a single-attempt success, so the shared mock
+      // hands each concurrent call exactly one sequenced response. All callers pass the
+      // Closed gate before any outcome is recorded, so six trip signals land regardless
+      // of scheduling and the windowed breaker opens. The interleaved success is a no-op
+      // under the window; under the old consecutive counter it could have reset progress
+      // mid-storm (that distinction is proven deterministically in the resilience unit
+      // tests — here we assert the real async path opens reliably).
+      mockFetch([
+        { status: 503, ok: false, error: 'unavailable' },
+        { status: 503, ok: false, error: 'unavailable' },
+        { status: 503, ok: false, error: 'unavailable' },
+        { status: 200, data: fixtures.deal }, // healthy concurrent request interleaves a success
+        { status: 503, ok: false, error: 'unavailable' },
+        { status: 503, ok: false, error: 'unavailable' },
+        { status: 503, ok: false, error: 'unavailable' },
+      ]);
+      const client = new PipedriveClient();
+
+      // Launch all in-flight without awaiting each; settle them together.
+      const inFlight = Array.from({ length: 7 }, () =>
+        client.post('/deals', { title: 'x' }, 'v2'),
+      );
+      await Promise.all(inFlight);
+
+      expect(getBreakerState()).toBe('Open');
+
+      // The breaker now fast-fails the next call with no upstream request.
+      const afterOpen = vi.fn();
+      vi.stubGlobal('fetch', afterOpen);
+      const response = await client.get('/deals', undefined, 'v2');
+      expect(response.error?.code).toBe('CIRCUIT_OPEN');
+      expect(afterOpen).not.toHaveBeenCalled();
+    });
   });
 
   describe('telemetry (R8)', () => {
