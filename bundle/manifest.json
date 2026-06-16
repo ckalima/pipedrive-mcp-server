@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "pipedrive-mcp-server",
   "display_name": "Pipedrive CRM",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "description": "MCP server for Pipedrive CRM integration with Claude Code",
   "author": {
     "name": "Chris Kalima",

@@ -1,6 +1,6 @@
 {
   "name": "@ckalima/pipedrive-mcp-server",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "mcpName": "io.github.ckalima/pipedrive-mcp-server",
   "description": "MCP server for Pipedrive CRM integration with Claude Code",
   "type": "module",
