@@ -15,6 +15,9 @@ import {
   recordOutcome,
   getBreakerState,
   resetCircuitBreakerState,
+  monotonicNowMs,
+  setMonotonicClockForTests,
+  resetMonotonicClockForTests,
   circuitOpenError,
   BACKOFF_BASE_MS,
   BACKOFF_CAP_MS,
@@ -371,6 +374,26 @@ describe('circuit breaker (U2, KTD7)', () => {
     // Window cleared: a fresh THRESHOLD-1 burst stays Closed (no carryover count).
     for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
     expect(getBreakerState()).toBe('Closed');
+  });
+});
+
+describe('monotonic clock seam (U2, #133)', () => {
+  it('default monotonicNowMs() is finite and non-decreasing across calls', () => {
+    const a = monotonicNowMs();
+    const b = monotonicNowMs();
+    expect(Number.isFinite(a)).toBe(true);
+    expect(b).toBeGreaterThanOrEqual(a);
+  });
+
+  it('setMonotonicClockForTests overrides the source; reset restores the real clock', () => {
+    setMonotonicClockForTests(() => 42);
+    expect(monotonicNowMs()).toBe(42);
+    expect(monotonicNowMs()).toBe(42); // pinned, not advancing
+
+    resetMonotonicClockForTests();
+    // Back to the real performance.now()-backed source: a value well past the pinned
+    // 42 (the test process has run far longer than 42ms), proving it is not still pinned.
+    expect(monotonicNowMs()).toBeGreaterThan(42);
   });
 });
 

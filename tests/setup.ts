@@ -4,7 +4,11 @@
 
 import { vi, beforeEach, afterEach } from 'vitest';
 import { resetVersionRoutingState } from '../src/version-routing.js';
-import { resetCircuitBreakerState, setResilienceSleepForTests } from '../src/resilience.js';
+import {
+  resetCircuitBreakerState,
+  setResilienceSleepForTests,
+  resetMonotonicClockForTests,
+} from '../src/resilience.js';
 
 // Store original environment
 const originalEnv = { ...process.env };
@@ -40,6 +44,11 @@ beforeEach(() => {
   // sleeps. A zero-delay sleep keeps the suite fast with no real waits; resilience
   // tests that need to assert wait amounts install their own recording sleep.
   setResilienceSleepForTests(() => Promise.resolve());
+
+  // Restore the real monotonic clock the breaker keys on (#133). It is a module-level
+  // injectable seam like the two above, so a test that installs a controlled clock to
+  // drive the cooldown/window arithmetic would otherwise leak into the next test.
+  resetMonotonicClockForTests();
 });
 
 // Restore original environment after each test

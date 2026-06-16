@@ -8,9 +8,12 @@ import { leadsV1 } from '../../src/version-routing.js';
 import {
   getBreakerState,
   setResilienceSleepForTests,
+  setMonotonicClockForTests,
   RETRY_MAX_ATTEMPTS,
   RETRY_BUDGET_MS,
   RETRY_AFTER_CAP_MS,
+  BREAKER_THRESHOLD,
+  BREAKER_WINDOW_MS,
   BREAKER_COOLDOWN_MS,
 } from '../../src/resilience.js';
 import { setupValidEnv, clearApiKey, VALID_API_KEY } from '../helpers/mockEnv.js';
@@ -801,44 +804,40 @@ describe('resilience: retry + circuit breaker (U3)', () => {
     });
 
     it('half-open probe issues exactly one upstream request for a retryable read 500 (internal retry disabled)', async () => {
-      vi.useFakeTimers();
-      try {
-        mockApiError(503, 'unavailable');
-        const client = new PipedriveClient();
-        for (let i = 0; i < 5; i++) await client.post('/deals', { title: 'x' }, 'v2');
-        expect(getBreakerState()).toBe('Open');
+      // The cooldown is driven by the monotonic clock (#133), so advance that seam — not
+      // vi.setSystemTime, which moves only the wall-clock the breaker no longer reads.
+      let clock = 0;
+      setMonotonicClockForTests(() => clock);
+      mockApiError(503, 'unavailable');
+      const client = new PipedriveClient();
+      for (let i = 0; i < 5; i++) await client.post('/deals', { title: 'x' }, 'v2');
+      expect(getBreakerState()).toBe('Open');
 
-        // Cooldown elapses -> the next call becomes the single half-open probe.
-        vi.setSystemTime(Date.now() + BREAKER_COOLDOWN_MS + 1);
-        const probeMock = mockApiError(500, 'boom'); // a read 500 is normally retried...
+      // Cooldown elapses (monotonic) -> the next call becomes the single half-open probe.
+      clock = BREAKER_COOLDOWN_MS + 1;
+      const probeMock = mockApiError(500, 'boom'); // a read 500 is normally retried...
 
-        const response = await client.get('/deals', undefined, 'v2');
+      const response = await client.get('/deals', undefined, 'v2');
 
-        expect(response.success).toBe(false);
-        expect(probeMock).toHaveBeenCalledTimes(1); // ...but the probe runs once, no retry
-        expect(getBreakerState()).toBe('Open'); // a non-success probe reopens the breaker
-      } finally {
-        vi.useRealTimers();
-      }
+      expect(response.success).toBe(false);
+      expect(probeMock).toHaveBeenCalledTimes(1); // ...but the probe runs once, no retry
+      expect(getBreakerState()).toBe('Open'); // a non-success probe reopens the breaker
     });
 
     it('AE1 ∩ probe: a half-open probe that is a write hitting a network error does not retry and reopens', async () => {
-      vi.useFakeTimers();
-      try {
-        mockApiError(503, 'unavailable');
-        const client = new PipedriveClient();
-        for (let i = 0; i < 5; i++) await client.post('/deals', { title: 'x' }, 'v2');
-        vi.setSystemTime(Date.now() + BREAKER_COOLDOWN_MS + 1);
-        const probeMock = mockFetchNetworkError('Connection refused');
+      let clock = 0;
+      setMonotonicClockForTests(() => clock);
+      mockApiError(503, 'unavailable');
+      const client = new PipedriveClient();
+      for (let i = 0; i < 5; i++) await client.post('/deals', { title: 'x' }, 'v2');
+      clock = BREAKER_COOLDOWN_MS + 1; // cooldown elapses on the monotonic clock (#133)
+      const probeMock = mockFetchNetworkError('Connection refused');
 
-        const response = await client.post('/deals', { title: 'x' }, 'v2');
+      const response = await client.post('/deals', { title: 'x' }, 'v2');
 
-        expect(response.error?.code).toBe('NETWORK_ERROR');
-        expect(probeMock).toHaveBeenCalledTimes(1); // write never re-sent (AE1)
-        expect(getBreakerState()).toBe('Open'); // probe failure reopens
-      } finally {
-        vi.useRealTimers();
-      }
+      expect(response.error?.code).toBe('NETWORK_ERROR');
+      expect(probeMock).toHaveBeenCalledTimes(1); // write never re-sent (AE1)
+      expect(getBreakerState()).toBe('Open'); // probe failure reopens
     });
 
     it('#123: concurrent interleaved 429/503 load opens the breaker reliably despite an interleaved success', async () => {
@@ -881,6 +880,88 @@ describe('resilience: retry + circuit breaker (U3)', () => {
       const response = await client.get('/deals', undefined, 'v2');
       expect(response.error?.code).toBe('CIRCUIT_OPEN');
       expect(afterOpen).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('monotonic clock — wall-clock steps do not affect the breaker (#133)', () => {
+    it('a forward Date.now jump > window mid-storm still trips the breaker (R1)', async () => {
+      // Monotonic clock advances by 1ms per breaker call, so every trip lands well within
+      // BREAKER_WINDOW_MS regardless of wall-clock movement.
+      let mono = 0;
+      setMonotonicClockForTests(() => (mono += 1));
+
+      // Hostile wall-clock: Date.now jumps forward by 10 windows partway through the storm.
+      // Under the old code (breaker keyed on Date.now) this advanced the eviction cutoff past
+      // the still-recent signals and the breaker failed to open; on the monotonic clock it is
+      // inert, so the storm still trips.
+      const base = Date.now();
+      let dateCalls = 0;
+      vi.spyOn(Date, 'now').mockImplementation(() => {
+        dateCalls += 1;
+        return base + (dateCalls > 2 ? 10 * BREAKER_WINDOW_MS : 0);
+      });
+
+      mockApiError(503, 'unavailable'); // POST+503 is a single-attempt trip signal
+      const client = new PipedriveClient();
+      for (let i = 0; i < BREAKER_THRESHOLD; i++) await client.post('/deals', { title: 'x' }, 'v2');
+
+      expect(getBreakerState()).toBe('Open');
+
+      const afterOpen = vi.fn();
+      vi.stubGlobal('fetch', afterOpen);
+      const response = await client.get('/deals', undefined, 'v2');
+      expect(response.error?.code).toBe('CIRCUIT_OPEN'); // not RATE_LIMITED
+      expect(afterOpen).not.toHaveBeenCalled();
+    });
+
+    it('signals spread > window on the monotonic clock age out even while Date.now is held constant (R1 converse)', async () => {
+      // The converse guard: advance the monotonic clock by more than a window between trips,
+      // so each eviction clears the prior signal and the count never reaches the threshold —
+      // even though Date.now is pinned (which, if the breaker still read it, would keep every
+      // signal in-window and trip). Staying Closed proves the breaker keys off the monotonic
+      // clock, not the wall-clock.
+      let mono = 0;
+      setMonotonicClockForTests(() => (mono += BREAKER_WINDOW_MS + 1));
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+
+      mockApiError(503, 'unavailable');
+      const client = new PipedriveClient();
+      for (let i = 0; i < BREAKER_THRESHOLD + 3; i++) {
+        await client.post('/deals', { title: 'x' }, 'v2');
+        expect(getBreakerState()).toBe('Closed');
+      }
+    });
+
+    it('cooldown keys off the monotonic clock, not the wall-clock (R2)', async () => {
+      let mono = 0;
+      setMonotonicClockForTests(() => mono);
+
+      // Open the breaker with five trip signals at monotonic t=0 (openedAtMs = 0).
+      mockApiError(503, 'unavailable');
+      const client = new PipedriveClient();
+      for (let i = 0; i < BREAKER_THRESHOLD; i++) await client.post('/deals', { title: 'x' }, 'v2');
+      expect(getBreakerState()).toBe('Open');
+
+      // A large FORWARD wall-clock jump must NOT prematurely end the cooldown: within the
+      // cooldown on the monotonic clock, the next call still fast-fails with no request.
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 100 * BREAKER_COOLDOWN_MS);
+      mono = BREAKER_COOLDOWN_MS - 1;
+      const beforeCooldown = vi.fn();
+      vi.stubGlobal('fetch', beforeCooldown);
+      const stillOpen = await client.get('/deals', undefined, 'v2');
+      expect(stillOpen.error?.code).toBe('CIRCUIT_OPEN');
+      expect(beforeCooldown).not.toHaveBeenCalled();
+      expect(getBreakerState()).toBe('Open');
+
+      // A large BACKWARD wall-clock step must NOT delay the cooldown: at the cooldown on the
+      // monotonic clock, the next call is handed the single probe slot and issues one request.
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() - 100 * BREAKER_COOLDOWN_MS);
+      mono = BREAKER_COOLDOWN_MS;
+      const probeMock = mockApiError(503, 'unavailable');
+      const probe = await client.get('/deals', undefined, 'v2');
+      expect(probeMock).toHaveBeenCalledTimes(1); // probe ran — cooldown elapsed on the monotonic clock
+      expect(probe.success).toBe(false); // probe got a 503 back (its own rendered error, not CIRCUIT_OPEN)
+      expect(getBreakerState()).toBe('Open'); // probe failure reopens
     });
   });
 

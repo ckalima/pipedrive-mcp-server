@@ -12,6 +12,7 @@ import {
   breakerAllowsRequest,
   recordOutcome,
   getBreakerState,
+  monotonicNowMs,
   circuitOpenError,
   resilientSleep,
   RETRY_MAX_ATTEMPTS,
@@ -437,7 +438,9 @@ export class PipedriveClient {
     for (let attemptIndex = 0; ; attemptIndex++) {
       // ── Breaker gate (consulted before every attempt) ──
       const stateBeforeGate = getBreakerState();
-      const allowed = breakerAllowsRequest(Date.now());
+      // Monotonic clock (not Date.now): a wall-clock step must not mis-time the
+      // breaker's cooldown or evict an in-progress window's signals (#133).
+      const allowed = breakerAllowsRequest(monotonicNowMs());
       this.logBreakerTransition(stateBeforeGate, getBreakerState(), method, logEndpoint);
       if (!allowed) {
         this.logResilience(`${method} ${logEndpoint} circuit open — fast-failing without a request`);
@@ -487,7 +490,8 @@ export class PipedriveClient {
       const stateBeforeRecord = getBreakerState();
       // Pass isProbe so a straggler that only settled during this request's probe
       // window cannot hijack the half-open verdict (owner-scoped breaker update).
-      recordOutcome({ isSuccess, isTripSignal }, Date.now(), isProbe);
+      // Monotonic clock (not Date.now) so the window arithmetic is clock-step-safe (#133).
+      recordOutcome({ isSuccess, isTripSignal }, monotonicNowMs(), isProbe);
       this.logBreakerTransition(stateBeforeRecord, getBreakerState(), method, logEndpoint);
 
       if (isSuccess) {
@@ -514,6 +518,8 @@ export class PipedriveClient {
 
       // ── Compute the wait (KTD6 cap-then-bail order, else backoff + jitter) ──
       const budgetRemainingMs = RETRY_BUDGET_MS - budgetUsedMs;
+      // Wall-clock (Date.now), intentionally NOT the monotonic clock: this compares
+      // against a server-supplied Retry-After HTTP-date, which is wall-clock (#133).
       const hintMs = parseRetryAfterMs(responseHeaders ?? EMPTY_HEADERS, Date.now());
       let waitMs: number;
       if (hintMs !== null) {

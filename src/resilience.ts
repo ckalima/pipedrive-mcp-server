@@ -191,19 +191,30 @@ export function parseRetryAfterMs(headers: Headers, nowMs: number): number | nul
 // a success no longer participates in Closed-state mutation, so interleaving from
 // concurrent calls can only advance the count toward tripping, never suppress it
 // (#123). Isolated 429s age out of the window over time.
+//
+// All window/cooldown arithmetic keys on a *monotonic* clock the client supplies
+// (monotonicNowMs(), below) rather than wall-clock time, so an NTP/VM clock step can
+// neither evict an in-progress window's still-recent signals nor shorten/lengthen the
+// cooldown (#133). The injectable nowMs parameter is unchanged — only the client's
+// choice of clock source moved from Date.now() to the monotonic seam.
 
 /** The three breaker states (KTD7). */
 export type BreakerState = "Closed" | "Open" | "HalfOpen";
 
 let breakerState: BreakerState = "Closed";
 /**
- * Wall-clock ms timestamps of trip signals (429/503) seen while Closed, within the
- * current BREAKER_WINDOW_MS window. Evicted by age on each new trip signal; the
- * breaker opens when this reaches BREAKER_THRESHOLD entries. A success or non-trip
- * outcome is a no-op (it does NOT clear this) — that is the concurrency fix (#123).
+ * Monotonic process-relative ms timestamps of trip signals (429/503) seen while
+ * Closed, within the current BREAKER_WINDOW_MS window. Evicted by age on each new trip
+ * signal; the breaker opens when this reaches BREAKER_THRESHOLD entries. A success or
+ * non-trip outcome is a no-op (it does NOT clear this) — that is the concurrency fix
+ * (#123). The client supplies these via monotonicNowMs() so a wall-clock step cannot
+ * evict still-recent signals mid-storm (#133).
  */
 let tripSignalTimestamps: number[] = [];
-/** Wall-clock ms when the breaker last opened; cooldown is measured from here. */
+/**
+ * Monotonic process-relative ms when the breaker last opened; cooldown is measured
+ * from here (#133 — monotonic so a wall-clock step cannot mis-time the cooldown).
+ */
 let openedAtMs = 0;
 
 // The HalfOpen state IS the one-slot probe gate: the Open -> HalfOpen transition is
@@ -347,6 +358,51 @@ export function circuitOpenError(): ErrorResponse {
     "Requests are being held back to protect the shared Pipedrive rate limit after repeated rate-limit or service-unavailable responses.",
     "This is a local safeguard, not a fresh upstream rejection. Wait about 60 seconds before retrying; a single probe will test recovery automatically.",
   );
+}
+
+// ─── Monotonic clock seam (#133) ──────────────────────────────────────────────
+//
+// The breaker's window/cooldown arithmetic must key on a *monotonic* clock, not
+// wall-clock time: Date.now() is subject to NTP/VM clock steps, and a forward jump
+// larger than BREAKER_WINDOW_MS mid-storm would evict an in-progress window's
+// still-recent trip signals (so the breaker fails to open), while any step shifts the
+// Open->HalfOpen cooldown deadline. performance.now() is monotonically non-decreasing,
+// immune to clock adjustments, and reports float ms relative to process start — the
+// same unit the breaker arithmetic already uses. The client calls monotonicNowMs() for
+// the breaker gate and record; parseRetryAfterMs deliberately stays on Date.now()
+// because it compares against a server-supplied Retry-After HTTP-date (wall-clock).
+//
+// This is an injectable seam, the same category of test-only override as the sleep
+// seam and resetCircuitBreakerState(): the 60s cooldown and 30s window are not testable
+// in real wall-clock time, and a test must be able to drive a controlled monotonic clock
+// independently of a hostile Date.now() — the precise divergence #133 is about. The
+// breaker functions keep their pure nowMs parameter (existing unit tests pass fixed
+// timestamps); only the client's clock source changed.
+
+/** A source of monotonic, process-relative milliseconds. Injectable for test isolation. */
+export type MonotonicClock = () => number;
+
+const realMonotonicNow: MonotonicClock = () => performance.now();
+
+let monotonicImpl: MonotonicClock = realMonotonicNow;
+
+/** Current monotonic ms. Production uses performance.now(); tests may override. */
+export function monotonicNowMs(): number {
+  return monotonicImpl();
+}
+
+/**
+ * Test-only: override the monotonic clock (e.g. a controlled sequence) so the cooldown
+ * and window-aging arithmetic can be driven deterministically and independently of
+ * wall-clock movement. Wired so a per-test override cannot leak into the next test.
+ */
+export function setMonotonicClockForTests(fn: MonotonicClock): void {
+  monotonicImpl = fn;
+}
+
+/** Test-only: restore the real performance.now()-backed monotonic clock. */
+export function resetMonotonicClockForTests(): void {
+  monotonicImpl = realMonotonicNow;
 }
 
 // ─── Backoff sleep seam (KTD9 alternative) ────────────────────────────────────
