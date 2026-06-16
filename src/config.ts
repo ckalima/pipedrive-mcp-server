@@ -14,6 +14,9 @@ export interface Config {
   mode: CapabilityMode;
 }
 
+/** The environment variable carrying the Pipedrive API token. */
+export const ENV_VAR_NAME = "PIPEDRIVE_API_KEY";
+
 /** Exact length of a Pipedrive personal API token. */
 export const API_KEY_LENGTH = 40;
 
