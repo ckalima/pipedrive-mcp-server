@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, statSync, existsSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, statSync, existsSync, readdirSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeConfig, claudeMcpAddInvocation } from '../../src/cli/write-config.js';
@@ -173,6 +173,30 @@ describe('writeConfig — file targets (U4)', () => {
 
     expect(outcome.kind).toBe('print');
     expect(readFileSync(path, 'utf8')).toBe(before); // original untouched
+  });
+
+  it('does not write the key through a symlinked destination (planted-symlink defense)', () => {
+    // A symlink planted at the destination must not redirect the secret-bearing
+    // write to its target. The atomic temp-then-rename (unpredictable temp name +
+    // exclusive `wx`) replaces the symlink with a real local file instead of
+    // following it, so the external victim never receives the key (H1/R14).
+    const victim = join(dir, 'victim.json');
+    writeFileSync(victim, JSON.stringify({ mcpServers: { other: {} } }, null, 2));
+    const path = join(dir, 'config.json');
+    symlinkSync(victim, path); // destination is now an attacker-controlled symlink
+    const { target, rendered } = desktopRender();
+
+    const outcome = writeConfig(target, rendered, {
+      pathOverride: path,
+      isInsideGitTree: () => false,
+      timestamp: TS,
+    });
+
+    expect(outcome.kind).toBe('written');
+    // The key landed in a real local file, NOT through the symlink into the victim.
+    expect(readFileSync(victim, 'utf8')).not.toContain(KEY);
+    expect(lstatSync(path).isSymbolicLink()).toBe(false);
+    expect(readFileSync(path, 'utf8')).toContain(KEY);
   });
 
   it('returns print when no stable path resolves (VS Code user scope)', () => {

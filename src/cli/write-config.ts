@@ -13,7 +13,6 @@ import {
   existsSync,
   readFileSync,
   writeFileSync,
-  chmodSync,
   mkdirSync,
   mkdtempSync,
   renameSync,
@@ -21,6 +20,7 @@ import {
 } from "node:fs";
 import { dirname, basename, resolve, join, delimiter } from "node:path";
 import { tmpdir } from "node:os";
+import { randomBytes } from "node:crypto";
 
 import { ENV_VAR_NAME } from "../config.js";
 import {
@@ -165,12 +165,16 @@ export function writeConfig(
     return { kind: "print", reason: "no stable config path on this OS" };
   }
 
-  // ── Read + parse any existing file (abort on malformed; leave it untouched) ──
+  // ── Read any existing file ONCE; reuse this single snapshot for parse AND backup ──
+  // Reading twice (a parse-read then a separate backup-read) opens a TOCTOU window:
+  // the file could be swapped between the reads, so the backup would not match the
+  // bytes the merge was computed from and a rollback would restore the wrong state
+  // (R14). One read closes that window.
   let existing: Record<string, unknown> = {};
-  let fileExisted = false;
+  let originalBytes: Buffer | undefined;
   if (existsSync(path)) {
-    fileExisted = true;
-    const raw = readFileSync(path, "utf8");
+    originalBytes = readFileSync(path);
+    const raw = originalBytes.toString("utf8");
     if (raw.trim() !== "") {
       let parsed: unknown;
       try {
@@ -192,7 +196,7 @@ export function writeConfig(
   // ── Backup the pre-write file (never inside a git tree — relocate or beside it) ──
   let backupPath: string | undefined;
   let backupRelocated = false;
-  if (fileExisted) {
+  if (originalBytes !== undefined) {
     const inTree = (deps.isInsideGitTree ?? isPathInsideGitTree)(path);
     if (inTree) {
       // Relocate into a fresh owner-only (0700) directory with an unpredictable
@@ -209,7 +213,7 @@ export function writeConfig(
     // The exclusive `wx` flag fails (rather than follows/overwrites) if the path
     // already exists or is a planted symlink; we then abort to print, untouched.
     try {
-      writeFileSync(backupPath, readFileSync(path), { mode: 0o600, flag: "wx" });
+      writeFileSync(backupPath, originalBytes, { mode: 0o600, flag: "wx" });
     } catch {
       return { kind: "print", reason: "could not create a safe backup" };
     }
@@ -217,12 +221,16 @@ export function writeConfig(
 
   // ── Atomic write at mode 0600 (temp-then-rename), tightening even a 0644 dest ──
   mkdirSync(dirname(path), { recursive: true });
-  const tmpPath = `${path}.tmp-${ts}`;
+  // Unpredictable temp name + exclusive `wx`. A predictable name in the destination
+  // dir could be pre-created as a symlink that writeFileSync would FOLLOW, writing
+  // the key-bearing config through it to an attacker-chosen path — the same hazard
+  // the backup write guards against (R14). `wx` fails closed if the temp already
+  // exists, and (because it creates the node) makes `mode: 0o600` apply at creation,
+  // so no post-write chmod is needed. The temp stays in the destination dir so the
+  // rename is atomic on the same filesystem.
+  const tmpPath = `${path}.tmp-${randomBytes(8).toString("hex")}`;
   try {
-    writeFileSync(tmpPath, serialized, { mode: 0o600 });
-    // Set 0600 explicitly so a pre-existing temp or a permissive umask cannot
-    // leave it group/world-readable; rename carries this mode onto the destination.
-    chmodSync(tmpPath, 0o600);
+    writeFileSync(tmpPath, serialized, { mode: 0o600, flag: "wx" });
     renameSync(tmpPath, path);
   } catch {
     // Never leave a temp file holding the literal key behind on failure; abort to
