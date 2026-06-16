@@ -71,7 +71,7 @@ export PIPEDRIVE_API_KEY="your-40-character-api-key"
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `PIPEDRIVE_API_KEY` | Yes | - | Your 40-character Pipedrive API token. |
-| `PIPEDRIVE_MODE` | No | `safe-write` | Server-enforced capability tier: `read-only` (reads only), `safe-write` (reads + non-destructive writes), or `full` (all tools, including destructive). Out-of-mode tools are hidden from `tools/list` and refused if called directly. Authoritative when set; an unrecognized value falls back to `read-only`. See [Capability modes](#capability-modes). |
+| `PIPEDRIVE_MODE` | No | `safe-write` | Server-enforced capability tier: `read-only` (reads only), `safe-write` (reads + non-destructive writes), or `full` (all tools, including destructive). Out-of-mode tools are hidden from `tools/list` and refused if called directly. Authoritative when set to a recognized value; a blank value is treated as unset (the default applies), an unrecognized value falls back to `read-only`. See [Capability modes](#capability-modes). |
 | `PIPEDRIVE_ENABLE_DESTRUCTIVE` | No | `false` | Legacy flag, superseded by `PIPEDRIVE_MODE`. When `PIPEDRIVE_MODE` is unset, `true` is treated as `full` and anything else as `safe-write`. Still honored for back-compat; prefer `PIPEDRIVE_MODE=full`. |
 | `PIPEDRIVE_IMAGE_BASE_DIR` | No | (unset) | Allowlisted directory the server may read product images from when `file_path` is passed to the image-upload tools. Filesystem reads are **disabled** unless this is set, and a `file_path` must resolve within it. Leave unset and pass `base64_data` if the caller cannot share the server's filesystem. See [SECURITY.md](SECURITY.md#operator-best-practices). |
 

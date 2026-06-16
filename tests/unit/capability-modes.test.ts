@@ -73,7 +73,7 @@ describe('capability modes', () => {
   });
 
   describe('resolveCapabilityMode — fail-closed on an unrecognized value (KTD4)', () => {
-    it.each(['readonly', 'garbage', '', '   ', 'write', 'destructive'])(
+    it.each(['readonly', 'garbage', 'write', 'destructive'])(
       'resolves %p to read-only',
       (value) => {
         expect(resolveCapabilityMode({ PIPEDRIVE_MODE: value })).toBe('read-only');
@@ -84,6 +84,33 @@ describe('capability modes', () => {
       expect(
         resolveCapabilityMode({ PIPEDRIVE_MODE: 'garbage', PIPEDRIVE_ENABLE_DESTRUCTIVE: 'true' }),
       ).toBe('read-only');
+    });
+  });
+
+  describe('resolveCapabilityMode — a blank value is treated as unset (MCPB empty-substitution guard)', () => {
+    // An MCPB host may substitute an empty string for an optional user_config field left at
+    // its default; a blank value must therefore reproduce the documented default, not fail
+    // closed to read-only the way a typo does.
+    it.each(['', '   ', '\t'])(
+      'resolves a blank PIPEDRIVE_MODE (%p) to the safe-write default, not read-only',
+      (value) => {
+        expect(resolveCapabilityMode({ PIPEDRIVE_MODE: value })).toBe('safe-write');
+      },
+    );
+
+    it('derives from the legacy flag when PIPEDRIVE_MODE is blank, exactly as if it were unset', () => {
+      expect(
+        resolveCapabilityMode({ PIPEDRIVE_MODE: '', PIPEDRIVE_ENABLE_DESTRUCTIVE: 'true' }),
+      ).toBe('full');
+    });
+
+    it('reports a blank value as a clean unset (no invalidMode, no unrecognized warning)', () => {
+      expect(describeCapabilityMode({ PIPEDRIVE_MODE: '   ' })).toEqual({
+        mode: 'safe-write',
+        invalidMode: false,
+        derivedFromLegacyFlag: false,
+      });
+      expect(capabilityModeStartupLines({ PIPEDRIVE_MODE: '' }).join('\n')).not.toMatch(/unrecognized/i);
     });
   });
 

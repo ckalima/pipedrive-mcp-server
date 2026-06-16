@@ -51,19 +51,29 @@ export type ModeResolution = {
  * Resolve the capability mode AND how it was reached, without throwing or mutating `env`.
  *
  * Precedence (KTD2):
- *   1. `PIPEDRIVE_MODE` set → authoritative. Normalized (trim + lowercase) and exact-
- *      matched against the known set; an unrecognized value fails CLOSED to `read-only`
- *      (KTD4) — it must never widen access beyond what the operator intended.
- *   2. `PIPEDRIVE_MODE` unset → derive from the legacy `PIPEDRIVE_ENABLE_DESTRUCTIVE`
- *      flag (`true` → `full`, anything else → `safe-write`). The strict `=== "true"`
+ *   1. `PIPEDRIVE_MODE` set to a non-blank value → authoritative. Normalized (trim +
+ *      lowercase) and exact-matched against the known set; an unrecognized value fails
+ *      CLOSED to `read-only` (KTD4) — it must never widen access beyond what the operator
+ *      intended.
+ *   2. `PIPEDRIVE_MODE` unset OR blank (empty/whitespace) → derive from the legacy
+ *      `PIPEDRIVE_ENABLE_DESTRUCTIVE` flag (`true` → `full`, anything else → `safe-write`).
+ *      A set-but-blank value means "no value provided," not a typo, so it reproduces the
+ *      documented default rather than failing closed. This is the durable guard for the
+ *      MCPB install path: a host substitutes an empty string for an optional `user_config`
+ *      field the operator left at its default, and the manifest spec does not guarantee the
+ *      declared default is injected (see docs link in the manifest). The strict `=== "true"`
  *      comparison matches `getConfig()`, so an uppercase `TRUE` cannot silently widen.
  *   3. Neither set → `safe-write`, exactly reproducing today's out-of-box behavior.
  */
 export function describeCapabilityMode(env: EnvLike = process.env): ModeResolution {
   const raw = env.PIPEDRIVE_MODE;
+  const normalized = raw?.trim().toLowerCase();
 
-  if (raw !== undefined) {
-    const normalized = raw.trim().toLowerCase();
+  // A set-but-blank PIPEDRIVE_MODE ("" or whitespace) normalizes to a falsy value and
+  // falls through to the unset branch below: it means "no value provided," so it must
+  // reproduce the documented default, never fail closed to read-only. Only a non-blank,
+  // unrecognized value is a typo and fails closed (KTD4).
+  if (normalized) {
     if (KNOWN_MODES.has(normalized)) {
       return { mode: normalized as CapabilityMode, invalidMode: false, derivedFromLegacyFlag: false };
     }
@@ -72,7 +82,7 @@ export function describeCapabilityMode(env: EnvLike = process.env): ModeResoluti
     return { mode: "read-only", invalidMode: true, rawMode: raw, derivedFromLegacyFlag: false };
   }
 
-  // PIPEDRIVE_MODE unset: derive from the legacy flag for back-compat (R2).
+  // PIPEDRIVE_MODE unset or blank: derive from the legacy flag for back-compat (R2).
   const legacyPresent = env.PIPEDRIVE_ENABLE_DESTRUCTIVE !== undefined;
   const mode: CapabilityMode = env.PIPEDRIVE_ENABLE_DESTRUCTIVE === "true" ? "full" : "safe-write";
   return { mode, invalidMode: false, derivedFromLegacyFlag: legacyPresent };
