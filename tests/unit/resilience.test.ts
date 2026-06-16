@@ -386,14 +386,20 @@ describe('monotonic clock seam (U2, #133)', () => {
   });
 
   it('setMonotonicClockForTests overrides the source; reset restores the real clock', () => {
+    // Capture the real clock before overriding so the reset assertion compares against an
+    // actual reading rather than a magic constant tied to process uptime.
+    const beforeOverride = monotonicNowMs();
+
     setMonotonicClockForTests(() => 42);
     expect(monotonicNowMs()).toBe(42);
     expect(monotonicNowMs()).toBe(42); // pinned, not advancing
 
     resetMonotonicClockForTests();
-    // Back to the real performance.now()-backed source: a value well past the pinned
-    // 42 (the test process has run far longer than 42ms), proving it is not still pinned.
-    expect(monotonicNowMs()).toBeGreaterThan(42);
+    // Back to the real performance.now()-backed source: no longer pinned to 42, and
+    // non-decreasing relative to the pre-override reading (monotonic).
+    const afterReset = monotonicNowMs();
+    expect(afterReset).not.toBe(42);
+    expect(afterReset).toBeGreaterThanOrEqual(beforeOverride);
   });
 });
 
