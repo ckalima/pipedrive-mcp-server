@@ -28,6 +28,21 @@ An MCP (Model Context Protocol) server for Pipedrive CRM integration with Claude
 
 ## Quick Start
 
+### Fastest setup: `npx … init`
+
+Run the one-command guided installer and follow the prompts. It opens the Pipedrive
+API-token page, validates your key live against your account, and generates a working
+MCP config for your client (Claude Desktop, Claude Code, Cursor, Windsurf, or VS Code):
+
+```bash
+npx -y @ckalima/pipedrive-mcp-server init
+```
+
+It always prints a paste-ready block and can optionally write it into your client's
+config file after a timestamped backup. Committed/shared config files use
+`${PIPEDRIVE_API_KEY}` indirection, never a raw key. Prefer to configure by hand? The
+manual steps below still work.
+
 ### 1. Get Your Pipedrive API Key
 
 1. Log into Pipedrive
