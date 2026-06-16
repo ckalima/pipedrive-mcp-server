@@ -71,8 +71,10 @@ export function claudeMcpAddInvocation(scope: string): { command: string; follow
   return { command, followUp };
 }
 
-/** Walks up from a path looking for a `.git` entry (dir or file). */
-function defaultIsInsideGitTree(target: string): boolean {
+/** Walks up from a path looking for a `.git` entry (dir or file). Exported so the
+ *  orchestrator (U5) phrases its in-tree write confirmation with the same check
+ *  that gates backup relocation here (R14/R17). */
+export function isPathInsideGitTree(target: string): boolean {
   let dir = dirname(resolve(target));
   for (;;) {
     if (existsSync(join(dir, ".git"))) return true;
@@ -190,7 +192,7 @@ export function writeConfig(
   let backupPath: string | undefined;
   let backupRelocated = false;
   if (fileExisted) {
-    const inTree = (deps.isInsideGitTree ?? defaultIsInsideGitTree)(path);
+    const inTree = (deps.isInsideGitTree ?? isPathInsideGitTree)(path);
     if (inTree) {
       const dir = deps.backupDir ?? tmpdir();
       backupPath = join(dir, `${basename(path)}.bak-${ts}`);

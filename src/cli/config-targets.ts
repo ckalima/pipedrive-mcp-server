@@ -346,3 +346,25 @@ export function renderConfig(target: ConfigTarget, key: string): RenderedConfig 
     }
   }
 }
+
+/**
+ * Renders an indirected block for TERMINAL DISPLAY (R18): a literal-key target
+ * shows the `${PIPEDRIVE_API_KEY}` reference instead of the key, so a literal
+ * never enters terminal scrollback. Non-literal targets already indirect, so
+ * {@link renderConfig} is reused (the key argument is unused for those).
+ */
+export function renderForDisplay(target: ConfigTarget): RenderedConfig {
+  if (target.delivery === "cli" || target.secret.kind === "cli") {
+    return { target, carriesLiteralKey: false };
+  }
+  if (target.secret.kind === "literal") {
+    const topLevelKey = target.topLevelKey ?? "mcpServers";
+    return {
+      target,
+      block: { [topLevelKey]: { [SERVER_NAME]: serverEntry(`\${${ENV_VAR_NAME}}`) } },
+      carriesLiteralKey: false,
+      followUp: SET_VAR_FOLLOWUP,
+    };
+  }
+  return renderConfig(target, "");
+}
