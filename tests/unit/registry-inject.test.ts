@@ -83,7 +83,8 @@ describe('injectMcpb', () => {
   });
 
   it('throws when there is no mcpb package', () => {
-    const noMcpb = { packages: [{ registryType: 'npm', version: '9.9.9' }] };
+    const noMcpb = { packages: baseServerJson().packages.filter((p) => p.registryType !== 'mcpb') };
+    expect(noMcpb.packages).toHaveLength(1); // sanity: only the npm package remains
     expect(() => injectMcpb(noMcpb, '2.4.0', realHash)).toThrow(/no package with registryType "mcpb"/);
   });
 });

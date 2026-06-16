@@ -79,4 +79,10 @@ describe('mcpb registry descriptor', () => {
   it('committed fileSha256 is the all-zeros sentinel (CI injects the real hash)', () => {
     expect(mcpb[0].fileSha256).toBe(SENTINEL_SHA256);
   });
+
+  it('only the mcpb package carries a fileSha256 (npm verifies via mcpName, not a hash)', () => {
+    for (const p of serverJson.packages.filter((p) => p.registryType !== 'mcpb')) {
+      expect(p.fileSha256, `${p.registryType} package should not carry fileSha256`).toBeUndefined();
+    }
+  });
 });
