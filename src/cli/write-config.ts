@@ -13,10 +13,11 @@ import {
   existsSync,
   readFileSync,
   writeFileSync,
-  copyFileSync,
   chmodSync,
   mkdirSync,
+  mkdtempSync,
   renameSync,
+  unlinkSync,
 } from "node:fs";
 import { dirname, basename, resolve, join, delimiter } from "node:path";
 import { tmpdir } from "node:os";
@@ -194,25 +195,45 @@ export function writeConfig(
   if (fileExisted) {
     const inTree = (deps.isInsideGitTree ?? isPathInsideGitTree)(path);
     if (inTree) {
-      const dir = deps.backupDir ?? tmpdir();
+      // Relocate into a fresh owner-only (0700) directory with an unpredictable
+      // name. A predictable name in a world-writable tmpdir (Linux /tmp) would
+      // let an attacker pre-create a symlink the backup write follows (R14).
+      const dir = deps.backupDir ?? mkdtempSync(join(tmpdir(), "pipedrive-mcp-bak-"));
       backupPath = join(dir, `${basename(path)}.bak-${ts}`);
       backupRelocated = true;
     } else {
       backupPath = `${path}.bak-${ts}`;
     }
-    copyFileSync(path, backupPath);
-    // A backup may carry a literal key, so it is owner-only (R14).
-    chmodSync(backupPath, 0o600);
+    // Create the backup owner-only (0600) FROM THE START — not copy-then-chmod,
+    // which leaves a brief window where a key-bearing backup is world-readable.
+    // The exclusive `wx` flag fails (rather than follows/overwrites) if the path
+    // already exists or is a planted symlink; we then abort to print, untouched.
+    try {
+      writeFileSync(backupPath, readFileSync(path), { mode: 0o600, flag: "wx" });
+    } catch {
+      return { kind: "print", reason: "could not create a safe backup" };
+    }
   }
 
   // ── Atomic write at mode 0600 (temp-then-rename), tightening even a 0644 dest ──
   mkdirSync(dirname(path), { recursive: true });
   const tmpPath = `${path}.tmp-${ts}`;
-  writeFileSync(tmpPath, serialized, { mode: 0o600 });
-  // Set 0600 explicitly so a pre-existing temp or a permissive umask cannot leave
-  // it group/world-readable; rename carries this mode onto the destination.
-  chmodSync(tmpPath, 0o600);
-  renameSync(tmpPath, path);
+  try {
+    writeFileSync(tmpPath, serialized, { mode: 0o600 });
+    // Set 0600 explicitly so a pre-existing temp or a permissive umask cannot
+    // leave it group/world-readable; rename carries this mode onto the destination.
+    chmodSync(tmpPath, 0o600);
+    renameSync(tmpPath, path);
+  } catch {
+    // Never leave a temp file holding the literal key behind on failure; abort to
+    // print so the orchestrator falls back to the indirected block.
+    try {
+      unlinkSync(tmpPath);
+    } catch {
+      // best-effort cleanup
+    }
+    return { kind: "print", reason: "could not write the config file" };
+  }
 
   return { kind: "written", path, backupPath, backupRelocated };
 }

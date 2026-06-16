@@ -156,6 +156,25 @@ describe('writeConfig — file targets (U4)', () => {
     expect(readFileSync(path, 'utf8')).not.toContain(KEY);
   });
 
+  it('aborts to print (leaving the original untouched) if the backup path is already occupied', () => {
+    // Proxies a planted-symlink / predictable-name attack: the exclusive backup
+    // write must fail closed rather than follow/overwrite an existing path.
+    const path = join(dir, 'config.json');
+    const before = JSON.stringify({ mcpServers: { other: {} } }, null, 2);
+    writeFileSync(path, before);
+    writeFileSync(`${path}.bak-${TS}`, 'pre-existing'); // occupy the backup path
+    const { target, rendered } = desktopRender();
+
+    const outcome = writeConfig(target, rendered, {
+      pathOverride: path,
+      isInsideGitTree: () => false,
+      timestamp: TS,
+    });
+
+    expect(outcome.kind).toBe('print');
+    expect(readFileSync(path, 'utf8')).toBe(before); // original untouched
+  });
+
   it('returns print when no stable path resolves (VS Code user scope)', () => {
     const target = getTarget('vscode', 'user')!;
     const rendered = renderConfig(target, KEY);
