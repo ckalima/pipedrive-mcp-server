@@ -11,6 +11,7 @@
  */
 
 import * as readline from "node:readline/promises";
+import { Writable } from "node:stream";
 
 import { ENV_VAR_NAME } from "../config.js";
 import { verifyApiKey, type VerifyKeyResult, type VerifiedUser } from "./verify-key.js";
@@ -129,42 +130,106 @@ const TOKEN_PAGE_URL = "https://app.pipedrive.com/settings/api";
 const CREDENTIAL_WARNING =
   "⚠ This configuration contains a live Pipedrive API key. Keep it private — never commit or share it.";
 
+/**
+ * A pass-through output stream that can be muted while a secret is read, so
+ * readline's echo never reaches the terminal (M2).
+ *
+ * Suppression happens at the OUTPUT-STREAM boundary — every byte readline emits
+ * goes through `output.write` — rather than by wrapping readline's private
+ * `_writeToOutput`. That internal became a private Symbol in recent Node
+ * (verified absent by name on v23: the by-name wrap silently no-ops and the
+ * pasted key would echo), and `engines` allows `>=20`, so the by-name technique
+ * is not reliable across supported versions. Intercepting the stream is version
+ * independent: it depends only on the public `output.write` contract. While
+ * muted every chunk is swallowed except a line terminator, so the prompt still
+ * advances on Enter. (This is the well-known `mute-stream` pattern, inlined to
+ * avoid a dependency per KTD6.) Exported for direct testing of the mute logic.
+ */
+export class MaskableOutput extends Writable {
+  muted = false;
+
+  constructor(
+    private readonly sink: NodeJS.WritableStream & {
+      columns?: number;
+      rows?: number;
+      isTTY?: boolean;
+    },
+  ) {
+    super();
+  }
+
+  // readline reads these off its output stream for terminal sizing / capability
+  // detection; proxy them so a real-TTY sink still drives terminal (echo) mode.
+  get columns(): number | undefined {
+    return this.sink.columns;
+  }
+  get rows(): number | undefined {
+    return this.sink.rows;
+  }
+  get isTTY(): boolean | undefined {
+    return this.sink.isTTY;
+  }
+
+  _write(
+    chunk: Buffer | string,
+    _encoding: BufferEncoding,
+    callback: (error?: Error | null) => void,
+  ): void {
+    const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    if (!this.muted) {
+      this.sink.write(text);
+    } else if (text.includes("\n") || text.includes("\r")) {
+      // Let only the line terminator through so Enter still advances the prompt;
+      // every other byte (the echoed key, redraw codes) is swallowed.
+      this.sink.write("\n");
+    }
+    callback();
+  }
+}
+
+/** Optional seams for {@link createReadlineDeps}; production passes none. */
+export interface ReadlineDepsOptions {
+  input?: NodeJS.ReadableStream;
+  output?: NodeJS.WritableStream & { columns?: number; rows?: number; isTTY?: boolean };
+  /** Force readline terminal (echo) mode; defaults to TTY auto-detection. */
+  terminal?: boolean;
+}
+
 /** Builds readline-backed prompt/confirm/promptSecret, creating the interface
- *  lazily so that fully-mocked test runs never open stdin. */
-function createReadlineDeps() {
+ *  lazily so that fully-mocked test runs never open stdin. Exported with optional
+ *  seams so the security-critical masking can be exercised against a real
+ *  readline interface, not just a wholesale promptSecret mock (M2). */
+export function createReadlineDeps(opts: ReadlineDepsOptions = {}) {
+  const input = opts.input ?? process.stdin;
+  const sink = opts.output ?? process.stdout;
+  // All readline output (prompt redraws + keystroke echo) flows through this, so
+  // muting it hides a typed secret regardless of how readline echoes internally.
+  const output = new MaskableOutput(sink);
+
   let rl: readline.Interface | null = null;
-  // While set, the interface swallows the characters it would normally echo, so a
-  // secret typed/pasted at a masked prompt never reaches the terminal (M2).
-  let muted = false;
   const get = () => {
     if (rl) return rl;
-    const iface = readline.createInterface({ input: process.stdin, output: process.stdout });
-    // `_writeToOutput` is the single chokepoint readline uses to echo input; wrap
-    // it so masked answers emit nothing but the closing newline. Guarded so a host
-    // without the internal simply degrades to a normal (echoing) prompt.
-    const writable = iface as unknown as { _writeToOutput?: (s: string) => void };
-    const original = writable._writeToOutput?.bind(iface);
-    if (original) {
-      writable._writeToOutput = (s: string) => {
-        if (!muted) return original(s);
-        if (s.includes("\n") || s.includes("\r")) original("\n");
-      };
-    }
-    rl = iface;
+    rl = readline.createInterface({
+      input,
+      output,
+      ...(opts.terminal !== undefined ? { terminal: opts.terminal } : {}),
+    });
     return rl;
   };
+
   return {
     prompt: async (q: string) => (await get().question(q)).trim(),
     promptSecret: async (q: string) => {
       const iface = get();
-      // Print the label unmuted, then mute while the answer is read so the prompt
-      // text shows but the key does not.
-      process.stdout.write(q);
-      muted = true;
+      // Write the label straight to the real sink — never through the muted
+      // stream, so it can't be raced or suppressed — then mute while the answer
+      // is read so the prompt text shows but the key does not.
+      sink.write(q);
+      output.muted = true;
       try {
         return (await iface.question("")).trim();
       } finally {
-        muted = false;
+        output.muted = false;
       }
     },
     confirm: async (q: string, defaultYes: boolean) => {
