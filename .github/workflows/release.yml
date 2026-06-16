@@ -253,7 +253,19 @@ jobs:
           echo "bundle sha256 verified: $GOT"
 
       - name: Inject release URL + hash into server.json
-        run: npm run registry:inject -- "${{ needs.publish.outputs.mcpb_file }}"
+        # Publish-boundary backstop: assert the hash actually written into server.json (what
+        # gets published) equals the publish job's hash. The registry never validates fileSha256
+        # and a wrong value silently breaks client installs on an immutable version, so this is
+        # worth a redundant check even though the byte-identity step already verified the artifact.
+        env:
+          EXPECT: ${{ needs.publish.outputs.mcpb_sha256 }}
+        run: |
+          npm run registry:inject -- "${{ needs.publish.outputs.mcpb_file }}"
+          GOT=$(jq -r '.packages[] | select(.registryType=="mcpb") | .fileSha256' server.json)
+          if [ "$GOT" != "$EXPECT" ]; then
+            echo "::error::server.json mcpb fileSha256 $GOT != attached bundle $EXPECT"; exit 1
+          fi
+          echo "server.json mcpb hash matches the attached bundle: $EXPECT"
 
       - name: Install mcp-publisher
         # Pinned to a known version (not releases/latest) so a future mcp-publisher release
@@ -267,7 +279,19 @@ jobs:
           ./mcp-publisher --version
 
       - name: Authenticate to the MCP registry (OIDC)
-        run: ./mcp-publisher login github-oidc
+        # Retry transient OIDC/registry blips. This call exercises the OIDC -> io.github.ckalima
+        # namespace mapping live, and the first real release is the riskiest run. `until` does not
+        # trip `set -e`; a persistent failure still reds the job (fallback: npm run registry:publish).
+        run: |
+          n=0
+          until ./mcp-publisher login github-oidc; do
+            n=$((n + 1))
+            if [ "$n" -ge 3 ]; then
+              echo "::error::OIDC login to the MCP registry failed after $n attempts"; exit 1
+            fi
+            echo "login attempt $n failed; retrying in 5s..."
+            sleep 5
+          done
 
       - name: Publish to the MCP registry (idempotent) and verify hash
         # Publishing the whole server.json publishes both the npm and mcpb packages. Re-runs on

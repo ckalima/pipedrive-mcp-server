@@ -11,7 +11,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect } from 'vitest';
 
-import { injectMcpb, mcpbUrl, sha256File } from '../../scripts/registry-inject.js';
+import { injectMcpb, mcpbFilename, mcpbUrl, sha256File } from '../../scripts/registry-inject.js';
 
 const baseServerJson = () => ({
   name: 'io.github.ckalima/pipedrive-mcp-server',
@@ -28,11 +28,20 @@ const baseServerJson = () => ({
   ],
 });
 
+describe('mcpbFilename', () => {
+  it('is the single source of truth for the .mcpb filename pattern', () => {
+    // build-mcpb.ts (artifact name) and release.yml (the `test -f` pattern) must agree with
+    // this; pinning it here catches a rename before it ships a dangling registry URL.
+    expect(mcpbFilename('2.4.0')).toBe('pipedrive-mcp-server-2.4.0.mcpb');
+  });
+});
+
 describe('mcpbUrl', () => {
-  it('templates the GitHub Release URL and contains "mcp"', () => {
+  it('templates the GitHub Release URL, ends with mcpbFilename, and contains "mcp"', () => {
     expect(mcpbUrl('2.4.0')).toBe(
       'https://github.com/ckalima/pipedrive-mcp-server/releases/download/v2.4.0/pipedrive-mcp-server-2.4.0.mcpb',
     );
+    expect(mcpbUrl('2.4.0').endsWith(`/${mcpbFilename('2.4.0')}`)).toBe(true);
     expect(mcpbUrl('2.4.0')).toContain('mcp');
   });
 });

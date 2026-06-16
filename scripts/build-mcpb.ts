@@ -17,6 +17,8 @@ import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
+import { mcpbFilename } from "./registry-inject.js";
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(ROOT, "dist");
 const BUNDLE = join(ROOT, "bundle");
@@ -58,7 +60,7 @@ function main(): void {
   // 5. Pack bundle/ into a versioned .mcpb at the repo root. execFileSync (argv, no
   //    shell) keeps BUNDLE/out as discrete arguments, so a checkout path containing a
   //    space or shell metacharacter is never word-split.
-  const out = join(ROOT, `pipedrive-mcp-server-${pkg.version}.mcpb`);
+  const out = join(ROOT, mcpbFilename(pkg.version));
   console.log(`$ npx mcpb pack ${BUNDLE} ${out}`);
   execFileSync("npx", ["mcpb", "pack", BUNDLE, out], { cwd: ROOT, stdio: "inherit" });
 

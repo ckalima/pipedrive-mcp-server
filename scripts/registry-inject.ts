@@ -30,9 +30,18 @@ export function sha256File(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+/**
+ * The bundle's filename. Single source of truth: `build-mcpb.ts` names the artifact with this,
+ * `mcpbUrl()` embeds it, and `release.yml` matches the same pattern — so the three places that
+ * reference the `.mcpb` filename can't drift (a unit test pins the pattern).
+ */
+export function mcpbFilename(version: string): string {
+  return `pipedrive-mcp-server-${version}.mcpb`;
+}
+
 /** The canonical, version-templated GitHub Release download URL for the bundle. */
 export function mcpbUrl(version: string): string {
-  return `https://github.com/${OWNER_REPO}/releases/download/v${version}/pipedrive-mcp-server-${version}.mcpb`;
+  return `https://github.com/${OWNER_REPO}/releases/download/v${version}/${mcpbFilename(version)}`;
 }
 
 type Pkg = {
