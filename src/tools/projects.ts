@@ -153,7 +153,7 @@ export async function updateProject(params: UpdateProjectParams) {
 }
 
 /**
- * Delete a project (requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true)
+ * Delete a project (requires PIPEDRIVE_MODE=full)
  */
 export async function deleteProject(params: DeleteProjectParams) {
   const guard = destructiveOperationGuard();
@@ -439,7 +439,7 @@ export const projectTools = [
   },
   {
     name: "pipedrive_delete_project",
-    description: "Delete a project. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true environment variable. (Requires the Projects add-on; Projects API is in public beta.)",
+    description: "Delete a project. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true). (Requires the Projects add-on; Projects API is in public beta.)",
     inputSchema: {
       type: "object" as const,
       properties: {

@@ -673,7 +673,7 @@ export const fieldTools = [
   },
   {
     name: "pipedrive_delete_deal_field",
-    description: "Delete a deal custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Delete a deal custom field by field_code. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: { field_code: FIELD_CODE_PROP },
@@ -696,7 +696,7 @@ export const fieldTools = [
   },
   {
     name: "pipedrive_delete_deal_field_options",
-    description: "Bulk-delete options of a deal enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Bulk-delete options of a deal enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: { field_code: FIELD_CODE_PROP, option_ids: OPTION_IDS_PROP },
@@ -744,7 +744,7 @@ export const fieldTools = [
   },
   {
     name: "pipedrive_delete_person_field",
-    description: "Delete a person custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Delete a person custom field by field_code. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: { field_code: FIELD_CODE_PROP },
@@ -767,7 +767,7 @@ export const fieldTools = [
   },
   {
     name: "pipedrive_delete_person_field_options",
-    description: "Bulk-delete options of a person enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Bulk-delete options of a person enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: { field_code: FIELD_CODE_PROP, option_ids: OPTION_IDS_PROP },
@@ -815,7 +815,7 @@ export const fieldTools = [
   },
   {
     name: "pipedrive_delete_organization_field",
-    description: "Delete an organization custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Delete an organization custom field by field_code. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: { field_code: FIELD_CODE_PROP },
@@ -838,7 +838,7 @@ export const fieldTools = [
   },
   {
     name: "pipedrive_delete_organization_field_options",
-    description: "Bulk-delete options of an organization enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Bulk-delete options of an organization enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: { field_code: FIELD_CODE_PROP, option_ids: OPTION_IDS_PROP },
@@ -882,7 +882,7 @@ export const fieldTools = [
   },
   {
     name: "pipedrive_delete_product_field",
-    description: "Delete a product custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Delete a product custom field by field_code. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: { field_code: FIELD_CODE_PROP },
@@ -905,7 +905,7 @@ export const fieldTools = [
   },
   {
     name: "pipedrive_delete_product_field_options",
-    description: "Bulk-delete options of a product enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Bulk-delete options of a product enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: { field_code: FIELD_CODE_PROP, option_ids: OPTION_IDS_PROP },

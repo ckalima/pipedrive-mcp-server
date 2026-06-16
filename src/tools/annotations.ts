@@ -11,8 +11,8 @@
  *     client parsing names at call time, which is the thing annotations exist to avoid.
  *   - `destructiveHint` comes from the SAME declared `destructive` field that gates the
  *     runtime `destructiveOperationGuard()` and drives the README/manifest 🔒 marker.
- *     Sourcing the protocol hint from that one field means the hint and the
- *     `PIPEDRIVE_ENABLE_DESTRUCTIVE` gate can never disagree.
+ *     Sourcing the protocol hint from that one field means the hint and the runtime
+ *     destructive gate (allowed iff capability mode is `full`) can never disagree.
  *   - `openWorldHint` is always true: every tool talks to the external Pipedrive API,
  *     whose data can change outside this server's control.
  *

@@ -124,7 +124,7 @@ export async function updateBoard(params: UpdateBoardParams) {
 }
 
 /**
- * Delete a project board. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.
+ * Delete a project board. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).
  */
 export async function deleteBoard(params: DeleteBoardParams) {
   const guard = destructiveOperationGuard();
@@ -242,7 +242,7 @@ export async function updatePhase(params: UpdatePhaseParams) {
 }
 
 /**
- * Delete a project phase. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.
+ * Delete a project phase. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).
  */
 export async function deletePhase(params: DeletePhaseParams) {
   const guard = destructiveOperationGuard();
@@ -319,7 +319,7 @@ export const boardTools = [
   },
   {
     name: "pipedrive_delete_board",
-    description: "Delete a project board. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true. (Projects add-on; Projects API in public beta.)",
+    description: "Delete a project board. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true). (Projects add-on; Projects API in public beta.)",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -393,7 +393,7 @@ export const phaseTools = [
   },
   {
     name: "pipedrive_delete_phase",
-    description: "Delete a project phase. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true. (Projects add-on; Projects API in public beta.)",
+    description: "Delete a project phase. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true). (Projects add-on; Projects API in public beta.)",
     inputSchema: {
       type: "object" as const,
       properties: {

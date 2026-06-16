@@ -1262,7 +1262,7 @@ export const dealTools = [
   // U5: Convert-deal-to-lead tools
   {
     name: "pipedrive_convert_deal_to_lead",
-    description: "Convert a deal to a lead (async job). DESTRUCTIVE: a successful conversion marks the source deal as deleted. Returns a conversion_id; the conversion runs asynchronously, so you MUST poll pipedrive_get_deal_conversion_status with the conversion_id until a terminal status. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Convert a deal to a lead (async job). DESTRUCTIVE: a successful conversion marks the source deal as deleted. Returns a conversion_id; the conversion runs asynchronously, so you MUST poll pipedrive_get_deal_conversion_status with the conversion_id until a terminal status. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: {

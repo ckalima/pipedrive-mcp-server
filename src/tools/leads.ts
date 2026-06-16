@@ -172,7 +172,7 @@ export async function updateLead(params: UpdateLeadParams) {
 }
 
 /**
- * Delete a lead (requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true)
+ * Delete a lead (requires PIPEDRIVE_MODE=full)
  */
 export async function deleteLead(params: DeleteLeadParams) {
   const guard = destructiveOperationGuard();
@@ -483,7 +483,7 @@ export const leadsTools = [
   },
   {
     name: "pipedrive_delete_lead",
-    description: "Delete a lead. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true environment variable.",
+    description: "Delete a lead. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: {

@@ -326,7 +326,7 @@ export const pipelineTools = [
   },
   {
     name: "pipedrive_delete_pipeline",
-    description: "Delete a pipeline. Marks the pipeline as deleted. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Delete a pipeline. Marks the pipeline as deleted. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -376,7 +376,7 @@ export const pipelineTools = [
   },
   {
     name: "pipedrive_delete_stage",
-    description: "Delete a stage. Marks the stage as deleted. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.",
+    description: "Delete a stage. Marks the stage as deleted. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: {

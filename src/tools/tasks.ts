@@ -147,7 +147,7 @@ export async function updateTask(params: UpdateTaskParams) {
 
 /**
  * Delete a task. If the task has subtasks, those will also be deleted.
- * Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true.
+ * Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).
  */
 export async function deleteTask(params: DeleteTaskParams) {
   const guard = destructiveOperationGuard();
@@ -260,7 +260,7 @@ export const taskTools = [
   },
   {
     name: "pipedrive_delete_task",
-    description: "Delete a task. If the task has subtasks, those will also be deleted. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true. (Projects add-on; Projects API in public beta.)",
+    description: "Delete a task. If the task has subtasks, those will also be deleted. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true). (Projects add-on; Projects API in public beta.)",
     inputSchema: {
       type: "object" as const,
       properties: {

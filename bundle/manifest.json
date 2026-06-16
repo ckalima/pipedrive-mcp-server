@@ -142,7 +142,7 @@
     },
     {
       "name": "pipedrive_convert_deal_to_lead",
-      "description": "Convert a deal to a lead (async job). DESTRUCTIVE: a successful conversion marks the source deal as deleted. Returns a conversion_id; the conversion runs asynchronously, so you MUST poll pipedrive_get_deal_conversion_status with the conversion_id until a terminal status. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Convert a deal to a lead (async job). DESTRUCTIVE: a successful conversion marks the source deal as deleted. Returns a conversion_id; the conversion runs asynchronously, so you MUST poll pipedrive_get_deal_conversion_status with the conversion_id until a terminal status. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_get_deal_conversion_status",
@@ -258,7 +258,7 @@
     },
     {
       "name": "pipedrive_delete_lead",
-      "description": "Delete a lead. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true environment variable."
+      "description": "Delete a lead. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_convert_lead_to_deal",
@@ -286,7 +286,7 @@
     },
     {
       "name": "pipedrive_delete_project",
-      "description": "Delete a project. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true environment variable. (Requires the Projects add-on; Projects API is in public beta.)"
+      "description": "Delete a project. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true). (Requires the Projects add-on; Projects API is in public beta.)"
     },
     {
       "name": "pipedrive_search_projects",
@@ -410,7 +410,7 @@
     },
     {
       "name": "pipedrive_delete_task",
-      "description": "Delete a task. If the task has subtasks, those will also be deleted. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true. (Projects add-on; Projects API in public beta.)"
+      "description": "Delete a task. If the task has subtasks, those will also be deleted. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true). (Projects add-on; Projects API in public beta.)"
     },
     {
       "name": "pipedrive_list_boards",
@@ -430,7 +430,7 @@
     },
     {
       "name": "pipedrive_delete_board",
-      "description": "Delete a project board. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true. (Projects add-on; Projects API in public beta.)"
+      "description": "Delete a project board. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true). (Projects add-on; Projects API in public beta.)"
     },
     {
       "name": "pipedrive_list_phases",
@@ -450,7 +450,7 @@
     },
     {
       "name": "pipedrive_delete_phase",
-      "description": "Delete a project phase. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true. (Projects add-on; Projects API in public beta.)"
+      "description": "Delete a project phase. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true). (Projects add-on; Projects API in public beta.)"
     },
     {
       "name": "pipedrive_get_person_emails",
@@ -506,7 +506,7 @@
     },
     {
       "name": "pipedrive_delete_deal_field",
-      "description": "Delete a deal custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Delete a deal custom field by field_code. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_update_deal_field_options",
@@ -514,7 +514,7 @@
     },
     {
       "name": "pipedrive_delete_deal_field_options",
-      "description": "Bulk-delete options of a deal enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Bulk-delete options of a deal enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_create_person_field",
@@ -526,7 +526,7 @@
     },
     {
       "name": "pipedrive_delete_person_field",
-      "description": "Delete a person custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Delete a person custom field by field_code. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_update_person_field_options",
@@ -534,7 +534,7 @@
     },
     {
       "name": "pipedrive_delete_person_field_options",
-      "description": "Bulk-delete options of a person enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Bulk-delete options of a person enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_create_organization_field",
@@ -546,7 +546,7 @@
     },
     {
       "name": "pipedrive_delete_organization_field",
-      "description": "Delete an organization custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Delete an organization custom field by field_code. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_update_organization_field_options",
@@ -554,7 +554,7 @@
     },
     {
       "name": "pipedrive_delete_organization_field_options",
-      "description": "Bulk-delete options of an organization enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Bulk-delete options of an organization enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_create_product_field",
@@ -566,7 +566,7 @@
     },
     {
       "name": "pipedrive_delete_product_field",
-      "description": "Delete a product custom field by field_code. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Delete a product custom field by field_code. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_update_product_field_options",
@@ -574,7 +574,7 @@
     },
     {
       "name": "pipedrive_delete_product_field_options",
-      "description": "Bulk-delete options of a product enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Bulk-delete options of a product enum/set field. Atomic: fails if any ID does not exist. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_list_organizations",
@@ -638,7 +638,7 @@
     },
     {
       "name": "pipedrive_delete_pipeline",
-      "description": "Delete a pipeline. Marks the pipeline as deleted. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Delete a pipeline. Marks the pipeline as deleted. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_create_stage",
@@ -650,7 +650,7 @@
     },
     {
       "name": "pipedrive_delete_stage",
-      "description": "Delete a stage. Marks the stage as deleted. Requires PIPEDRIVE_ENABLE_DESTRUCTIVE=true."
+      "description": "Delete a stage. Marks the stage as deleted. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_list_users",
