@@ -7,13 +7,13 @@
     "url": "https://github.com/ckalima/pipedrive-mcp-server",
     "source": "github"
   },
-  "version": "2.3.0",
+  "version": "2.3.1",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@ckalima/pipedrive-mcp-server",
-      "version": "2.3.0",
+      "version": "2.3.1",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

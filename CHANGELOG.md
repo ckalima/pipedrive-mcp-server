@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-06-16
+
+### Fixed
+
+- **Circuit breaker hardened against concurrent load and wall-clock steps.** Two
+  internal fixes to the per-process circuit breaker that protects the shared Pipedrive
+  rate limit; no configuration, API, or tool-surface change.
+  - The Closed-state trip count is now a **sliding window** (the threshold of 5 trip
+    signals must fall within 30s) rather than a consecutive counter, so a success from an
+    interleaved concurrent request can no longer reset progress toward tripping mid-storm
+    (#134).
+  - The breaker's window/cooldown arithmetic — and the retry budget/timeout arithmetic —
+    now key on a **monotonic clock** (`performance.now()`) instead of `Date.now()`, so an
+    NTP/VM wall-clock step can no longer evict an in-progress window's signals or mis-time
+    the Open→HalfOpen cooldown (#135).
+
 ## [2.3.0] - 2026-06-16
 
 ### Changed
@@ -126,6 +142,7 @@ published from GitHub Actions with build provenance.
 - **Destructive operations gated** behind the `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`
   environment variable (disabled by default).
 
+[2.3.1]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.3.1
 [2.3.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.3.0
 [2.2.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.2.0
 [2.1.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.1.0
