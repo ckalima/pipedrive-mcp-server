@@ -256,9 +256,15 @@ jobs:
         run: npm run registry:inject -- "${{ needs.publish.outputs.mcpb_file }}"
 
       - name: Install mcp-publisher
+        # Pinned to a known version (not releases/latest) so a future mcp-publisher release
+        # can't silently change publish behavior in this OIDC-privileged job, matching how the
+        # publish job pins npm@11. Bump deliberately. No --version `|| true`: a bad download
+        # must fail here, not surface later as a confusing login error.
+        env:
+          MCP_PUBLISHER_VERSION: v1.7.9
         run: |
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
-          ./mcp-publisher --version || true
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher --version
 
       - name: Authenticate to the MCP registry (OIDC)
         run: ./mcp-publisher login github-oidc
@@ -282,19 +288,24 @@ jobs:
           else
             echo "::warning::mcp-publisher publish exited $PUB; verifying whether $VER is already live with this hash"
           fi
-          # Shape-agnostic read-back: the registry does not validate fileSha256, so confirm
-          # ourselves that the injected hash is present in the live entry before calling it done.
+          # The registry does not validate fileSha256, so confirm it ourselves. Scope the check
+          # to THIS version's mcpb package via jq (not a body-wide grep): the search endpoint
+          # returns every published version, so a bare substring match could "verify" a hash that
+          # belongs to a different version, or miss ours if the response paginates.
           for i in 1 2 3 4 5 6; do
             BODY=$(curl -fsSL "$REG" 2>/dev/null || true)
-            if printf '%s' "$BODY" | grep -q "$EXPECT"; then
-              echo "verified: published mcpb fileSha256 $EXPECT is live in the registry"
+            GOT=$(printf '%s' "$BODY" | jq -r --arg v "$VER" \
+              '.servers[]? | select(.server.version==$v) | .server.packages[]?
+               | select(.registryType=="mcpb") | .fileSha256 // empty' 2>/dev/null | head -n1)
+            if [ "$GOT" = "$EXPECT" ]; then
+              echo "verified: $VER mcpb fileSha256 $EXPECT is live in the registry"
               exit 0
             fi
-            echo "attempt $i: hash not visible yet, retrying in 10s..."
+            echo "attempt $i: $VER not yet live with the expected hash (got '${GOT:-<none>}'), retrying in 10s..."
             sleep 10
           done
           if [ "$PUB" -ne 0 ]; then
-            echo "::error::publish failed and $EXPECT is not live — a different hash may already occupy $VER (immutable; cut a new version)"
+            echo "::error::publish failed and $VER is not live with $EXPECT — a different hash may already occupy $VER (immutable; cut a new version)"
             exit 1
           fi
           echo "::warning::publish reported success but read-back did not confirm the hash within timeout (registry lag?). Verify manually: $REG"
