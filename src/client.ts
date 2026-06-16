@@ -418,13 +418,18 @@ export class PipedriveClient {
     body: BodyInit | undefined,
     multipart: boolean,
   ): Promise<ApiResponse<T>> {
-    const overallStartMs = Date.now();
+    // Monotonic elapsed-time origin (not Date.now): the retry budget/timeout math below
+    // measures DURATION, so it must be clock-step-safe like the breaker (#133). A wall-clock
+    // step would otherwise spike the elapsed delta and bail the retry loop early (or shrink an
+    // attempt timeout to ~0). Only the Retry-After HTTP-date comparison (parseRetryAfterMs)
+    // stays on wall-clock, since it diffs against an absolute server date, not a duration.
+    const overallStartMs = monotonicNowMs();
     // Resolve per-instance overrides (default to the module knobs). These let the
     // validation seam cap attempts to 1 with a short timeout; every other caller
     // keeps the full 4-attempt loop and 30s per-attempt timeout unchanged.
     const maxAttempts = this.resilience?.maxAttempts ?? RETRY_MAX_ATTEMPTS;
     const baseTimeoutMs = this.resilience?.timeoutMs ?? REQUEST_TIMEOUT_MS;
-    // Added wall-clock (KTD3): retry-attempt durations plus inter-attempt waits.
+    // Added elapsed time (KTD3): retry-attempt durations plus inter-attempt waits.
     // The initial attempt is NOT debited here — it is bounded separately by
     // baseTimeoutMs, so the total is bounded at ~baseTimeoutMs + budget.
     let budgetUsedMs = 0;
@@ -449,8 +454,8 @@ export class PipedriveClient {
       const isProbe = getBreakerState() === "HalfOpen";
 
       // ── Per-attempt timeout (KTD3): the initial attempt gets the full timeout;
-      //    retries shrink as the total wall-clock nears baseTimeoutMs+budget. ──
-      const remainingTotalMs = baseTimeoutMs + RETRY_BUDGET_MS - (Date.now() - overallStartMs);
+      //    retries shrink as the total elapsed time nears baseTimeoutMs+budget. ──
+      const remainingTotalMs = baseTimeoutMs + RETRY_BUDGET_MS - (monotonicNowMs() - overallStartMs);
       if (attemptIndex > 0 && remainingTotalMs <= 0 && lastFailure) {
         return lastFailure;
       }
@@ -462,7 +467,7 @@ export class PipedriveClient {
       this.logResilience(
         `${method} ${logEndpoint}${multipart ? " (multipart)" : ""} attempt ${attemptIndex + 1}/${maxAttempts}${isProbe ? " (breaker probe)" : ""}`,
       );
-      const attemptStartMs = Date.now();
+      const attemptStartMs = monotonicNowMs();
       let parsed: ApiResponse<T> | undefined;
       let isNetworkError = false;
       let responseHeaders: Headers | undefined;
@@ -480,7 +485,7 @@ export class PipedriveClient {
         lastFailure = this.networkError<T>(error);
       }
       if (attemptIndex > 0) {
-        budgetUsedMs += Date.now() - attemptStartMs;
+        budgetUsedMs += monotonicNowMs() - attemptStartMs;
       }
 
       // ── Classify + record breaker outcome ──

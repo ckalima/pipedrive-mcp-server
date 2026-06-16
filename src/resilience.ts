@@ -311,6 +311,14 @@ export function recordOutcome(outcome: BreakerOutcome, nowMs: number, isProbe = 
   // Closed: a success or non-trip outcome is a no-op — it must NOT reset progress,
   // or a single interleaved success from a concurrent call could suppress the trip
   // mid-storm (#123). Only trip signals mutate the window.
+  //
+  // Accepted, not guarded (#133, finding A2 — won't-fix): a straggler that passed the
+  // Closed gate in a *prior* breaker generation and only settles here (after the breaker
+  // opened, cooled down, and a probe re-Closed it, clearing the window) can seed the fresh
+  // window with at most ONE trip signal. We do not add an epoch/generation guard: the
+  // straggler's 429/503 is a genuine signal the server sent, it ages out within
+  // BREAKER_WINDOW_MS on its own, and discarding it would require threading a generation
+  // token from the gate through recordOutcome for negligible benefit.
   if (outcome.isSuccess || !outcome.isTripSignal) {
     return;
   }

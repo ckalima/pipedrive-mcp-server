@@ -725,31 +725,43 @@ describe('resilience: retry + circuit breaker (U3)', () => {
     });
 
     it('debits retry-attempt durations against the budget (slow timeouts stop the loop before the attempt cap)', async () => {
-      // Regression guard for the KTD3 added-wall-clock bound. The rest of the suite
+      // Regression guard for the KTD3 added-elapsed-time bound. The rest of the suite
       // uses instant mocks, so the per-attempt-duration debit is never exercised and
       // a deletion of it would go unnoticed. Here each attempt "consumes" ~28s of
-      // (faked) wall-clock, so the ~30s budget is spent after a single retry and the
-      // loop bails BEFORE reaching the 4-attempt cap. Without the duration debit the
-      // loop would run the full RETRY_MAX_ATTEMPTS attempts instead.
-      vi.useFakeTimers();
-      try {
-        const base = Date.now();
-        let now = base;
-        const mockFn = vi.fn(async () => {
-          now += 28_000; // simulate a slow attempt that ends in a timeout
-          vi.setSystemTime(now);
-          throw new Error('Request timeout');
-        });
-        vi.stubGlobal('fetch', mockFn);
-        const client = new PipedriveClient();
+      // (controlled monotonic) time, so the ~60s budget is spent after a few retries and
+      // the loop bails BEFORE reaching the 4-attempt cap. The budget keys on the monotonic
+      // clock (#133), so drive that seam directly rather than vi.setSystemTime.
+      let mono = 0;
+      setMonotonicClockForTests(() => mono);
+      const mockFn = vi.fn(async () => {
+        mono += 28_000; // simulate a slow attempt that ends in a timeout
+        throw new Error('Request timeout');
+      });
+      vi.stubGlobal('fetch', mockFn);
+      const client = new PipedriveClient();
 
-        const response = await client.get('/deals', undefined, 'v2');
+      const response = await client.get('/deals', undefined, 'v2');
 
-        expect(response.error?.code).toBe('NETWORK_ERROR');
-        expect(mockFn.mock.calls.length).toBeLessThan(RETRY_MAX_ATTEMPTS);
-      } finally {
-        vi.useRealTimers();
-      }
+      expect(response.error?.code).toBe('NETWORK_ERROR');
+      expect(mockFn.mock.calls.length).toBeLessThan(RETRY_MAX_ATTEMPTS);
+    });
+
+    it('a forward Date.now jump mid-loop does not curtail the retry budget (now monotonic, #133)', async () => {
+      // The budget/timeout math keys on the monotonic clock (#133), so a hostile wall-clock
+      // jump must not prematurely exhaust it. Pin the monotonic clock (plenty of budget) and
+      // jump Date.now far past the budget: all RETRY_MAX_ATTEMPTS still run. Under the old
+      // wall-clock budget the jump would drive remainingTotalMs negative and bail early.
+      setMonotonicClockForTests(() => 0);
+      const base = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(base + 100 * RETRY_BUDGET_MS);
+
+      const mockFn = mockApiError(429, 'rate'); // all-429 read retries up to the attempt cap
+      const client = new PipedriveClient();
+
+      const response = await client.get('/deals', undefined, 'v2');
+
+      expect(response.error?.code).toBe('RATE_LIMITED');
+      expect(mockFn).toHaveBeenCalledTimes(RETRY_MAX_ATTEMPTS); // not curtailed by the wall-clock jump
     });
   });
 
