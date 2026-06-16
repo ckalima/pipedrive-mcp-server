@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { PipedriveClient } from '../../src/client.js';
+import { PipedriveClient, createValidationClient } from '../../src/client.js';
 import { VALID_API_KEY, setupEnvWithApiKey } from '../helpers/mockEnv.js';
 
 function makeFetchMock() {
@@ -400,6 +400,41 @@ describe('PipedriveClient token redaction (U2, F1)', () => {
     const stderr = errorSpy.mock.calls.flat().map(String).join('\n');
     expect(stderr).toContain('GET /users');
     expect(stderr).not.toContain(VALID_API_KEY);
+    errorSpy.mockRestore();
+  });
+});
+
+describe('createValidationClient fail-fast resilience (#2)', () => {
+  /** Mock fetch that always rejects, simulating a slow/down network (every attempt fails). */
+  function mockFetchAlwaysRejects() {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const mockFn = vi.fn(async () => {
+      throw new Error('network down');
+    });
+    vi.stubGlobal('fetch', mockFn);
+    return { mockFn, errorSpy };
+  }
+
+  it('makes exactly ONE attempt on a network failure — it never rides the retry loop', async () => {
+    const { mockFn, errorSpy } = mockFetchAlwaysRejects();
+
+    const client = createValidationClient('v'.repeat(40));
+    const res = await client.get('/users/me', undefined, 'v1');
+
+    expect(res.success).toBe(false);
+    expect(mockFn).toHaveBeenCalledTimes(1); // not RETRY_MAX_ATTEMPTS (4)
+    errorSpy.mockRestore();
+  });
+
+  it('contrast: the default env-driven client DOES retry the same network failure', async () => {
+    setupEnvWithApiKey(VALID_API_KEY);
+    const { mockFn, errorSpy } = mockFetchAlwaysRejects();
+
+    const client = new PipedriveClient();
+    await client.get('/users/me', undefined, 'v1');
+
+    // The default read path retries transient failures, so it attempts more than once.
+    expect(mockFn.mock.calls.length).toBeGreaterThan(1);
     errorSpy.mockRestore();
   });
 });

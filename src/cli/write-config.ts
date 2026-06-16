@@ -17,6 +17,7 @@ import {
   mkdtempSync,
   renameSync,
   unlinkSync,
+  rmdirSync,
 } from "node:fs";
 import { dirname, basename, resolve, join, delimiter } from "node:path";
 import { tmpdir } from "node:os";
@@ -28,6 +29,7 @@ import {
   SERVER_COMMAND,
   SERVER_ARGS,
   VSCODE_INPUT_ID,
+  CLAUDE_CODE_SCOPE_IDS,
   resolveTargetPath,
   type ConfigTarget,
   type RenderedConfig,
@@ -53,9 +55,6 @@ export interface WriteConfigDeps {
   timestamp?: string;
 }
 
-/** The Claude Code config scopes the installer can emit a command for. */
-const CLAUDE_CODE_SCOPES = new Set(["local", "project", "user"]);
-
 /**
  * Builds the `claude mcp add` invocation for Claude Code local/user scope.
  *
@@ -71,7 +70,7 @@ const CLAUDE_CODE_SCOPES = new Set(["local", "project", "user"]);
  * something less constrained than the descriptor table's scope.
  */
 export function claudeMcpAddInvocation(scope: string): { command: string; followUp: string } {
-  if (!CLAUDE_CODE_SCOPES.has(scope)) {
+  if (!CLAUDE_CODE_SCOPE_IDS.has(scope)) {
     throw new Error(`refusing to build a 'claude mcp add' command for unknown scope '${scope}'`);
   }
   const command =
@@ -209,11 +208,14 @@ export function writeConfig(
   let backupRelocated = false;
   if (originalBytes !== undefined) {
     const inTree = (deps.isInsideGitTree ?? isPathInsideGitTree)(path);
+    // Track a backup dir WE minted (vs. a caller-supplied deps.backupDir) so we can
+    // tear it down if the backup write fails — otherwise the empty 0700 dir leaks.
+    let createdBackupDir: string | undefined;
     if (inTree) {
       // Relocate into a fresh owner-only (0700) directory with an unpredictable
       // name. A predictable name in a world-writable tmpdir (Linux /tmp) would
       // let an attacker pre-create a symlink the backup write follows (R14).
-      const dir = deps.backupDir ?? mkdtempSync(join(tmpdir(), "pipedrive-mcp-bak-"));
+      const dir = deps.backupDir ?? (createdBackupDir = mkdtempSync(join(tmpdir(), "pipedrive-mcp-bak-")));
       backupPath = join(dir, `${basename(path)}.bak-${ts}`);
       backupRelocated = true;
     } else {
@@ -226,6 +228,20 @@ export function writeConfig(
     try {
       writeFileSync(backupPath, originalBytes, { mode: 0o600, flag: "wx" });
     } catch {
+      // The exclusive write failed: if we minted the dir for a relocated backup,
+      // remove it (and any partial file) so a fresh 0700 dir doesn't leak (#7).
+      if (createdBackupDir) {
+        try {
+          unlinkSync(backupPath);
+        } catch {
+          // no partial file to remove
+        }
+        try {
+          rmdirSync(createdBackupDir);
+        } catch {
+          // best-effort cleanup
+        }
+      }
       return { kind: "print", reason: "could not create a safe backup" };
     }
   }

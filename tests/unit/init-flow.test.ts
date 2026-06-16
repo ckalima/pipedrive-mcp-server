@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runInit, type InitDeps } from '../../src/cli/init.js';
+import { runInit, StdinClosedError, type InitDeps } from '../../src/cli/init.js';
 import { openUrl } from '../../src/cli/open-url.js';
 import type { ConfigTarget } from '../../src/cli/config-targets.js';
 
@@ -189,6 +189,50 @@ describe('runInit flow (U5)', () => {
     const out = deps.prints.join('\n');
     expect(out).toContain('claude mcp add');
     expect(out).not.toContain(KEY);
+  });
+
+  it('prints a Validating… progress line before the network check (#2)', async () => {
+    const deps = makeDeps();
+
+    await runInit(['--host', 'claude-desktop'], deps);
+
+    expect(deps.prints.some((p) => p.includes('Validating'))).toBe(true);
+  });
+
+  it('cancels cleanly (exit 1) when a host prompt hits closed stdin (#5)', async () => {
+    // No --host, so the flow reaches the interactive host prompt; simulate EOF
+    // there by rejecting with the typed StdinClosedError the readline seam raises.
+    const deps = makeDeps({
+      prompt: vi.fn(async () => {
+        throw new StdinClosedError();
+      }),
+    });
+
+    const code = await runInit([], deps);
+
+    expect(code).toBe(1);
+    expect(deps.prints.join('\n')).toMatch(/cancelled \(input closed\)/i);
+    expect(deps.writeConfig).not.toHaveBeenCalled();
+  });
+
+  it('aborts fail-closed before any IO when --host is given without a value (#8)', async () => {
+    const deps = makeDeps();
+
+    const code = await runInit(['--host'], deps);
+
+    expect(code).toBe(1);
+    expect(deps.prints.join('\n')).toMatch(/--host requires a value/);
+    expect(deps.openUrl).not.toHaveBeenCalled();
+    expect(deps.verifyApiKey).not.toHaveBeenCalled();
+  });
+
+  it('prints a warning for an unrecognized flag but still completes (#8)', async () => {
+    const deps = makeDeps();
+
+    const code = await runInit(['--host', 'claude-desktop', '--bogus'], deps);
+
+    expect(code).toBe(0);
+    expect(deps.prints.join('\n')).toMatch(/unrecognized option '--bogus'/i);
   });
 });
 

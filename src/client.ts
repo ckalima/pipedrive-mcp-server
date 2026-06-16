@@ -47,6 +47,28 @@ export interface ApiResponse<T> {
 /** Request timeout in milliseconds (per-attempt cap; the initial attempt uses the full value). */
 const REQUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * Per-attempt timeout for pasted-key validation (KTD2). Shorter than the normal
+ * request timeout because validation runs in front of an interactive prompt: a
+ * stalled `/users/me` should surface a re-paste in seconds, not block the operator.
+ */
+const VALIDATION_TIMEOUT_MS = 10_000;
+
+/**
+ * Per-instance resilience overrides for the retry driver. Omitted fields fall
+ * back to the module defaults (RETRY_MAX_ATTEMPTS / REQUEST_TIMEOUT_MS), so the
+ * env-driven singleton and any caller that constructs a client without overrides
+ * behave exactly as before. The validation seam (KTD2) uses this to opt OUT of the
+ * full ~60s read-retry loop: a pasted-key check must fail fast on a slow/down
+ * network rather than retry four times while the operator stares at a frozen prompt.
+ */
+export interface ResilienceOverrides {
+  /** Total attempts per logical request (1 disables retries). Defaults to RETRY_MAX_ATTEMPTS. */
+  maxAttempts?: number;
+  /** Per-attempt timeout in ms. Defaults to REQUEST_TIMEOUT_MS. */
+  timeoutMs?: number;
+}
+
 /** Shared empty Headers for the network/timeout path, where no response headers exist. */
 const EMPTY_HEADERS = new Headers();
 
@@ -74,6 +96,8 @@ function sanitizeEndpointForLog(endpoint: string): string {
 export class PipedriveClient {
   // Defer config loading to first use for better error handling
   private config: Config | null = null;
+  /** Per-instance retry/timeout overrides (defaults apply when fields are unset). */
+  private readonly resilience?: ResilienceOverrides;
 
   /**
    * @param seededConfig When supplied, the client uses this explicit config
@@ -84,9 +108,13 @@ export class PipedriveClient {
    *   env-driven getClient() singleton, which caches the first key for the
    *   process lifetime and would re-validate every re-prompt against it. Omit it
    *   for the normal env-driven path (unchanged: deferred load on first use).
+   * @param resilience Optional per-instance retry/timeout overrides. Omit for the
+   *   default 4-attempt loop; the validation seam passes {maxAttempts:1} so a
+   *   pasted-key check fails fast instead of riding the full ~60s read-retry path.
    */
-  constructor(seededConfig?: Config) {
+  constructor(seededConfig?: Config, resilience?: ResilienceOverrides) {
     this.config = seededConfig ?? null;
+    this.resilience = resilience;
   }
 
   /**
@@ -390,9 +418,14 @@ export class PipedriveClient {
     multipart: boolean,
   ): Promise<ApiResponse<T>> {
     const overallStartMs = Date.now();
+    // Resolve per-instance overrides (default to the module knobs). These let the
+    // validation seam cap attempts to 1 with a short timeout; every other caller
+    // keeps the full 4-attempt loop and 30s per-attempt timeout unchanged.
+    const maxAttempts = this.resilience?.maxAttempts ?? RETRY_MAX_ATTEMPTS;
+    const baseTimeoutMs = this.resilience?.timeoutMs ?? REQUEST_TIMEOUT_MS;
     // Added wall-clock (KTD3): retry-attempt durations plus inter-attempt waits.
     // The initial attempt is NOT debited here — it is bounded separately by
-    // REQUEST_TIMEOUT_MS, so the total is bounded at ~REQUEST_TIMEOUT_MS + budget.
+    // baseTimeoutMs, so the total is bounded at ~baseTimeoutMs + budget.
     let budgetUsedMs = 0;
     let lastFailure: ApiResponse<T> | null = null;
 
@@ -413,18 +446,18 @@ export class PipedriveClient {
       const isProbe = getBreakerState() === "HalfOpen";
 
       // ── Per-attempt timeout (KTD3): the initial attempt gets the full timeout;
-      //    retries shrink as the total wall-clock nears REQUEST_TIMEOUT_MS+budget. ──
-      const remainingTotalMs = REQUEST_TIMEOUT_MS + RETRY_BUDGET_MS - (Date.now() - overallStartMs);
+      //    retries shrink as the total wall-clock nears baseTimeoutMs+budget. ──
+      const remainingTotalMs = baseTimeoutMs + RETRY_BUDGET_MS - (Date.now() - overallStartMs);
       if (attemptIndex > 0 && remainingTotalMs <= 0 && lastFailure) {
         return lastFailure;
       }
       const attemptTimeoutMs = attemptIndex === 0
-        ? REQUEST_TIMEOUT_MS
-        : Math.min(REQUEST_TIMEOUT_MS, Math.max(1, remainingTotalMs));
+        ? baseTimeoutMs
+        : Math.min(baseTimeoutMs, Math.max(1, remainingTotalMs));
 
       // ── Attempt ──
       this.logResilience(
-        `${method} ${logEndpoint}${multipart ? " (multipart)" : ""} attempt ${attemptIndex + 1}/${RETRY_MAX_ATTEMPTS}${isProbe ? " (breaker probe)" : ""}`,
+        `${method} ${logEndpoint}${multipart ? " (multipart)" : ""} attempt ${attemptIndex + 1}/${maxAttempts}${isProbe ? " (breaker probe)" : ""}`,
       );
       const attemptStartMs = Date.now();
       let parsed: ApiResponse<T> | undefined;
@@ -475,7 +508,7 @@ export class PipedriveClient {
       if (!retryable) {
         return lastFailure!;
       }
-      if (attemptIndex + 1 >= RETRY_MAX_ATTEMPTS) {
+      if (attemptIndex + 1 >= maxAttempts) {
         return lastFailure!;
       }
 
@@ -572,12 +605,21 @@ export function getClient(): PipedriveClient {
  * is the safe seed. Callers should issue `/users/me` (v1) directly on the
  * returned client, NOT through the version-routing seam: that seam treats a
  * `/users/me` 404 as a retirement signal, which validation traffic must not trip.
+ *
+ * Validation opts out of the full read-retry loop (maxAttempts:1) with a short
+ * per-attempt timeout, so a pasted-key check fails fast on a slow/down network
+ * instead of retrying for ~60s behind a frozen prompt. A genuine bad key (401)
+ * returns on the first attempt regardless; the cap only bounds the network-stall
+ * case, where re-pasting is the right recovery anyway.
  */
 export function createValidationClient(apiKey: string): PipedriveClient {
-  return new PipedriveClient({
-    apiKey,
-    baseUrlV1: BASE_URL_V1,
-    baseUrlV2: BASE_URL_V2,
-    mode: "read-only",
-  });
+  return new PipedriveClient(
+    {
+      apiKey,
+      baseUrlV1: BASE_URL_V1,
+      baseUrlV2: BASE_URL_V2,
+      mode: "read-only",
+    },
+    { maxAttempts: 1, timeoutMs: VALIDATION_TIMEOUT_MS },
+  );
 }

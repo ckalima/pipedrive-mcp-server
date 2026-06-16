@@ -49,6 +49,12 @@ export interface InitOptions {
   host?: string;
   /** `--scope <id>`: Claude Code config scope; validated in U5. */
   scope?: string;
+  /** Non-fatal parse notes (e.g. an unrecognized flag); printed, then the run continues.
+   *  Present only when there is something to report. */
+  warnings?: string[];
+  /** Fatal parse problems (e.g. `--host` with no value); the run aborts fail-closed.
+   *  Present only when there is something to report. */
+  errors?: string[];
 }
 
 const USAGE = `pipedrive-mcp-server init — guided MCP setup
@@ -78,12 +84,30 @@ export function getInitUsage(): string {
 
 /**
  * Parses `init` argv into {@link InitOptions}. Accepts both `--flag value` and
- * `--flag=value` forms for `--host`/`--scope`. Unknown flags are ignored for
- * forward-compatibility (a typo'd flag simply leaves the matching prompt
- * interactive rather than failing the run).
+ * `--flag=value` forms for `--host`/`--scope`.
+ *
+ * A space-form `--host`/`--scope` must be followed by a real value: a missing or
+ * flag-shaped next token (e.g. `--host --scope`) is a fatal parse error rather than
+ * silently swallowing the following flag as the value (which then fails downstream
+ * with a confusing "unknown host '--scope'"). Unrecognized flags are collected as
+ * non-fatal warnings — the run continues with the matching prompt interactive — but
+ * are surfaced rather than dropped in silence.
  */
 export function parseInitArgs(argv: string[]): InitOptions {
   const options: InitOptions = { help: false, printOnly: false };
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  // Reads the value token for a space-form flag, rejecting a missing or
+  // flag-shaped one (a leading "-") so it can't be mistaken for the value.
+  const valueFor = (flag: string, i: number): string | undefined => {
+    const next = argv[i + 1];
+    if (next === undefined || next.startsWith("-")) {
+      errors.push(`${flag} requires a value.`);
+      return undefined;
+    }
+    return next;
+  };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -93,15 +117,28 @@ export function parseInitArgs(argv: string[]): InitOptions {
     } else if (arg === "--print-only") {
       options.printOnly = true;
     } else if (arg === "--host") {
-      options.host = argv[++i];
+      const value = valueFor("--host", i);
+      if (value !== undefined) {
+        options.host = value;
+        i++;
+      }
     } else if (arg.startsWith("--host=")) {
       options.host = arg.slice("--host=".length);
     } else if (arg === "--scope") {
-      options.scope = argv[++i];
+      const value = valueFor("--scope", i);
+      if (value !== undefined) {
+        options.scope = value;
+        i++;
+      }
     } else if (arg.startsWith("--scope=")) {
       options.scope = arg.slice("--scope=".length);
+    } else {
+      warnings.push(`Ignoring unrecognized option '${arg}'.`);
     }
   }
+
+  if (warnings.length > 0) options.warnings = warnings;
+  if (errors.length > 0) options.errors = errors;
 
   return options;
 }
@@ -129,6 +166,23 @@ const TOKEN_PAGE_URL = "https://app.pipedrive.com/settings/api";
 
 const CREDENTIAL_WARNING =
   "⚠ This configuration contains a live Pipedrive API key. Keep it private — never commit or share it.";
+
+/**
+ * Raised by the readline prompt seams when stdin closes (EOF / Ctrl-D, or a
+ * non-interactive run with no input) while a prompt is pending.
+ *
+ * `readline/promises` `question()` neither resolves nor rejects when the input
+ * stream ends — it simply hangs (verified on the supported Node versions). The
+ * prompt seams drive an AbortController off the stream's `end`/`close` and
+ * translate the resulting AbortError into this typed error, so the flow can
+ * cancel cleanly with a clear message instead of wedging the process forever.
+ */
+export class StdinClosedError extends Error {
+  constructor() {
+    super("stdin closed before a prompt could be answered");
+    this.name = "StdinClosedError";
+  }
+}
 
 /**
  * A pass-through output stream that can be muted while a secret is read, so
@@ -206,6 +260,15 @@ export function createReadlineDeps(opts: ReadlineDepsOptions = {}) {
   // muting it hides a typed secret regardless of how readline echoes internally.
   const output = new MaskableOutput(sink);
 
+  // readline/promises `question()` hangs (never resolves or rejects) when stdin
+  // ends. Drive an AbortController off the stream's end/close so a pending — and
+  // any subsequent — question rejects promptly, letting a piped-then-closed or
+  // non-interactive run cancel cleanly instead of wedging the process.
+  const closed = new AbortController();
+  const abortOnClose = () => closed.abort();
+  input.once("end", abortOnClose);
+  input.once("close", abortOnClose);
+
   let rl: readline.Interface | null = null;
   const get = () => {
     if (rl) return rl;
@@ -217,27 +280,39 @@ export function createReadlineDeps(opts: ReadlineDepsOptions = {}) {
     return rl;
   };
 
+  // Ask a single question, translating the AbortController's AbortError (stdin
+  // closed) into the typed StdinClosedError the flow recognizes as cancellation.
+  const ask = async (q: string): Promise<string> => {
+    try {
+      return await get().question(q, { signal: closed.signal });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") throw new StdinClosedError();
+      throw error;
+    }
+  };
+
   return {
-    prompt: async (q: string) => (await get().question(q)).trim(),
+    prompt: async (q: string) => (await ask(q)).trim(),
     promptSecret: async (q: string) => {
-      const iface = get();
       // Write the label straight to the real sink — never through the muted
       // stream, so it can't be raced or suppressed — then mute while the answer
       // is read so the prompt text shows but the key does not.
       sink.write(q);
       output.muted = true;
       try {
-        return (await iface.question("")).trim();
+        return (await ask("")).trim();
       } finally {
         output.muted = false;
       }
     },
     confirm: async (q: string, defaultYes: boolean) => {
-      const ans = (await get().question(`${q}${defaultYes ? "[Y/n] " : "[y/N] "}`)).trim().toLowerCase();
+      const ans = (await ask(`${q}${defaultYes ? "[Y/n] " : "[y/N] "}`)).trim().toLowerCase();
       if (ans === "") return defaultYes;
       return ans === "y" || ans === "yes";
     },
     close: () => {
+      input.off("end", abortOnClose);
+      input.off("close", abortOnClose);
       rl?.close();
       rl = null;
     },
@@ -273,12 +348,29 @@ export async function runInit(argv: string[], overrides: Partial<InitDeps> = {})
 
   try {
     return await runInitFlow(options, deps);
+  } catch (error) {
+    // A host/scope prompt hit closed stdin (EOF / non-interactive run): cancel
+    // cleanly rather than letting the rejection escape as an unhandled crash.
+    if (error instanceof StdinClosedError) {
+      deps.print("Setup cancelled (input closed). No changes made.");
+      return 1;
+    }
+    throw error;
   } finally {
     rl.close();
   }
 }
 
 async function runInitFlow(options: InitOptions, deps: InitDeps): Promise<number> {
+  // 0. Surface parse diagnostics first: print non-fatal warnings (unrecognized
+  //    flags) and abort fail-closed on a fatal parse error (a flag missing its
+  //    value), BEFORE opening the token page or prompting for a key.
+  for (const warning of options.warnings ?? []) deps.print(warning);
+  if (options.errors && options.errors.length > 0) {
+    for (const problem of options.errors) deps.print(problem);
+    return 1;
+  }
+
   // 1. Validate flags fail-closed BEFORE requesting or rendering a key (R17): the
   //    host/scope choice drives literal-vs-indirection, so an invalid combo must
   //    never silently route a secret into the wrong rendering.
@@ -450,11 +542,17 @@ async function promptForValidKey(
       // Masked: the key must not be echoed into terminal scrollback (M2).
       raw = await deps.promptSecret("Paste your Pipedrive API key (or 'q' to quit): ");
     } catch {
-      return null; // stdin closed / EOF (Ctrl-D)
+      // Closed stdin (EOF / Ctrl-D) now rejects via the abort seam (StdinClosedError);
+      // any prompt failure cancels the loop and the caller prints "Setup cancelled".
+      return null;
     }
     const lowered = raw.toLowerCase();
     if (lowered === "q" || lowered === "quit") return null;
 
+    // Signal progress before the network call: validation is bounded (a single
+    // ~10s attempt, not the full retry loop), but on a slow link even that should
+    // not look like a frozen prompt.
+    deps.print("Validating…");
     const result = await deps.verifyApiKey(raw);
     if (result.valid) return { key: raw, user: result.user ?? {} };
     deps.print(`  ✗ ${result.error ?? "Validation failed."}`);

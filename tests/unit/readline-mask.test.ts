@@ -17,7 +17,14 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { PassThrough, Writable } from 'node:stream';
-import { MaskableOutput, createReadlineDeps } from '../../src/cli/init.js';
+import { MaskableOutput, createReadlineDeps, StdinClosedError } from '../../src/cli/init.js';
+
+/** A throwaway non-TTY output sink for the EOF tests (mute logic is irrelevant there). */
+function nullSink() {
+  const sink = new Writable({ write(_c, _e, cb) { cb(); } }) as Writable & { isTTY?: boolean };
+  sink.isTTY = false;
+  return sink;
+}
 
 describe('MaskableOutput (M2 mute logic)', () => {
   function captureSink() {
@@ -115,5 +122,44 @@ describe('createReadlineDeps.promptSecret over a real readline interface (M2)', 
     deps.close();
 
     expect(answer).toBe('claude-desktop');
+  });
+});
+
+describe('createReadlineDeps EOF cancellation (#5)', () => {
+  it('rejects a pending prompt with StdinClosedError when stdin ends with no answer', async () => {
+    // readline/promises question() would otherwise HANG forever on EOF; the abort
+    // seam must turn a closed stdin into a clean, typed rejection instead.
+    const input = new PassThrough();
+    const deps = createReadlineDeps({ input, output: nullSink() });
+
+    const pending = deps.prompt('Which host? ');
+    input.end(); // EOF: no line will ever arrive
+
+    await expect(pending).rejects.toBeInstanceOf(StdinClosedError);
+    deps.close();
+  });
+
+  it('keeps rejecting subsequent prompts once stdin has closed (does not re-hang)', async () => {
+    const input = new PassThrough();
+    const deps = createReadlineDeps({ input, output: nullSink() });
+
+    const first = deps.prompt('first? ');
+    input.end();
+    await expect(first).rejects.toBeInstanceOf(StdinClosedError);
+
+    // The abort signal is now tripped; a fresh prompt must reject at once, not wait.
+    await expect(deps.prompt('second? ')).rejects.toBeInstanceOf(StdinClosedError);
+    deps.close();
+  });
+
+  it('rejects the masked key prompt too, and leaves the output un-muted afterward', async () => {
+    const input = new PassThrough();
+    const deps = createReadlineDeps({ input, output: nullSink() });
+
+    const pending = deps.promptSecret('Paste your API key: ');
+    input.end();
+
+    await expect(pending).rejects.toBeInstanceOf(StdinClosedError);
+    deps.close();
   });
 });

@@ -236,6 +236,18 @@ export function isHostId(value: string): value is HostId {
   return HOST_IDS.has(value);
 }
 
+/**
+ * The Claude Code config scope ids ({local, project, user}), derived from the
+ * HOSTS table so they are defined in exactly one place (KTD4). The write path
+ * validates a scope against this set before interpolating it into a runnable
+ * `claude mcp add` command, so adding a scope here can never leave a second
+ * hardcoded copy stale. NOTE: only `local`/`user` are CLI-delivered; `project`
+ * is file-delivered, but it is a real Claude Code scope and stays in the set.
+ */
+export const CLAUDE_CODE_SCOPE_IDS: ReadonlySet<string> = new Set(
+  HOSTS.find((h) => h.id === "claude-code")?.scopes?.map((s) => s.id) ?? [],
+);
+
 /** The default scope id for a host (the one marked default, or undefined when scopeless). */
 export function defaultScope(host: HostId): string | undefined {
   const info = HOSTS.find((h) => h.id === host);

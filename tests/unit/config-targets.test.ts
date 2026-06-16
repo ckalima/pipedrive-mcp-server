@@ -15,6 +15,7 @@ import {
   isHostId,
   renderConfig,
   resolveTargetPath,
+  CLAUDE_CODE_SCOPE_IDS,
   type PlatformContext,
 } from '../../src/cli/config-targets.js';
 
@@ -185,5 +186,14 @@ describe('target resolution + fail-closed lookup (U3 / R17)', () => {
 
   it('defaultScope is undefined for a scopeless host', () => {
     expect(defaultScope('claude-desktop')).toBeUndefined();
+  });
+});
+
+describe('CLAUDE_CODE_SCOPE_IDS single source (#3)', () => {
+  it('exactly mirrors the Claude Code scopes declared in the HOSTS table', () => {
+    const fromHosts = HOSTS.find((h) => h.id === 'claude-code')!.scopes!.map((s) => s.id);
+    expect([...CLAUDE_CODE_SCOPE_IDS].sort()).toEqual([...fromHosts].sort());
+    // Guards against a second hardcoded copy drifting from the descriptor table.
+    expect([...CLAUDE_CODE_SCOPE_IDS].sort()).toEqual(['local', 'project', 'user']);
   });
 });
