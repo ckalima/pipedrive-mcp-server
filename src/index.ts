@@ -26,6 +26,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { validateConfig, getCachedApiToken } from "./config.js";
+import { runInit } from "./cli/init.js";
 import { toolDefinitions, getToolHandler, getToolSchema, getTool } from "./tools/index.js";
 import {
   resolveCapabilityMode,
@@ -207,6 +208,44 @@ async function main() {
   console.error(`[${SERVER_NAME}] Server running on STDIO`);
 }
 
+/** Injected handlers for {@link dispatchCli}, so routing is testable without booting. */
+export interface CliDeps {
+  runInit: (argv: string[]) => Promise<number>;
+  serve: () => Promise<void>;
+  log: (message: string) => void;
+}
+
+const CLI_USAGE = `Usage:
+  npx -y @ckalima/pipedrive-mcp-server          Start the STDIO MCP server (default)
+  npx -y @ckalima/pipedrive-mcp-server init     Run the guided setup installer
+
+Run "init --help" for installer options.`;
+
+/**
+ * Routes process argv to a subcommand (R1). `init` runs the guided installer;
+ * no subcommand boots the STDIO server unchanged; an unknown subcommand prints
+ * usage to stderr and returns a non-zero code. Dependencies are injected so the
+ * routing can be unit-tested without booting the server or the installer.
+ *
+ * `init --help` is not special-cased here: it routes to `runInit(["--help"])`,
+ * which owns the usage text (U1).
+ */
+export async function dispatchCli(argv: string[], deps: CliDeps): Promise<number> {
+  const subcommand = argv[0];
+
+  if (subcommand === "init") {
+    return deps.runInit(argv.slice(1));
+  }
+
+  if (!subcommand) {
+    await deps.serve();
+    return 0;
+  }
+
+  deps.log(`Unknown command: ${subcommand}\n\n${CLI_USAGE}`);
+  return 2;
+}
+
 // Run server only when executed as the entrypoint (not when imported by tests)
 function isEntrypoint(): boolean {
   const argv1 = process.argv[1];
@@ -219,12 +258,25 @@ function isEntrypoint(): boolean {
 }
 
 if (isEntrypoint()) {
-  main().catch((error) => {
-    // Redact and length-bound like the dispatcher above; never pass the raw error
-    // object to console.error (its stack/cause can carry the token) (F1/KTD3).
-    const rawMessage = error instanceof Error ? error.message : "Unknown error occurred";
-    const safeMessage = boundErrorMessage(rawMessage, getCachedApiToken() ?? undefined);
-    console.error(`[${SERVER_NAME}] Fatal error: ${safeMessage}`);
-    process.exit(1);
-  });
+  const argv = process.argv.slice(2);
+  // The server path keeps the process alive via the STDIO transport, so it must
+  // NOT process.exit (that would kill the running server). The init/unknown
+  // paths terminate with their returned code.
+  const isServe = !argv[0];
+  dispatchCli(argv, {
+    runInit,
+    serve: main,
+    log: (message) => console.error(message),
+  })
+    .then((code) => {
+      if (!isServe) process.exit(code);
+    })
+    .catch((error) => {
+      // Redact and length-bound like the dispatcher above; never pass the raw error
+      // object to console.error (its stack/cause can carry the token) (F1/KTD3).
+      const rawMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      const safeMessage = boundErrorMessage(rawMessage, getCachedApiToken() ?? undefined);
+      console.error(`[${SERVER_NAME}] Fatal error: ${safeMessage}`);
+      process.exit(1);
+    });
 }
