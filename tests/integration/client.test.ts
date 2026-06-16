@@ -763,9 +763,9 @@ describe('resilience: retry + circuit breaker (U3)', () => {
       expect(mockFn).toHaveBeenCalledTimes(1); // 410 is non-transient (R5)
     });
 
-    it('AE4: five consecutive trip signals open the breaker; the next call fast-fails with no request', async () => {
+    it('AE4: five trip signals within the window open the breaker; the next call fast-fails with no request', async () => {
       // POST + 503 is a single-attempt trip signal (writes do not retry 503), so
-      // five such calls accumulate exactly five consecutive trip signals.
+      // five such calls accumulate exactly five trip signals within the window.
       mockApiError(503, 'unavailable');
       const client = new PipedriveClient();
       for (let i = 0; i < 5; i++) {
@@ -851,7 +851,7 @@ describe('resilience: retry + circuit breaker (U3)', () => {
       // under the window; under the old consecutive counter it could have reset progress
       // mid-storm (that distinction is proven deterministically in the resilience unit
       // tests — here we assert the real async path opens reliably).
-      mockFetch([
+      const mockFn = mockFetch([
         { status: 503, ok: false, error: 'unavailable' },
         { status: 503, ok: false, error: 'unavailable' },
         { status: 503, ok: false, error: 'unavailable' },
@@ -868,6 +868,11 @@ describe('resilience: retry + circuit breaker (U3)', () => {
       );
       await Promise.all(inFlight);
 
+      // Exactly one upstream call per write (POST+503 is single-attempt, no retry):
+      // six of them are trip signals, well above the threshold of 5, so the breaker
+      // opens regardless of settlement order. Pinning the count guards against a
+      // future change that retries POSTs and silently alters the trip-signal budget.
+      expect(mockFn).toHaveBeenCalledTimes(7);
       expect(getBreakerState()).toBe('Open');
 
       // The breaker now fast-fails the next call with no upstream request.

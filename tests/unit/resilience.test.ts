@@ -194,7 +194,7 @@ describe('circuit breaker (U2, KTD7)', () => {
     expect(getBreakerState()).toBe('Open');
   });
 
-  it('503 increments the counter identically to 429', () => {
+  it('503 records a trip signal identically to 429 (windowed)', () => {
     // Drive the trip with a mix; both 429 and 503 arrive as isTripSignal:true.
     for (let i = 0; i < BREAKER_THRESHOLD; i++) {
       recordOutcome(trip, T0);
@@ -324,6 +324,21 @@ describe('circuit breaker (U2, KTD7)', () => {
     }
   });
 
+  it('counts only in-window signals across partial eviction (sub-threshold burst, gap, re-accumulate)', () => {
+    // A sub-threshold burst that fully ages out must not contribute to a later burst:
+    // the fresh burst trips on its OWN count, proving eviction counts in-window signals
+    // rather than a running total of every trip ever seen.
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Closed');
+    const t1 = T0 + BREAKER_WINDOW_MS + 1; // first batch is now fully aged out
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) {
+      recordOutcome(trip, t1);
+      expect(getBreakerState()).toBe('Closed'); // fresh burst alone is still below threshold
+    }
+    recordOutcome(trip, t1); // THRESHOLD-th fresh signal opens it (the aged-out batch did not count)
+    expect(getBreakerState()).toBe('Open');
+  });
+
   it('counts a signal at exactly the trailing window edge (inclusive boundary)', () => {
     // The trailing edge is inclusive: a signal at T0 still counts when a later signal
     // arrives at exactly T0 + BREAKER_WINDOW_MS (age == window). Paired with the
@@ -335,12 +350,27 @@ describe('circuit breaker (U2, KTD7)', () => {
     expect(getBreakerState()).toBe('Open');
   });
 
-  it('resetCircuitBreakerState returns to Closed with a zeroed counter', () => {
+  it('a trip signal while Open is a defensive no-op (does not append or restart cooldown)', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Open');
+    // A late straggler trip arriving while Open must not touch breaker state.
+    recordOutcome(trip, T0 + 5);
+    expect(getBreakerState()).toBe('Open');
+    // Cooldown is still measured from the original open (T0), not restarted: the
+    // probe is handed out exactly at T0 + cooldown, proving openedAtMs was untouched.
+    expect(breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS)).toBe(true);
+    expect(getBreakerState()).toBe('HalfOpen');
+  });
+
+  it('resetCircuitBreakerState returns to Closed with the window cleared', () => {
     for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
     expect(getBreakerState()).toBe('Open');
     resetCircuitBreakerState();
     expect(getBreakerState()).toBe('Closed');
     expect(breakerAllowsRequest(T0)).toBe(true);
+    // Window cleared: a fresh THRESHOLD-1 burst stays Closed (no carryover count).
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Closed');
   });
 });
 
