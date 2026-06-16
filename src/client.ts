@@ -3,7 +3,7 @@
  * Handles both v1 and v2 API endpoints with proper authentication
  */
 
-import { getConfig, type Config } from "./config.js";
+import { getConfig, BASE_URL_V1, BASE_URL_V2, type Config } from "./config.js";
 import { handleApiError, createErrorResponse, formatErrorForMcp, redactSecrets, type ErrorResponse } from "./utils/errors.js";
 import {
   classifyOutcome,
@@ -74,6 +74,20 @@ function sanitizeEndpointForLog(endpoint: string): string {
 export class PipedriveClient {
   // Defer config loading to first use for better error handling
   private config: Config | null = null;
+
+  /**
+   * @param seededConfig When supplied, the client uses this explicit config
+   *   instead of ever calling getConfig()/reading process.env. This is the
+   *   token-accepting validation seam (KTD2): the installer validates each
+   *   pasted key by seeding a fresh instance with that key, so the key
+   *   authenticates on the wire as itself and redaction keys off it — never the
+   *   env-driven getClient() singleton, which caches the first key for the
+   *   process lifetime and would re-validate every re-prompt against it. Omit it
+   *   for the normal env-driven path (unchanged: deferred load on first use).
+   */
+  constructor(seededConfig?: Config) {
+    this.config = seededConfig ?? null;
+  }
 
   /**
    * Ensures the client is properly configured and returns the loaded config
@@ -547,4 +561,23 @@ export function getClient(): PipedriveClient {
     clientInstance = new PipedriveClient();
   }
   return clientInstance;
+}
+
+/**
+ * Builds a fresh client seeded with an explicit, caller-supplied key for one-off
+ * validation of a pasted token (KTD2). It deliberately bypasses the env-driven
+ * getClient() singleton so each pasted key authenticates on the wire as itself
+ * (the singleton freezes the first key for the process lifetime). `mode` is
+ * irrelevant to validation — it only gates destructive tools — so `read-only`
+ * is the safe seed. Callers should issue `/users/me` (v1) directly on the
+ * returned client, NOT through the version-routing seam: that seam treats a
+ * `/users/me` 404 as a retirement signal, which validation traffic must not trip.
+ */
+export function createValidationClient(apiKey: string): PipedriveClient {
+  return new PipedriveClient({
+    apiKey,
+    baseUrlV1: BASE_URL_V1,
+    baseUrlV2: BASE_URL_V2,
+    mode: "read-only",
+  });
 }

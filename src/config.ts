@@ -14,6 +14,23 @@ export interface Config {
   mode: CapabilityMode;
 }
 
+/** Exact length of a Pipedrive personal API token. */
+export const API_KEY_LENGTH = 40;
+
+/** Pipedrive API base URLs. Single source of truth shared by getConfig() and the
+ *  installer's validation client (src/cli/verify-key.ts), so they cannot drift. */
+export const BASE_URL_V1 = "https://api.pipedrive.com/v1";
+export const BASE_URL_V2 = "https://api.pipedrive.com/api/v2";
+
+/**
+ * True iff `key` has the exact API-token length. This is the single format
+ * predicate both {@link getConfig} and the installer's `verifyApiKey` enforce,
+ * so the env path and the paste path cannot drift on what "valid format" means.
+ */
+export function isValidApiKeyFormat(key: string): boolean {
+  return key.length === API_KEY_LENGTH;
+}
+
 /**
  * Last successfully loaded API token, cached for redaction-only use. Populated by
  * getConfig() on a successful load. See getCachedApiToken().
@@ -48,9 +65,9 @@ export function getConfig(): Config {
     );
   }
 
-  if (apiKey.length !== 40) {
+  if (!isValidApiKeyFormat(apiKey)) {
     throw new Error(
-      "Invalid PIPEDRIVE_API_KEY format: expected a 40-character key. " +
+      `Invalid PIPEDRIVE_API_KEY format: expected a ${API_KEY_LENGTH}-character key. ` +
       "Verify your API key at Pipedrive Settings > Personal preferences > API"
     );
   }
@@ -65,8 +82,8 @@ export function getConfig(): Config {
 
   return {
     apiKey,
-    baseUrlV1: "https://api.pipedrive.com/v1",
-    baseUrlV2: "https://api.pipedrive.com/api/v2",
+    baseUrlV1: BASE_URL_V1,
+    baseUrlV2: BASE_URL_V2,
     mode,
   };
 }
