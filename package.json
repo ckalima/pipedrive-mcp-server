@@ -51,7 +51,7 @@
   "devDependencies": {
     "@anthropic-ai/mcpb": "2.1.2",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^22",
+    "@types/node": "^26",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^10.5.0",
     "js-yaml": "^4.2.0",
