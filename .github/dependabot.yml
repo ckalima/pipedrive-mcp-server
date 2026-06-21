@@ -15,6 +15,12 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Keep @types/node aligned to the engines floor (Node 22 LTS), not latest. The
+      # type defs are intentionally pinned to ^22 so tsc flags use of APIs newer than
+      # our minimum supported runtime; a major bump would silently defeat that guard.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions pinned in .github/workflows (checkout, setup-node, gitleaks-action).
   # Same grouping policy so action bumps stay current without churn.
