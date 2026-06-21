@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import yaml from "js-yaml";
+import { load } from "js-yaml";
 
 // Resolve the spec relative to THIS file (robust to the test runner's cwd).
 // This helper lives at tests/contract/helpers/openapiContract.ts, so the spec
@@ -77,7 +77,7 @@ let cachedSpec: OpenApiDoc | undefined;
 /** Load + parse the vendored v2 spec (memoized). */
 export function loadV2Spec(): OpenApiDoc {
   if (!cachedSpec) {
-    cachedSpec = yaml.load(readFileSync(SPEC_PATH, "utf8")) as OpenApiDoc;
+    cachedSpec = load(readFileSync(SPEC_PATH, "utf8")) as OpenApiDoc;
   }
   return cachedSpec;
 }
