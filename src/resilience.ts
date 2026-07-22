@@ -74,6 +74,25 @@ function isRead(method: string): boolean {
 }
 
 /**
+ * Whether an attempt is evidence the UPSTREAM is still unhealthy — 429/503/other
+ * 5xx/network/timeout. Distinct from `isTripSignal` (429/503 only, what counts
+ * toward opening the breaker) and used solely for the half-open probe verdict.
+ *
+ * A benign status-bearing failure (404/400/403/410) is NOT unhealthy: the server
+ * answered promptly and correctly, it just did not like the request. Treating one
+ * as a probe failure let a routine 404 — an agent re-polling a deleted record —
+ * re-open the breaker on every probe and livelock the process out of the API.
+ * A missing status without a network error is unknown, so it counts as unhealthy
+ * (fail-safe: keep the breaker open rather than closing it on no evidence).
+ */
+export function isUpstreamUnhealthy(outcome: AttemptOutcome): boolean {
+  if (outcome.isNetworkError) return true;
+  const status = outcome.httpStatus;
+  if (status === undefined) return true;
+  return status === 429 || status >= 500;
+}
+
+/**
  * Encodes the R2/R3/R5/R10 retry-and-trip table:
  *
  *   429            -> retryable for ANY method, trip signal
@@ -229,6 +248,14 @@ export interface BreakerOutcome {
   isSuccess: boolean;
   /** True on a 429 or 503 (R10). */
   isTripSignal: boolean;
+  /**
+   * True when the attempt is evidence the upstream is still unhealthy
+   * (429/503/5xx/network/timeout) — see isUpstreamUnhealthy(). Read ONLY on the
+   * half-open probe path, to decide re-Open vs Close. Required so every call site
+   * states its verdict explicitly; the unrecorded-probe backstop in client.ts must
+   * pass `true`, since an unsettled probe is no evidence of recovery.
+   */
+  isUpstreamUnhealthy: boolean;
 }
 
 /**
@@ -266,9 +293,14 @@ export function breakerAllowsRequest(nowMs: number): boolean {
  * Records the outcome of a settled attempt and advances the breaker. `isProbe`
  * identifies the request that owns the current half-open probe slot.
  *
- *   HalfOpen + isProbe (this IS the probe): success -> Closed + window cleared; any
- *     non-success (4xx/5xx/network/timeout, not only 429/503) -> Open + cooldown
- *     restart. Leaving HalfOpen releases the single probe slot.
+ *   HalfOpen + isProbe (this IS the probe): the upstream answering at all is what the
+ *     probe tests, so success OR a benign status-bearing failure (404/400/403/410)
+ *     -> Closed + window cleared; only isUpstreamUnhealthy (429/503/5xx/network/
+ *     timeout) -> Open + cooldown restart. Leaving HalfOpen releases the single probe
+ *     slot. Re-opening on any non-success used to livelock the breaker whenever the
+ *     probe happened to be a routine 404 (e.g. an agent re-polling a deleted record):
+ *     every cooldown produced one 404 and immediately re-opened for the process
+ *     lifetime, even though the API was healthy the whole time.
  *   HalfOpen + !isProbe: NO-OP. This is a request that passed the Closed gate
  *     before the breaker opened and only settled now, during another request's
  *     probe (the gate refuses NEW requests while HalfOpen, so this is the sole way
@@ -293,8 +325,10 @@ export function recordOutcome(outcome: BreakerOutcome, nowMs: number, isProbe = 
     if (!isProbe) {
       return;
     }
-    // The probe settled: leaving HalfOpen releases the single probe slot.
-    if (outcome.isSuccess) {
+    // The probe settled: leaving HalfOpen releases the single probe slot. The probe
+    // asks "is the upstream answering again?", not "did this particular request
+    // succeed?" — so a benign 4xx/410 closes the breaker just like a 2xx.
+    if (!outcome.isUpstreamUnhealthy) {
       breakerState = "Closed";
       tripSignalTimestamps = [];
     } else {

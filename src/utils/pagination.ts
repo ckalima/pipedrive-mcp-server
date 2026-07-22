@@ -22,22 +22,58 @@ export function extractPaginationV2(response: {
   };
 }
 
+/** The v1 pagination fields, which arrive in one of two shapes (see below). */
+interface PaginationFieldsV1 {
+  more_items_in_collection?: boolean;
+  next_start?: number;
+  start?: number;
+  limit?: number;
+}
+
 /**
- * Extracts pagination info from Pipedrive v1 API response
+ * Extracts pagination info from Pipedrive v1 API response.
+ *
+ * The vendored spec documents TWO pagination shapes:
+ *   - wrapped: `additional_data.pagination.{start,limit,more_items_in_collection,next_start}`
+ *     (notes, mail) - the shape most of v1 uses.
+ *   - flat: `additional_data.{start,limit,more_items_in_collection}` with NO wrapper
+ *     and NO next_start - which docs/api/openapi-v1.yaml documents for GET /leads.
+ *
+ * The live API does NOT emit the flat shape for /leads: a 2026-07-22 probe against a
+ * seeded account returned the wrapped shape with a correct `next_start`, byte-identical
+ * to the /persons control. So this reads BOTH shapes defensively rather than to fix an
+ * observed break - the spec is the thing that is wrong, and it is the spec a future
+ * endpoint might one day be built to match. Preferring `pagination` when present keeps
+ * live behaviour bit-for-bit unchanged.
+ *
+ * When the shape omits `next_start` it is synthesized as `start + limit` - the same
+ * offset the wrapped shape reports, and exactly what `buildPaginationParamsV1` sends
+ * back as `start`. It is synthesized only when there IS a next page and both operands
+ * are present, so a missing field can never fabricate a cursor.
  */
 export function extractPaginationV1(response: {
-  additional_data?: {
-    pagination?: {
-      more_items_in_collection?: boolean;
-      next_start?: number;
-    };
-  };
+  additional_data?: PaginationFieldsV1 & { pagination?: PaginationFieldsV1 };
 }): PaginationInfo {
-  const pagination = response.additional_data?.pagination;
+  const fields: PaginationFieldsV1 | undefined =
+    response.additional_data?.pagination ?? response.additional_data;
+  const has_more = fields?.more_items_in_collection ?? false;
+  const next_start = fields?.next_start ?? synthesizeNextStart(fields, has_more);
+
   return {
-    next_cursor: pagination?.next_start?.toString(),
-    has_more: pagination?.more_items_in_collection ?? false,
+    next_cursor: next_start?.toString(),
+    has_more,
   };
+}
+
+/** `start + limit`, but only when there is a next page and both values are numbers. */
+function synthesizeNextStart(
+  fields: PaginationFieldsV1 | undefined,
+  has_more: boolean,
+): number | undefined {
+  if (!has_more || typeof fields?.start !== "number" || typeof fields.limit !== "number") {
+    return undefined;
+  }
+  return fields.start + fields.limit;
 }
 
 /**
