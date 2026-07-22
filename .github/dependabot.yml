@@ -22,6 +22,23 @@ updates:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
 
+      # Hold typescript at 6.x until typescript-eslint supports the Go-based
+      # compiler. typescript-eslint (through 8.65.0, and its canary) declares
+      # `typescript: ">=4.8.4 <6.1.0"`, so a major bump fails `npm ci` with
+      # ERESOLVE; forcing it past that only trades the install error for a hard
+      # throw in the linter ("typescript-eslint does not support TS 7.0").
+      # Support is tracked in typescript-eslint#10940 -- still open, no timeline,
+      # and targeting TS >=7.1, so 7.0 will never be supported. Verified 2026-07-22
+      # that src/ itself is already TS 7 clean: tsc exits 0, all 2227 tests pass,
+      # and the emitted runtime .js is byte-identical to the 6.0.3 output (only
+      # .d.ts union/member ordering shifts). Adopting 7.x therefore needs the
+      # documented side-by-side alias setup (`typescript` -> @typescript/typescript6,
+      # `@typescript/native` -> typescript@7), which is a deliberate hand-written
+      # change rather than anything Dependabot can generate. Drop this ignore once
+      # typescript-eslint ships TS 7 support.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
   # GitHub Actions pinned in .github/workflows (checkout, setup-node, gitleaks-action).
   # Same grouping policy so action bumps stay current without churn.
   - package-ecosystem: "github-actions"
