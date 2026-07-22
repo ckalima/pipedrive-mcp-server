@@ -33,6 +33,7 @@ tag points at; `tests/unit/version-consistency.test.ts` and
 | `package.json` | edit by hand | release workflow (tag == version) |
 | `src/index.ts` `SERVER_VERSION` | edit by hand | `version-consistency.test.ts` |
 | `server.json` (root version, both package `version`s, and the mcpb download URL) | edit by hand | `version-consistency.test.ts` |
+| `package-lock.json` (root `version` and the `""` package entry) | edit by hand - see the warning in step 1 | nothing; `npm ci` is the only signal |
 | `bundle/manifest.json` `version` | **do not hand-edit** - `npm run gen:docs` derives it from `package.json` | `gen-docs.test.ts` |
 
 ## Versioning policy (semver)
@@ -40,15 +41,20 @@ tag points at; `tests/unit/version-consistency.test.ts` and
 This project follows semver. Judgment calls that have come up:
 
 - Tightening a default that disables a previously-on capability (e.g. the
-  `file_path` reads hardening, or capability modes hiding destructive tools from
-  `tools/list` by default) has been shipped as a **minor** with prominent
+  `file_path` reads hardening, capability modes hiding destructive tools from
+  `tools/list` by default, or 2.5.0 gating `convert_lead_to_deal` behind
+  `PIPEDRIVE_MODE=full`) has been shipped as a **minor** with prominent
   CHANGELOG migration notes, on the grounds that explicitly-configured setups
   keep working and the change fails safe. A stricter reading would call these
   **major**. Decide per release and say so in the CHANGELOG.
+- Raising the `engines.node` floor has ridden along with a **minor** (2.5.0 moved it
+  to `>=22.9.0`). It is called out in the CHANGELOG because installs below the floor
+  get `EBADENGINE`, but the floor tracks oldest-supported-LTS, so in practice only
+  users already off supported LTS are affected.
 
 ## Pre-release checklist
 
-1. All intended work is merged to `main` (branch-protected: PRs + `ci(20)`/`ci(22)`).
+1. All intended work is merged to `main` (branch-protected: PRs + `ci(22)`/`ci(24)`).
 2. `CHANGELOG.md` `[Unreleased]` captures **everything since the last tag**, not
    just the latest feature. Cross-check with `git log --no-merges vX.Y.Z..main`.
 3. Decide the version number (see policy above).
@@ -57,14 +63,24 @@ This project follows semver. Judgment calls that have come up:
 
 ## Release steps
 
-1. **Bump the version** in `package.json`, `src/index.ts` (`SERVER_VERSION`), and
-   `server.json` (both `version` fields). Then `npm run gen:docs` to refresh
-   `bundle/manifest.json`.
+1. **Bump the version** in `package.json`, `src/index.ts` (`SERVER_VERSION`),
+   `server.json` (both `version` fields **and** the mcpb download URL), and
+   `package-lock.json`. Then `npm run gen:docs` to refresh `bundle/manifest.json`.
+
+   > **Edit `package-lock.json` by hand: two `version` fields, nothing else.** Do not
+   > run `npm install --package-lock-only` to do it. On 2.5.0 that command bumped the
+   > version but also stripped `libc` metadata (`glibc`/`musl`) from optional native
+   > dependencies, because the local npm differed from the one that generated the
+   > lockfile. That metadata drives platform resolution, so shipping it would have
+   > changed which native binaries `npm ci` installs in CI. Nothing guards this file, so
+   > confirm with `npm ci --dry-run` before opening the release PR. Releases before 2.5.0
+   > skipped the lockfile entirely and let a later dependabot bump re-sync it.
 2. **Finalize the CHANGELOG**: rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`,
    leave a fresh empty `## [Unreleased]` above it, and add the
    `[X.Y.Z]: https://github.com/.../releases/tag/vX.Y.Z` link line.
 3. **Run the full gate locally**: `npm test` (includes the version-consistency and
-   gen-docs drift tests), `npx tsc --noEmit`, `npm run lint`. Optionally
+   gen-docs drift tests), `npx tsc --noEmit`, `npm run lint`, `npm ci --dry-run`
+   (the only check on the hand-edited lockfile). Optionally
    `workflow_dispatch` the Release workflow from `main` for a publish-skipping
    dry-run that still builds and validates the tarball.
 4. **Merge** the release commit to `main` (via PR).
@@ -107,6 +123,10 @@ version.
 - `SERVER_VERSION`, `server.json`'s versions, and the mcpb download URL are hand-maintained;
   they are drift-tested (`version-consistency.test.ts`) but could be derived from
   `package.json` at build time to remove the manual step entirely.
+- `package-lock.json`'s version is hand-maintained and, unlike the others, **not**
+  drift-tested, so a stale one only surfaces as an `npm ci` failure, or not at all.
+  Extending `version-consistency.test.ts` to cover it would close the gap and is
+  cheaper than the build-time derivation above.
 - The committed mcpb `fileSha256` is an all-zeros sentinel that CI overwrites at publish. The
   OIDC → `io.github.ckalima` namespace mapping is proven only on a real tag push;
   `npm run registry:publish` (GitHub-token auth) is the fallback if it ever needs troubleshooting.
