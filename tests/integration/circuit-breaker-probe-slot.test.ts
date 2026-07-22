@@ -45,7 +45,7 @@ describe('PipedriveClient circuit breaker — probe slot vs budget exhaustion (r
     // BOTH the breaker cooldown and the retry budget before the next iteration.
     setResilienceSleepForTests(async () => {
       for (let i = 0; i < BREAKER_THRESHOLD; i++) {
-        recordOutcome({ isSuccess: false, isTripSignal: true }, 1_000);
+        recordOutcome({ isSuccess: false, isTripSignal: true, isUpstreamUnhealthy: true }, 1_000);
       }
       expect(getBreakerState()).toBe('Open');
       mono = 1_000 + BREAKER_COOLDOWN_MS + 10_000;

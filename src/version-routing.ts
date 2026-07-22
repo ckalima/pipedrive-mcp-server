@@ -20,6 +20,21 @@
  * so later calls short-circuit without another upstream request. Every other
  * outcome — item not-found, validation, auth, rate-limit, 5xx, network/timeout —
  * is passed through unchanged (R5).
+ *
+ * The 404 secondary is deliberately hard to trip, because unlike 410 it is a guess
+ * and the latch it sets is permanent for the process:
+ *   - only an unfiltered GET counts (see isLatchable404). Anything that scopes the
+ *     request to ANOTHER record can 404 on its own when that record does not
+ *     exist, which says nothing about the surface: a `filter_id`/`owner_id`/…
+ *     query param on a read, or a body-carried foreign key on a write (POST
+ *     /notes with a since-deleted `deal_id`, POST /leads with a stale
+ *     `person_id`). Query params are inspectable and allowlisted; a request body
+ *     is not, so writes are simply never latch-eligible. Nothing is lost —
+ *     a genuinely retired surface 404s its reads too.
+ *   - RETIREMENT_404_THRESHOLD consecutive such 404s are required; any other
+ *     outcome for the capability resets the run. A single transient 404 no longer
+ *     retires a live capability for the rest of the session.
+ * A 410 still latches on the first sighting: the server said so.
  */
 
 import { getClient, type ApiResponse } from "./client.js";
@@ -112,17 +127,82 @@ export function isRetirementSignal(
   return false;
 }
 
+/**
+ * Query params that cannot, by themselves, turn a live collection root into a 404.
+ * An ALLOWLIST, not a blocklist: an unrecognized param is assumed to be able to
+ * scope the request to some other record (and therefore to 404 on its own), so it
+ * makes the response ineligible for the retirement latch. Anything added here must
+ * be a pure shape/order/paging control — never an identifier.
+ */
+const NON_SCOPING_PARAMS: ReadonlySet<string> = new Set([
+  "limit",
+  "start",
+  "cursor",
+  "sort",
+  "sort_by",
+  "sort_direction",
+  "include_fields",
+  "archived_flag",
+]);
+
+/** Consecutive unfiltered collection-root 404s needed before inferring retirement. */
+export const RETIREMENT_404_THRESHOLD = 3;
+
+/**
+ * Whether a 404 on a GET may count toward the retirement latch: true only when
+ * every query param is non-scoping, so the 404 can be read as "the collection root
+ * itself is gone" rather than "the record you filtered on does not exist".
+ * A caller-supplied `filter_id` pointing at a deleted filter is the motivating case:
+ * it 404s the collection root while the surface is perfectly alive.
+ *
+ * Reads only. Write verbs are never latch-eligible (see createSeam) because their
+ * scoping identifiers ride the request body, where this predicate cannot see them.
+ */
+export function isLatchable404(params?: URLSearchParams): boolean {
+  if (!params) return true;
+  for (const key of params.keys()) {
+    if (!NON_SCOPING_PARAMS.has(key)) return false;
+  }
+  return true;
+}
+
 // ─── Session state (module-level, process lifetime) ──────────────────────────────
 // Valid because the STDIO server is one process per session (KTD6). An exported
 // reset mirrors the getClient() singleton-state concern and keeps tests isolated.
 
-const retired = new Set<CapabilityKey>();
+/** Retired capabilities, keyed to how retirement was detected (drives the wording). */
+const retired = new Map<CapabilityKey, "gone" | "inferred">();
 const warned = new Set<CapabilityKey>();
+/**
+ * Length of the current run of consecutive latchable collection-root 404s, per
+ * capability. Reset by ANY other outcome for that capability (success, a filtered
+ * 404, a 5xx, a network failure) — the run has to be uninterrupted to count as
+ * evidence the surface is gone rather than that one request went wrong.
+ */
+const consecutive404s = new Map<CapabilityKey, number>();
 
-/** Clears the per-session retired and warned state. For test isolation. */
+/**
+ * Bumped every time a capability answers successfully. A request captures the value at
+ * issue; if it has moved by the time the request settles, the surface demonstrably
+ * answered while this request was outstanding, so a 404 it returns is stale evidence and
+ * cannot count toward the latch.
+ */
+const generation = new Map<CapabilityKey, number>();
+
+/**
+ * Requests currently outstanding per capability, so the latch can require that the
+ * evidence is complete: while a sibling is still in flight it may yet return a 200 that
+ * contradicts the whole run.
+ */
+const inFlight = new Map<CapabilityKey, number>();
+
+/** Clears the per-session retired, warned, and 404-run state. For test isolation. */
 export function resetVersionRoutingState(): void {
   retired.clear();
   warned.clear();
+  consecutive404s.clear();
+  generation.clear();
+  inFlight.clear();
 }
 
 /**
@@ -145,10 +225,13 @@ function warnOnce(capability: CapabilityKey): void {
 }
 
 /** The clear "retired, no v2 equivalent" envelope (R6), shaped like any failed call. */
-function retirementResponse<T>(capability: CapabilityKey): ApiResponse<T> {
+function retirementResponse<T>(
+  capability: CapabilityKey,
+  detection: "gone" | "inferred",
+): ApiResponse<T> {
   return {
     success: false,
-    error: capabilityRetiredError(CAPABILITIES[capability].displayName),
+    error: capabilityRetiredError(CAPABILITIES[capability].displayName, detection),
   };
 }
 
@@ -162,18 +245,81 @@ async function send<T>(
   capability: CapabilityKey,
   endpoint: string,
   call: (client: ReturnType<typeof getClient>) => Promise<ApiResponse<T>>,
+  /** Whether a collection-root 404 from THIS request may count toward the latch. */
+  latchable404 = false,
 ): Promise<ApiResponse<T>> {
-  if (retired.has(capability)) {
-    return retirementResponse<T>(capability);
+  const alreadyRetired = retired.get(capability);
+  if (alreadyRetired) {
+    return retirementResponse<T>(capability, alreadyRetired);
   }
 
   warnOnce(capability);
 
-  const response = await call(getClient());
+  // Both readings are taken BEFORE the await so they describe the moment this request was
+  // issued, then compared against the state at settlement.
+  const generationAtIssue = generation.get(capability) ?? 0;
+  inFlight.set(capability, (inFlight.get(capability) ?? 0) + 1);
+
+  let response: ApiResponse<T>;
+  try {
+    response = await call(getClient());
+  } finally {
+    inFlight.set(capability, (inFlight.get(capability) ?? 1) - 1);
+  }
 
   if (!response.success && isRetirementSignal(capability, endpoint, response.httpStatus)) {
-    retired.add(capability);
-    return retirementResponse<T>(capability);
+    // 410: the server stated the surface is gone. That is fact, not inference, so it
+    // latches on the first sighting regardless of what else is in flight.
+    if (response.httpStatus === 410) {
+      retired.set(capability, "gone");
+      return retirementResponse<T>(capability, "gone");
+    }
+    // 404 on a collection root: only a guess, so it must be an unfiltered read AND
+    // repeated AND uncontradicted. The run counter alone assumes sequential traffic —
+    // concurrent calls all clear the `retired` gate before any of them settles, so N
+    // simultaneous transient 404s would otherwise trip the latch just like N consecutive
+    // ones. Two guards make a batch containing any success unable to latch, in either
+    // settlement order. They are not interchangeable: each covers the order the other
+    // misses, and retirement is permanent with restart-only recovery, so a wrong latch
+    // strands a live capability for the whole process lifetime.
+    if (latchable404) {
+      // Guard 1 — stale evidence. A success settled while this request was outstanding,
+      // so the surface answered after this 404 was issued. Do not count it, and do not
+      // reset the run either: the success already did that.
+      if (generationAtIssue !== (generation.get(capability) ?? 0)) {
+        return response;
+      }
+
+      const run = (consecutive404s.get(capability) ?? 0) + 1;
+      consecutive404s.set(capability, run);
+
+      // Guard 2 — incomplete evidence. A sibling is still outstanding and may yet return
+      // the 200 that refutes the whole run. Waiting costs nothing: if it too 404s, the
+      // run is already recorded and that later request latches instead.
+      if (run >= RETIREMENT_404_THRESHOLD && (inFlight.get(capability) ?? 0) === 0) {
+        consecutive404s.delete(capability);
+        retired.set(capability, "inferred");
+        return retirementResponse<T>(capability, "inferred");
+      }
+      // Short of latching the caller gets the real 404 — a plain NOT_FOUND, which is also
+      // the honest answer if this turns out to be a transient upstream fault. Notably it
+      // is never a retirement envelope the next request would have to take back.
+      return response;
+    }
+  }
+
+  // Anything else breaks the run: the evidence has to be uninterrupted.
+  consecutive404s.delete(capability);
+
+  // A success invalidates every 404 still outstanding (guard 1) and, together with guard
+  // 2, makes an inferred latch unreachable while any success is in flight. So there is no
+  // retraction path here: once `retired` is set, it was set on evidence no in-flight
+  // request contradicted, and every later call short-circuits before reaching upstream.
+  // Read-then-bump off the CURRENT value, never off `generationAtIssue`: an older success
+  // settling after a newer one would otherwise move the counter backwards and re-admit a
+  // 404 that had already been invalidated.
+  if (response.success) {
+    generation.set(capability, (generation.get(capability) ?? 0) + 1);
   }
 
   return response;
@@ -195,7 +341,14 @@ export interface CapabilitySeam {
 export function createSeam(capability: CapabilityKey): CapabilitySeam {
   return {
     get<T>(endpoint: string, params: URLSearchParams | undefined) {
-      return send<T>(capability, endpoint, (client) => client.get<T>(endpoint, params, "v1"));
+      // Reads are the ONLY latch-eligible verb, and only when unfiltered: every
+      // scoping identifier a read can carry is in `params`, where it is visible.
+      return send<T>(
+        capability,
+        endpoint,
+        (client) => client.get<T>(endpoint, params, "v1"),
+        isLatchable404(params),
+      );
     },
     post<T>(endpoint: string, body: Record<string, unknown> | unknown[]) {
       return send<T>(capability, endpoint, (client) => client.post<T>(endpoint, body, "v1"));

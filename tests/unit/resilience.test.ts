@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   classifyOutcome,
+  isUpstreamUnhealthy,
   computeBackoffMs,
   parseRetryAfterMs,
   breakerAllowsRequest,
@@ -26,9 +27,12 @@ import {
   BREAKER_COOLDOWN_MS,
 } from '../../src/resilience.js';
 
-const trip = { isSuccess: false, isTripSignal: true };
-const ok = { isSuccess: true, isTripSignal: false };
-const nonTripFailure = { isSuccess: false, isTripSignal: false };
+const trip = { isSuccess: false, isTripSignal: true, isUpstreamUnhealthy: true };
+const ok = { isSuccess: true, isTripSignal: false, isUpstreamUnhealthy: false };
+/** A 500 / network error: not a trip signal, but still an unhealthy upstream. */
+const nonTripFailure = { isSuccess: false, isTripSignal: false, isUpstreamUnhealthy: true };
+/** A 404 / 400 / 403 / 410: the upstream answered promptly, it just refused. */
+const benignFailure = { isSuccess: false, isTripSignal: false, isUpstreamUnhealthy: false };
 
 describe('classifyOutcome (U1)', () => {
   describe('reads (GET)', () => {
@@ -95,6 +99,31 @@ describe('classifyOutcome (U1)', () => {
       expect(classifyOutcome({ method, httpStatus: 500, isNetworkError: false }))
         .toEqual({ retryable: false, isTripSignal: false });
     });
+  });
+});
+
+describe('isUpstreamUnhealthy (U1)', () => {
+  it.each([429, 500, 502, 503, 504])('%d is unhealthy', (status) => {
+    expect(isUpstreamUnhealthy({ method: 'GET', httpStatus: status, isNetworkError: false })).toBe(true);
+  });
+
+  it('a network error/timeout is unhealthy', () => {
+    expect(isUpstreamUnhealthy({ method: 'GET', isNetworkError: true })).toBe(true);
+  });
+
+  it('a missing status without a network error is unhealthy (fail-safe)', () => {
+    expect(isUpstreamUnhealthy({ method: 'GET', isNetworkError: false })).toBe(true);
+  });
+
+  it.each([200, 201, 400, 401, 403, 404, 410, 422])('%d is NOT unhealthy — the upstream answered', (status) => {
+    expect(isUpstreamUnhealthy({ method: 'GET', httpStatus: status, isNetworkError: false })).toBe(false);
+  });
+
+  it('is independent of method (unlike retryability)', () => {
+    for (const method of ['GET', 'POST', 'PATCH', 'PUT', 'DELETE']) {
+      expect(isUpstreamUnhealthy({ method, httpStatus: 503, isNetworkError: false })).toBe(true);
+      expect(isUpstreamUnhealthy({ method, httpStatus: 404, isNetworkError: false })).toBe(false);
+    }
   });
 });
 
@@ -260,6 +289,33 @@ describe('circuit breaker (U2, KTD7)', () => {
     // Slot released: after a fresh cooldown a new probe is handed out.
     expect(breakerAllowsRequest(halfOpenAt + BREAKER_COOLDOWN_MS)).toBe(true);
     expect(getBreakerState()).toBe('HalfOpen');
+  });
+
+  it('half-open probe closes on a benign 4xx — the upstream answered', () => {
+    // The probe tests reachability, not the request's own success. Re-opening on a
+    // routine 404 (an agent re-polling a deleted record) livelocked the breaker:
+    // every cooldown yielded one 404 and immediately re-opened, for the process
+    // lifetime, against a perfectly healthy API.
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    const halfOpenAt = T0 + BREAKER_COOLDOWN_MS;
+    breakerAllowsRequest(halfOpenAt); // -> HalfOpen
+    recordOutcome(benignFailure, halfOpenAt, true);
+
+    expect(getBreakerState()).toBe('Closed');
+    // The window is cleared like a successful probe: THRESHOLD-1 fresh trips stay Closed.
+    for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, halfOpenAt);
+    expect(getBreakerState()).toBe('Closed');
+  });
+
+  it('repeated benign-4xx probes do not livelock the breaker', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    const halfOpenAt = T0 + BREAKER_COOLDOWN_MS;
+    breakerAllowsRequest(halfOpenAt);
+    recordOutcome(benignFailure, halfOpenAt, true);
+
+    // Closed means the very next call goes straight through — no second cooldown.
+    expect(breakerAllowsRequest(halfOpenAt + 1)).toBe(true);
+    expect(getBreakerState()).toBe('Closed');
   });
 
   it('a concurrent non-probe completion during HalfOpen does NOT advance the breaker (owner-scoped)', () => {
