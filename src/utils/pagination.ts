@@ -33,15 +33,20 @@ interface PaginationFieldsV1 {
 /**
  * Extracts pagination info from Pipedrive v1 API response.
  *
- * v1 has TWO pagination shapes and this repo calls endpoints of both kinds:
+ * The vendored spec documents TWO pagination shapes:
  *   - wrapped: `additional_data.pagination.{start,limit,more_items_in_collection,next_start}`
- *     (notes, mail) — the shape most of v1 uses.
+ *     (notes, mail) - the shape most of v1 uses.
  *   - flat: `additional_data.{start,limit,more_items_in_collection}` with NO wrapper
- *     and NO next_start (GET /leads, per docs/api/openapi-v1.yaml).
- * Reading only the wrapped shape left every leads list reporting `has_more: false`
- * with no cursor, so a collection larger than one page was silently truncated.
+ *     and NO next_start - which docs/api/openapi-v1.yaml documents for GET /leads.
  *
- * When the shape omits `next_start` it is synthesized as `start + limit` — the same
+ * The live API does NOT emit the flat shape for /leads: a 2026-07-22 probe against a
+ * seeded account returned the wrapped shape with a correct `next_start`, byte-identical
+ * to the /persons control. So this reads BOTH shapes defensively rather than to fix an
+ * observed break - the spec is the thing that is wrong, and it is the spec a future
+ * endpoint might one day be built to match. Preferring `pagination` when present keeps
+ * live behaviour bit-for-bit unchanged.
+ *
+ * When the shape omits `next_start` it is synthesized as `start + limit` - the same
  * offset the wrapped shape reports, and exactly what `buildPaginationParamsV1` sends
  * back as `start`. It is synthesized only when there IS a next page and both operands
  * are present, so a missing field can never fabricate a cursor.

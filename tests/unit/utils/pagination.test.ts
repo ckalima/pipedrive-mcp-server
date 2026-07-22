@@ -144,11 +144,13 @@ describe('pagination', () => {
       expect(result.next_cursor).toBe('100');
     });
 
-    // GET /leads returns a FLAT additional_data (no `pagination` wrapper, no
-    // next_start) per docs/api/openapi-v1.yaml. Reading only the wrapped shape
-    // pinned has_more to false and dropped the cursor, silently truncating every
-    // leads collection at one page.
-    describe('flat additional_data shape (GET /leads)', () => {
+    // docs/api/openapi-v1.yaml documents a FLAT additional_data for GET /leads (no
+    // `pagination` wrapper, no next_start). A 2026-07-22 live probe against a seeded
+    // account showed the API does NOT do this: /leads returns the wrapped shape with a
+    // correct next_start, identical to /persons. These cases therefore pin defensive
+    // tolerance of a shape the spec describes but no endpoint is known to emit - not a
+    // fix for observed breakage. Do not cite them as evidence /leads is flat.
+    describe('flat additional_data shape (spec-documented, not observed live)', () => {
       it('reads more_items_in_collection from a flat additional_data', () => {
         const response = {
           additional_data: { start: 0, limit: 50, more_items_in_collection: true },
