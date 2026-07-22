@@ -194,6 +194,18 @@ describe('deals tools', () => {
       expect(options.method).toBe('PATCH');
     });
 
+    // create_deal accepts visible_to and every sibling update tool (person, org,
+    // product) accepts it too; update_deal was the lone omission, so a deal's
+    // visibility could be set at creation but never changed.
+    it('should forward visible_to', async () => {
+      const mockFn = mockApiSuccess(fixtures.deal);
+
+      await updateDeal({ id: 1, visible_to: 7 });
+
+      const [, options] = mockFn.mock.calls[0];
+      expect(JSON.parse(options.body).visible_to).toBe(7);
+    });
+
     it('should handle status update with won_time', async () => {
       const mockFn = mockApiSuccess({ ...fixtures.deal, status: 'won' });
 

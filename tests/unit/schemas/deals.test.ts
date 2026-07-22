@@ -249,6 +249,7 @@ describe('deals schemas', () => {
         won_time: '2024-01-15T10:00:00Z',
         lost_time: undefined,
         lost_reason: undefined,
+        visible_to: 3,
         label_ids: [5, 6],
         custom_fields: { field_xyz: 123 },
       };
@@ -257,6 +258,16 @@ describe('deals schemas', () => {
       expect(result.id).toBe(123);
       expect(result.title).toBe('Updated Deal');
       expect(result.status).toBe('won');
+      expect(result.visible_to).toBe(3);
+    });
+
+    it('should validate visible_to the same way create does', () => {
+      for (const visible_to of [1, 3, 5, 7]) {
+        expect(UpdateDealSchema.parse({ id: 1, visible_to }).visible_to).toBe(visible_to);
+      }
+      for (const visible_to of [2, 4, 6, 8]) {
+        expect(() => UpdateDealSchema.parse({ id: 1, visible_to })).toThrow();
+      }
     });
 
     it('should accept won_time when setting status to won', () => {

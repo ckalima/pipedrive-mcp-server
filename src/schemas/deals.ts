@@ -127,6 +127,7 @@ export const UpdateDealSchema = IdParamSchema.extend({
     .describe("Lost time (required when setting status to 'lost')"),
   lost_reason: BoundedNameSchema.optional()
     .describe("Lost reason (when status is 'lost')"),
+  visible_to: VisibilitySchema,
   label_ids: boundedArray(z.number()).optional()
     .describe("Label IDs to set on deal"),
   custom_fields: BoundedCustomFieldsSchema.optional()

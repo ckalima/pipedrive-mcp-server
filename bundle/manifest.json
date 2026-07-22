@@ -262,7 +262,7 @@
     },
     {
       "name": "pipedrive_convert_lead_to_deal",
-      "description": "Convert a lead into a deal (Pipedrive v2). The conversion runs asynchronously; this tool polls until it completes (typically under 5s) and returns the new deal ID. If it is still running after ~30s, it returns the conversion_id and status for manual follow-up."
+      "description": "Convert a lead into a deal (Pipedrive v2). DESTRUCTIVE: a successful conversion marks the source lead as deleted. The conversion runs asynchronously; this tool polls until it completes (typically under 5s) and returns the new deal ID. If it is still running after ~30s, it returns the conversion_id and status for manual follow-up. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true)."
     },
     {
       "name": "pipedrive_get_lead_conversion_status",

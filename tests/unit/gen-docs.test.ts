@@ -73,24 +73,27 @@ describe('gen-docs generator', () => {
       }
     });
 
-    it('counts exactly 31 destructive tools', () => {
-      expect(classifyAll().filter((c) => c.destructive).length).toBe(31);
+    it('counts exactly 32 destructive tools', () => {
+      expect(classifyAll().filter((c) => c.destructive).length).toBe(32);
     });
 
-    it('flags the genuinely destructive deal→lead conversion (deletes the source deal)', () => {
-      const tool = allTools.find((t) => t.name === 'pipedrive_convert_deal_to_lead');
-      expect(tool).toBeDefined();
-      expect(isDestructive(tool!)).toBe(true);
+    it('flags both conversions, each of which deletes its source entity', () => {
+      // The two convert endpoints carry identical spec wording ("the deal/lead is
+      // marked as deleted"), so they are gated identically. Only one of them used to
+      // be, which is the asymmetry this pair of assertions now pins down.
+      for (const name of ['pipedrive_convert_deal_to_lead', 'pipedrive_convert_lead_to_deal']) {
+        const tool = allTools.find((t) => t.name === name);
+        expect(tool, `${name} should exist`).toBeDefined();
+        expect(isDestructive(tool!), `${name} must be marked destructive`).toBe(true);
+      }
     });
 
     it('does NOT flag name-substring lookalikes that are non-destructive', () => {
-      // A naive "convert"/"archive" name match would wrongly flag these; the declared
-      // field keeps them honest because their handlers have no guard.
-      for (const name of ['pipedrive_convert_lead_to_deal', 'pipedrive_archive_project']) {
-        const tool = allTools.find((t) => t.name === name);
-        expect(tool, `${name} should exist`).toBeDefined();
-        expect(isDestructive(tool!), `${name} must not be marked destructive`).toBe(false);
-      }
+      // A naive "convert"/"archive" name match would wrongly flag this; the declared
+      // field keeps it honest because its handler has no guard.
+      const tool = allTools.find((t) => t.name === 'pipedrive_archive_project');
+      expect(tool).toBeDefined();
+      expect(isDestructive(tool!)).toBe(false);
     });
   });
 

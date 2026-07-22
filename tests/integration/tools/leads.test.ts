@@ -428,6 +428,26 @@ describe('leads tools', () => {
   describe('convertLeadToDeal', () => {
     const noSleep = async () => {};
 
+    // A successful conversion marks the source lead as deleted, so the handler is
+    // destructive-gated exactly like its twin convertDealToLead. Every behavioural
+    // test below therefore has to enable destructive ops first.
+    beforeEach(() => {
+      process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE = 'true';
+    });
+
+    it('should block when PIPEDRIVE_ENABLE_DESTRUCTIVE is not set', async () => {
+      delete process.env.PIPEDRIVE_ENABLE_DESTRUCTIVE;
+      const mockFn = mockApiSuccess({ conversion_id: 'conv-123' });
+      const { convertLeadToDeal } = await getLeadsTools();
+
+      const result = await convertLeadToDeal({ id: VALID_UUID }, noSleep);
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('DESTRUCTIVE_DISABLED');
+      // The guard runs before any request, so the lead is never touched.
+      expect(mockFn).not.toHaveBeenCalled();
+    });
+
     it('should return the created deal id on completed (first status poll)', async () => {
       // POST -> conversion_id, then first status GET -> completed with deal id
       mockFetch([

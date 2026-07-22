@@ -415,6 +415,51 @@ describe('fields tools', () => {
       expect(fetchMock.mock.calls.length).toBe(2);
     });
 
+    // The cursor-follow loop is driven entirely by upstream-supplied values, so both
+    // ways an upstream can withhold termination are bounded. Without the bounds these
+    // two tests hang the process rather than fail.
+    describe('cursor-follow bounds', () => {
+      it('gives up after the page cap when the upstream never stops paging', async () => {
+        let page = 0;
+        vi.stubGlobal('fetch', vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers({ 'Content-Type': 'application/json' }),
+          json: async () => ({
+            success: true,
+            data: [{ key: `filler_${page}`, name: 'Filler', field_type: 'varchar' }],
+            // A fresh cursor every page, so the repeated-cursor check never fires.
+            additional_data: { next_cursor: `cursor_${++page}` },
+          }),
+          clone() { return this; },
+        })));
+        const { getField, MAX_FIELD_LOOKUP_PAGES } = await getFieldsTools();
+
+        const result = await getField({ entity_type: 'deal', key: 'never_present' });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('API_ERROR');
+        expect(result.content[0].text).toContain(String(MAX_FIELD_LOOKUP_PAGES));
+        expect(vi.mocked(global.fetch).mock.calls.length).toBe(MAX_FIELD_LOOKUP_PAGES);
+      });
+
+      it('gives up when the upstream keeps handing back the same cursor', async () => {
+        // The mock repeats its last entry, so every page returns `stuck` forever.
+        const mockFn = mockFetch([
+          { data: [{ key: 'other', name: 'Other', field_type: 'varchar' }], additional_data: { next_cursor: 'stuck' } },
+        ]);
+        const { getField } = await getFieldsTools();
+
+        const result = await getField({ entity_type: 'deal', key: 'never_present' });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('repeated pagination cursor');
+        // Bails on the second page, long before the page cap.
+        expect(mockFn.mock.calls.length).toBe(2);
+      });
+    });
+
     it('should paginate product fields via v2 cursor across pages', async () => {
       const page1 = Array.from({ length: 50 }, (_, i) => ({
         ...createFieldFixture(`p_${i}`, `P ${i}`, 'varchar'), key: `p_${i}`,
