@@ -14,8 +14,9 @@ import { setupValidEnv } from '../helpers/mockEnv.js';
 // can close over it. Fail-closed dispatch (U9) must reject BEFORE this runs.
 // `hugeText` exceeds the U6 universal backstop ceiling (the test asserts so
 // against MAX_TOOL_RESPONSE_CHARS) to drive the oversize-response path.
-const { schemalessHandler, hugeText } = vi.hoisted(() => ({
+const { schemalessHandler, optionalArgsHandler, hugeText } = vi.hoisted(() => ({
   schemalessHandler: vi.fn(async () => ({ content: [{ type: 'text', text: 'should never run' }] })),
+  optionalArgsHandler: vi.fn(async () => ({ content: [{ type: 'text', text: 'ran with defaults' }] })),
   hugeText: 'h'.repeat(1_000_100),
 }));
 
@@ -34,6 +35,9 @@ vi.mock('../../src/tools/index.js', async (importOriginal) => {
       }
       if (name === 'pipedrive_schemaless_tool') {
         return schemalessHandler;
+      }
+      if (name === 'pipedrive_optional_args_tool') {
+        return optionalArgsHandler;
       }
       if (name === 'pipedrive_huge_tool') {
         // Oversize NON-error result -> the U6 backstop must replace it.
@@ -60,6 +64,9 @@ vi.mock('../../src/tools/index.js', async (importOriginal) => {
       }
       if (name === 'pipedrive_schemaless_tool') {
         return undefined;
+      }
+      if (name === 'pipedrive_optional_args_tool') {
+        return z.object({ q: z.string().optional() });
       }
       return actual.getToolSchema(name);
     },
@@ -107,6 +114,24 @@ describe('dispatcher (handleCallTool)', () => {
       );
       // The fail-closed guard must short-circuit before dispatch.
       expect(schemalessHandler).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('omitted arguments -> treated as {} (review P1)', () => {
+    beforeEach(() => {
+      optionalArgsHandler.mockClear();
+    });
+
+    it('dispatches a tool with all-optional params when `arguments` is absent', async () => {
+      // MCP hosts may omit `arguments` entirely; pre-fix this hit
+      // schema.safeParse(undefined) and returned VALIDATION_ERROR.
+      const result = await handleCallTool({
+        params: { name: 'pipedrive_optional_args_tool' },
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toBe('ran with defaults');
+      expect(optionalArgsHandler).toHaveBeenCalledWith({});
     });
   });
 

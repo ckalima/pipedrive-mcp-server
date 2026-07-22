@@ -441,6 +441,17 @@ export class PipedriveClient {
     const logEndpoint = sanitizeEndpointForLog(endpoint);
 
     for (let attemptIndex = 0; ; attemptIndex++) {
+      // ── Elapsed-budget bail. MUST precede the breaker gate: the gate can hand
+      //    this call the half-open probe slot, and every post-gate exit has to
+      //    settle that probe through recordOutcome — bailing after claiming the
+      //    slot would strand the breaker HalfOpen for the process lifetime (every
+      //    later call fast-fails CIRCUIT_OPEN). Pre-gate, this return is
+      //    slot-neutral. ──
+      const remainingTotalMs = baseTimeoutMs + RETRY_BUDGET_MS - (monotonicNowMs() - overallStartMs);
+      if (attemptIndex > 0 && remainingTotalMs <= 0 && lastFailure) {
+        return lastFailure;
+      }
+
       // ── Breaker gate (consulted before every attempt) ──
       const stateBeforeGate = getBreakerState();
       // Monotonic clock (not Date.now): a wall-clock step must not mis-time the
@@ -452,101 +463,107 @@ export class PipedriveClient {
         return { success: false, error: circuitOpenError() };
       }
       const isProbe = getBreakerState() === "HalfOpen";
-
-      // ── Per-attempt timeout (KTD3): the initial attempt gets the full timeout;
-      //    retries shrink as the total elapsed time nears baseTimeoutMs+budget. ──
-      const remainingTotalMs = baseTimeoutMs + RETRY_BUDGET_MS - (monotonicNowMs() - overallStartMs);
-      if (attemptIndex > 0 && remainingTotalMs <= 0 && lastFailure) {
-        return lastFailure;
-      }
-      const attemptTimeoutMs = attemptIndex === 0
-        ? baseTimeoutMs
-        : Math.min(baseTimeoutMs, Math.max(1, remainingTotalMs));
-
-      // ── Attempt ──
-      this.logResilience(
-        `${method} ${logEndpoint}${multipart ? " (multipart)" : ""} attempt ${attemptIndex + 1}/${maxAttempts}${isProbe ? " (breaker probe)" : ""}`,
-      );
-      const attemptStartMs = monotonicNowMs();
-      let parsed: ApiResponse<T> | undefined;
-      let isNetworkError = false;
-      let responseHeaders: Headers | undefined;
+      // Once this iteration owns the probe slot, recordOutcome must run before any
+      // exit; the finally settles an unrecorded probe as a failure (re-Open, fresh
+      // cooldown) so no future edit can reintroduce a HalfOpen wedge.
+      let probeSettled = !isProbe;
       try {
-        const response = await fetch(url.toString(), {
-          method,
-          headers,
-          body,
-          signal: AbortSignal.timeout(attemptTimeoutMs),
-        });
-        responseHeaders = response.headers;
-        parsed = await this.parseResponse<T>(response);
-      } catch (error) {
-        isNetworkError = true;
-        lastFailure = this.networkError<T>(error);
-      }
-      if (attemptIndex > 0) {
-        budgetUsedMs += monotonicNowMs() - attemptStartMs;
-      }
+        // ── Per-attempt timeout (KTD3): the initial attempt gets the full timeout;
+        //    retries shrink as the total elapsed time nears baseTimeoutMs+budget. ──
+        const attemptTimeoutMs = attemptIndex === 0
+          ? baseTimeoutMs
+          : Math.min(baseTimeoutMs, Math.max(1, remainingTotalMs));
 
-      // ── Classify + record breaker outcome ──
-      const httpStatus = parsed?.httpStatus;
-      const isSuccess = parsed?.success === true;
-      const { retryable, isTripSignal } = classifyOutcome({ method, httpStatus, isNetworkError });
-      const stateBeforeRecord = getBreakerState();
-      // Pass isProbe so a straggler that only settled during this request's probe
-      // window cannot hijack the half-open verdict (owner-scoped breaker update).
-      // Monotonic clock (not Date.now) so the window arithmetic is clock-step-safe (#133).
-      recordOutcome({ isSuccess, isTripSignal }, monotonicNowMs(), isProbe);
-      this.logBreakerTransition(stateBeforeRecord, getBreakerState(), method, logEndpoint);
+        // ── Attempt ──
+        this.logResilience(
+          `${method} ${logEndpoint}${multipart ? " (multipart)" : ""} attempt ${attemptIndex + 1}/${maxAttempts}${isProbe ? " (breaker probe)" : ""}`,
+        );
+        const attemptStartMs = monotonicNowMs();
+        let parsed: ApiResponse<T> | undefined;
+        let isNetworkError = false;
+        let responseHeaders: Headers | undefined;
+        try {
+          const response = await fetch(url.toString(), {
+            method,
+            headers,
+            body,
+            signal: AbortSignal.timeout(attemptTimeoutMs),
+          });
+          responseHeaders = response.headers;
+          parsed = await this.parseResponse<T>(response);
+        } catch (error) {
+          isNetworkError = true;
+          lastFailure = this.networkError<T>(error);
+        }
+        if (attemptIndex > 0) {
+          budgetUsedMs += monotonicNowMs() - attemptStartMs;
+        }
 
-      if (isSuccess) {
-        return parsed!;
-      }
-      if (!isNetworkError) {
-        // Status-bearing failure (e.g. 410 / 4xx / 5xx): keep it to return on giving up.
-        lastFailure = parsed!;
-      }
+        // ── Classify + record breaker outcome ──
+        const httpStatus = parsed?.httpStatus;
+        const isSuccess = parsed?.success === true;
+        const { retryable, isTripSignal } = classifyOutcome({ method, httpStatus, isNetworkError });
+        const stateBeforeRecord = getBreakerState();
+        // Pass isProbe so a straggler that only settled during this request's probe
+        // window cannot hijack the half-open verdict (owner-scoped breaker update).
+        // Monotonic clock (not Date.now) so the window arithmetic is clock-step-safe (#133).
+        recordOutcome({ isSuccess, isTripSignal }, monotonicNowMs(), isProbe);
+        probeSettled = true;
+        this.logBreakerTransition(stateBeforeRecord, getBreakerState(), method, logEndpoint);
 
-      // A half-open probe is a single attempt with internal retry disabled (KTD7):
-      // its outcome alone settled the breaker above; never loop.
-      if (isProbe) {
-        return lastFailure!;
-      }
+        if (isSuccess) {
+          return parsed!;
+        }
+        if (!isNetworkError) {
+          // Status-bearing failure (e.g. 410 / 4xx / 5xx): keep it to return on giving up.
+          lastFailure = parsed!;
+        }
 
-      // ── Retry decision ──
-      if (!retryable) {
-        return lastFailure!;
-      }
-      if (attemptIndex + 1 >= maxAttempts) {
-        return lastFailure!;
-      }
-
-      // ── Compute the wait (KTD6 cap-then-bail order, else backoff + jitter) ──
-      const budgetRemainingMs = RETRY_BUDGET_MS - budgetUsedMs;
-      // Wall-clock (Date.now), intentionally NOT the monotonic clock: this compares
-      // against a server-supplied Retry-After HTTP-date, which is wall-clock (#133).
-      const hintMs = parseRetryAfterMs(responseHeaders ?? EMPTY_HEADERS, Date.now());
-      let waitMs: number;
-      if (hintMs !== null) {
-        const cappedHint = Math.min(hintMs, RETRY_AFTER_CAP_MS);
-        if (cappedHint > budgetRemainingMs) {
-          // Surfacing now beats sleeping a truncated wait into a likely second 429.
+        // A half-open probe is a single attempt with internal retry disabled (KTD7):
+        // its outcome alone settled the breaker above; never loop.
+        if (isProbe) {
           return lastFailure!;
         }
-        waitMs = cappedHint;
-      } else {
-        const backoff = computeBackoffMs(attemptIndex);
-        if (backoff > budgetRemainingMs) {
+
+        // ── Retry decision ──
+        if (!retryable) {
           return lastFailure!;
         }
-        waitMs = backoff;
-      }
+        if (attemptIndex + 1 >= maxAttempts) {
+          return lastFailure!;
+        }
 
-      this.logResilience(
-        `${method} ${logEndpoint} retrying in ${waitMs}ms after attempt ${attemptIndex + 1} (${httpStatus ? `status ${httpStatus}` : "network/timeout"})`,
-      );
-      budgetUsedMs += waitMs;
-      await resilientSleep(waitMs);
+        // ── Compute the wait (KTD6 cap-then-bail order, else backoff + jitter) ──
+        const budgetRemainingMs = RETRY_BUDGET_MS - budgetUsedMs;
+        // Wall-clock (Date.now), intentionally NOT the monotonic clock: this compares
+        // against a server-supplied Retry-After HTTP-date, which is wall-clock (#133).
+        const hintMs = parseRetryAfterMs(responseHeaders ?? EMPTY_HEADERS, Date.now());
+        let waitMs: number;
+        if (hintMs !== null) {
+          const cappedHint = Math.min(hintMs, RETRY_AFTER_CAP_MS);
+          if (cappedHint > budgetRemainingMs) {
+            // Surfacing now beats sleeping a truncated wait into a likely second 429.
+            return lastFailure!;
+          }
+          waitMs = cappedHint;
+        } else {
+          const backoff = computeBackoffMs(attemptIndex);
+          if (backoff > budgetRemainingMs) {
+            return lastFailure!;
+          }
+          waitMs = backoff;
+        }
+
+        this.logResilience(
+          `${method} ${logEndpoint} retrying in ${waitMs}ms after attempt ${attemptIndex + 1} (${httpStatus ? `status ${httpStatus}` : "network/timeout"})`,
+        );
+        budgetUsedMs += waitMs;
+        await resilientSleep(waitMs);
+      } finally {
+        if (!probeSettled) {
+          recordOutcome({ isSuccess: false, isTripSignal: false }, monotonicNowMs(), true);
+        }
+      }
     }
   }
 

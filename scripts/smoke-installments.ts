@@ -144,8 +144,9 @@ Flags:
 
 Env:
   PIPEDRIVE_API_KEY              Growth+ sandbox token (full) or non-Growth token (not-entitled).
-                                 NOTE: src loads dotenv, so a repo .env is the FALLBACK. An explicit
-                                 shell var (PIPEDRIVE_API_KEY=… npm run …) overrides .env and is safest.
+                                 NOTE: the npm script loads a repo .env via --env-file-if-exists as
+                                 the FALLBACK (src never loads .env itself). An explicit shell var
+                                 (PIPEDRIVE_API_KEY=… npm run …) overrides .env and is safest.
   PIPEDRIVE_ENABLE_DESTRUCTIVE  must be "true" for the full round-trip (delete + teardown).
   SMOKE_CONFIRM_SANDBOX         "true" is equivalent to passing --confirm-sandbox.
 `;

@@ -914,8 +914,9 @@ Flags:
   --help
 
 Env:
-  PIPEDRIVE_API_KEY              Pipedrive token. NOTE: src loads dotenv, so a repo
-                                 .env is the FALLBACK; an explicit shell var
+  PIPEDRIVE_API_KEY              Pipedrive token. NOTE: the npm script loads a repo
+                                 .env via --env-file-if-exists as the FALLBACK (src
+                                 never loads .env itself); an explicit shell var
                                  (PIPEDRIVE_API_KEY=… npm run …) overrides it and is safest.
   PIPEDRIVE_ENABLE_DESTRUCTIVE   must be "true" for Section C (delete + teardown).
   SMOKE_CONFIRM_SANDBOX          "true" is equivalent to passing --confirm-sandbox.

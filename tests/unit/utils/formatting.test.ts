@@ -8,6 +8,7 @@ import {
   formatToolResponse,
   measureResultTextLength,
   MAX_RESPONSE_DATA_CHARS,
+  MAX_TOOL_RESPONSE_CHARS,
 } from '../../../src/utils/formatting.js';
 
 describe('formatting', () => {
@@ -106,6 +107,30 @@ describe('formatting', () => {
       expect(typeof parsed.data).toBe('string');
       expect(parsed.data).toContain('[truncated');
       expect(parsed.data.length).toBeLessThanOrEqual(MAX_RESPONSE_DATA_CHARS + 200);
+    });
+
+    it('emits compact JSON so the wire size matches what the caps measured (review P0-3)', () => {
+      const result = formatToolResponse({ summary: 's', data: { a: [1, 2], b: { c: 'd' } } });
+      const text = result.content[0].text;
+      // Canonical compact form: re-serializing the parsed payload is byte-identical.
+      expect(text).toBe(JSON.stringify(JSON.parse(text)));
+      expect(text).not.toContain('\n');
+    });
+
+    it('a builder-capped structure-heavy payload stays under the dispatcher backstop (review P0-3)', () => {
+      // Many tiny objects: the shape whose pretty-printed form inflated well past
+      // the compact size the builder cap measured, so a data payload under
+      // MAX_RESPONSE_DATA_CHARS could breach MAX_TOOL_RESPONSE_CHARS and the
+      // dispatcher would withhold the response entirely.
+      const item = { id: 1, k: 'v' };
+      const itemLen = JSON.stringify(item).length + 1;
+      const count = Math.floor((MAX_RESPONSE_DATA_CHARS - 1_000) / itemLen);
+      const items = Array.from({ length: count }, () => item);
+      // Sanity: the raw data sits just under the builder cap (never truncated).
+      expect(JSON.stringify(items).length).toBeLessThanOrEqual(MAX_RESPONSE_DATA_CHARS);
+
+      const result = formatToolResponse({ summary: 's', data: items });
+      expect(measureResultTextLength(result)).toBeLessThanOrEqual(MAX_TOOL_RESPONSE_CHARS);
     });
 
     it('returns a marker for unserializable data instead of throwing', () => {
