@@ -180,6 +180,33 @@ describe('version-routing', () => {
       expect((await leadsV1.get('/leads', paging)).error?.code).toBe('CAPABILITY_RETIRED');
     });
 
+    it('collection-root 404s on WRITES never latch — their identifiers ride the body', async () => {
+      // createNote POSTs to the literal collection root with a caller-supplied
+      // deal_id/person_id in the BODY. If Pipedrive 404s a since-deleted parent,
+      // that is the same false signal as a stale filter_id — but invisible to the
+      // query-param allowlist, so writes are excluded from the latch outright.
+      mockApiError(404, 'Not found');
+
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD * 2; i++) {
+        expect((await notesV1.post('/notes', { content: 'x', deal_id: 999 })).error?.code)
+          .toBe('NOT_FOUND');
+      }
+
+      mockApiSuccess([]);
+      expect((await notesV1.get('/notes', undefined)).success).toBe(true);
+    });
+
+    it('a write 404 also breaks a read 404 run rather than counting toward it', async () => {
+      mockApiError(404, 'Not found');
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD - 1; i++) {
+        await notesV1.get('/notes', undefined);
+      }
+
+      await notesV1.post('/notes', { content: 'x', deal_id: 999 }); // resets the run
+
+      expect((await notesV1.get('/notes', undefined)).error?.code).toBe('NOT_FOUND');
+    });
+
     it('an inferred (404-derived) retirement is worded as a likelihood, not a fact', async () => {
       mockApiError(404, 'Not found');
       for (let i = 0; i < RETIREMENT_404_THRESHOLD - 1; i++) {

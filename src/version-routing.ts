@@ -23,10 +23,14 @@
  *
  * The 404 secondary is deliberately hard to trip, because unlike 410 it is a guess
  * and the latch it sets is permanent for the process:
- *   - only an UNFILTERED request counts (see isLatchable404). A query param that
- *     scopes the collection to another record — `filter_id`, `owner_id`,
- *     `person_id`, … — can 404 on its own when that record does not exist, which
- *     says nothing about the surface.
+ *   - only an unfiltered GET counts (see isLatchable404). Anything that scopes the
+ *     request to ANOTHER record can 404 on its own when that record does not
+ *     exist, which says nothing about the surface: a `filter_id`/`owner_id`/…
+ *     query param on a read, or a body-carried foreign key on a write (POST
+ *     /notes with a since-deleted `deal_id`, POST /leads with a stale
+ *     `person_id`). Query params are inspectable and allowlisted; a request body
+ *     is not, so writes are simply never latch-eligible. Nothing is lost —
+ *     a genuinely retired surface 404s its reads too.
  *   - RETIREMENT_404_THRESHOLD consecutive such 404s are required; any other
  *     outcome for the capability resets the run. A single transient 404 no longer
  *     retires a live capability for the rest of the session.
@@ -145,11 +149,14 @@ const NON_SCOPING_PARAMS: ReadonlySet<string> = new Set([
 export const RETIREMENT_404_THRESHOLD = 3;
 
 /**
- * Whether a 404 on this request may count toward the retirement latch: true only
- * when every query param is non-scoping, so the 404 can be read as "the collection
- * root itself is gone" rather than "the record you filtered on does not exist".
+ * Whether a 404 on a GET may count toward the retirement latch: true only when
+ * every query param is non-scoping, so the 404 can be read as "the collection root
+ * itself is gone" rather than "the record you filtered on does not exist".
  * A caller-supplied `filter_id` pointing at a deleted filter is the motivating case:
  * it 404s the collection root while the surface is perfectly alive.
+ *
+ * Reads only. Write verbs are never latch-eligible (see createSeam) because their
+ * scoping identifiers ride the request body, where this predicate cannot see them.
  */
 export function isLatchable404(params?: URLSearchParams): boolean {
   if (!params) return true;
@@ -221,7 +228,8 @@ async function send<T>(
   capability: CapabilityKey,
   endpoint: string,
   call: (client: ReturnType<typeof getClient>) => Promise<ApiResponse<T>>,
-  params?: URLSearchParams,
+  /** Whether a collection-root 404 from THIS request may count toward the latch. */
+  latchable404 = false,
 ): Promise<ApiResponse<T>> {
   const alreadyRetired = retired.get(capability);
   if (alreadyRetired) {
@@ -238,8 +246,9 @@ async function send<T>(
       retired.set(capability, "gone");
       return retirementResponse<T>(capability, "gone");
     }
-    // 404 on a collection root: only a guess, so it must be unfiltered AND repeated.
-    if (isLatchable404(params)) {
+    // 404 on a collection root: only a guess, so it must be an unfiltered read AND
+    // repeated.
+    if (latchable404) {
       const run = (consecutive404s.get(capability) ?? 0) + 1;
       consecutive404s.set(capability, run);
       if (run >= RETIREMENT_404_THRESHOLD) {
@@ -274,9 +283,14 @@ export interface CapabilitySeam {
 export function createSeam(capability: CapabilityKey): CapabilitySeam {
   return {
     get<T>(endpoint: string, params: URLSearchParams | undefined) {
-      // GET is the only verb carrying query params, so it is the only one whose
-      // 404 can be caused by a caller-supplied filter rather than the surface.
-      return send<T>(capability, endpoint, (client) => client.get<T>(endpoint, params, "v1"), params);
+      // Reads are the ONLY latch-eligible verb, and only when unfiltered: every
+      // scoping identifier a read can carry is in `params`, where it is visible.
+      return send<T>(
+        capability,
+        endpoint,
+        (client) => client.get<T>(endpoint, params, "v1"),
+        isLatchable404(params),
+      );
     },
     post<T>(endpoint: string, body: Record<string, unknown> | unknown[]) {
       return send<T>(capability, endpoint, (client) => client.post<T>(endpoint, body, "v1"));
