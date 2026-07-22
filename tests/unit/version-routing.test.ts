@@ -196,22 +196,29 @@ describe('version-routing', () => {
       expect((await notesV1.get('/notes', undefined)).success).toBe(true);
     });
 
-    // The "consecutive" run is only meaningful for sequential traffic. Concurrent calls
+    // The "consecutive" run is only meaningful for SEQUENTIAL traffic: concurrent calls
     // all pass the `retired` gate before any of them settles, so N simultaneous transient
-    // 404s look exactly like N consecutive ones. That much is inherent. What must not
-    // happen is a CONTEMPORANEOUS success failing to undo the inferred retirement: a
-    // surface that is genuinely gone cannot also serve a 200 in the same batch, so that
-    // 200 is proof the 404s were transient. Retirement is permanent and only a restart
-    // re-probes, so getting this wrong strands a live capability for the process lifetime.
-    it('an in-flight success clears an inferred retirement latched by concurrent 404s', async () => {
-      // Hand-rolled deferred fetch so settlement ORDER is exact: the three 404s land
-      // first and trip the latch, then the success lands after it.
+    // 404s would otherwise look exactly like N consecutive ones. A batch that contains
+    // even one 200 is proof the surface was alive throughout, so nothing in that batch may
+    // latch — and because retirement is permanent and only a restart re-probes, getting it
+    // wrong strands a live capability for the whole process lifetime.
+    //
+    // Both settlement orders are pinned because the two are guarded differently: the
+    // in-flight counter covers "success settles last", the generation counter covers
+    // "success settles first". A fix for either one alone leaves the other broken.
+    //
+    // A hand-rolled deferred fetch is used rather than timers so the ORDER is exact.
+    function deferredFetch(): Array<(r: Response) => void> {
       const gates: Array<(r: Response) => void> = [];
       vi.stubGlobal(
         'fetch',
         vi.fn(() => new Promise<Response>((resolve) => gates.push(resolve))),
       );
+      return gates;
+    }
 
+    it('does not latch when a sibling request is still in flight (success settles last)', async () => {
+      const gates = deferredFetch();
       const inFlight = [
         usersV1.get('/users', undefined),
         usersV1.get('/users', undefined),
@@ -223,28 +230,70 @@ describe('version-routing', () => {
       for (let i = 0; i < RETIREMENT_404_THRESHOLD; i++) {
         gates[i](createMockResponse({ status: 404, ok: false, error: 'Not found' }));
       }
-      const latched = await Promise.all(inFlight.slice(0, RETIREMENT_404_THRESHOLD));
-      expect(latched.at(-1)?.error?.code).toBe('CAPABILITY_RETIRED');
+      const settled = await Promise.all(inFlight.slice(0, RETIREMENT_404_THRESHOLD));
 
-      // The straggler proves the surface was alive the whole time.
+      // The threshold-hitting caller gets its real 404, NOT a retirement envelope: with a
+      // sibling still outstanding the evidence is not yet complete, and telling the caller
+      // "Pipedrive removed this" on evidence that is about to be contradicted is wrong even
+      // if the latch were retracted a moment later.
+      expect(settled.at(-1)?.error?.code).toBe('NOT_FOUND');
+
       gates[3](createMockResponse({ status: 200, data: [{ id: 1 }] }));
       expect((await inFlight[3]).success).toBe(true);
 
       mockApiSuccess([{ id: 1 }]);
-      const afterwards = await usersV1.get('/users', undefined);
-      expect(afterwards.error?.code).not.toBe('CAPABILITY_RETIRED');
-      expect(afterwards.success).toBe(true);
+      expect((await usersV1.get('/users', undefined)).success).toBe(true);
+    });
+
+    it('does not latch on 404s issued before a success that settles first', async () => {
+      const gates = deferredFetch();
+      const inFlight = [
+        usersV1.get('/users', undefined),
+        usersV1.get('/users', undefined),
+        usersV1.get('/users', undefined),
+        usersV1.get('/users', undefined),
+      ];
+      await vi.waitFor(() => expect(gates).toHaveLength(4));
+
+      // The success lands FIRST, so by the time the 404s settle there is no in-flight
+      // success left to speak for them. They are stale evidence: every one of them was
+      // issued before the surface demonstrably answered.
+      gates[3](createMockResponse({ status: 200, data: [{ id: 1 }] }));
+      expect((await inFlight[3]).success).toBe(true);
+
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD; i++) {
+        gates[i](createMockResponse({ status: 404, ok: false, error: 'Not found' }));
+      }
+      const settled = await Promise.all(inFlight.slice(0, RETIREMENT_404_THRESHOLD));
+      expect(settled.at(-1)?.error?.code).toBe('NOT_FOUND');
+
+      mockApiSuccess([{ id: 1 }]);
+      expect((await usersV1.get('/users', undefined)).success).toBe(true);
+    });
+
+    it('still latches on concurrent 404s when no request in the batch succeeds', async () => {
+      // The guards must not disarm the latch outright: a genuinely retired surface 404s
+      // every request, so the last one to settle sees an empty in-flight set and an
+      // unchanged generation, and latches exactly as the sequential path does.
+      const gates = deferredFetch();
+      const inFlight = Array.from({ length: RETIREMENT_404_THRESHOLD }, () =>
+        usersV1.get('/users', undefined),
+      );
+      await vi.waitFor(() => expect(gates).toHaveLength(RETIREMENT_404_THRESHOLD));
+
+      gates.forEach((gate) => gate(createMockResponse({ status: 404, ok: false, error: 'Not found' })));
+      const settled = await Promise.all(inFlight);
+      expect(settled.at(-1)?.error?.code).toBe('CAPABILITY_RETIRED');
+
+      mockApiSuccess([{ id: 1 }]);
+      expect((await usersV1.get('/users', undefined)).error?.code).toBe('CAPABILITY_RETIRED');
     });
 
     it('a 410-derived retirement is permanent and NOT cleared by an in-flight success', async () => {
       // 410 is the server stating the surface is gone. Unlike the inferred latch that
-      // is fact, not evidence, so a straggler must not reopen it.
-      const gates: Array<(r: Response) => void> = [];
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(() => new Promise<Response>((resolve) => gates.push(resolve))),
-      );
-
+      // is fact, not evidence, so neither guard applies: it latches on first sighting
+      // with siblings still outstanding, and a later success does not reopen it.
+      const gates = deferredFetch();
       const inFlight = [usersV1.get('/users', undefined), usersV1.get('/users', undefined)];
       await vi.waitFor(() => expect(gates).toHaveLength(2));
 

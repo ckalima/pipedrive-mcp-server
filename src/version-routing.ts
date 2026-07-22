@@ -181,11 +181,28 @@ const warned = new Set<CapabilityKey>();
  */
 const consecutive404s = new Map<CapabilityKey, number>();
 
+/**
+ * Bumped every time a capability answers successfully. A request captures the value at
+ * issue; if it has moved by the time the request settles, the surface demonstrably
+ * answered while this request was outstanding, so a 404 it returns is stale evidence and
+ * cannot count toward the latch.
+ */
+const generation = new Map<CapabilityKey, number>();
+
+/**
+ * Requests currently outstanding per capability, so the latch can require that the
+ * evidence is complete: while a sibling is still in flight it may yet return a 200 that
+ * contradicts the whole run.
+ */
+const inFlight = new Map<CapabilityKey, number>();
+
 /** Clears the per-session retired, warned, and 404-run state. For test isolation. */
 export function resetVersionRoutingState(): void {
   retired.clear();
   warned.clear();
   consecutive404s.clear();
+  generation.clear();
+  inFlight.clear();
 }
 
 /**
@@ -238,26 +255,55 @@ async function send<T>(
 
   warnOnce(capability);
 
-  const response = await call(getClient());
+  // Both readings are taken BEFORE the await so they describe the moment this request was
+  // issued, then compared against the state at settlement.
+  const generationAtIssue = generation.get(capability) ?? 0;
+  inFlight.set(capability, (inFlight.get(capability) ?? 0) + 1);
+
+  let response: ApiResponse<T>;
+  try {
+    response = await call(getClient());
+  } finally {
+    inFlight.set(capability, (inFlight.get(capability) ?? 1) - 1);
+  }
 
   if (!response.success && isRetirementSignal(capability, endpoint, response.httpStatus)) {
-    // 410: the server stated the surface is gone. Latch on the first sighting.
+    // 410: the server stated the surface is gone. That is fact, not inference, so it
+    // latches on the first sighting regardless of what else is in flight.
     if (response.httpStatus === 410) {
       retired.set(capability, "gone");
       return retirementResponse<T>(capability, "gone");
     }
     // 404 on a collection root: only a guess, so it must be an unfiltered read AND
-    // repeated.
+    // repeated AND uncontradicted. The run counter alone assumes sequential traffic —
+    // concurrent calls all clear the `retired` gate before any of them settles, so N
+    // simultaneous transient 404s would otherwise trip the latch just like N consecutive
+    // ones. Two guards make a batch containing any success unable to latch, in either
+    // settlement order. They are not interchangeable: each covers the order the other
+    // misses, and retirement is permanent with restart-only recovery, so a wrong latch
+    // strands a live capability for the whole process lifetime.
     if (latchable404) {
+      // Guard 1 — stale evidence. A success settled while this request was outstanding,
+      // so the surface answered after this 404 was issued. Do not count it, and do not
+      // reset the run either: the success already did that.
+      if (generationAtIssue !== (generation.get(capability) ?? 0)) {
+        return response;
+      }
+
       const run = (consecutive404s.get(capability) ?? 0) + 1;
       consecutive404s.set(capability, run);
-      if (run >= RETIREMENT_404_THRESHOLD) {
+
+      // Guard 2 — incomplete evidence. A sibling is still outstanding and may yet return
+      // the 200 that refutes the whole run. Waiting costs nothing: if it too 404s, the
+      // run is already recorded and that later request latches instead.
+      if (run >= RETIREMENT_404_THRESHOLD && (inFlight.get(capability) ?? 0) === 0) {
         consecutive404s.delete(capability);
         retired.set(capability, "inferred");
         return retirementResponse<T>(capability, "inferred");
       }
-      // Below the threshold the caller gets the real 404 — a plain NOT_FOUND, which
-      // is also the honest answer if this turns out to be a transient upstream fault.
+      // Short of latching the caller gets the real 404 — a plain NOT_FOUND, which is also
+      // the honest answer if this turns out to be a transient upstream fault. Notably it
+      // is never a retirement envelope the next request would have to take back.
       return response;
     }
   }
@@ -265,19 +311,15 @@ async function send<T>(
   // Anything else breaks the run: the evidence has to be uninterrupted.
   consecutive404s.delete(capability);
 
-  // A success retracts an INFERRED retirement. The run counter assumes sequential
-  // traffic; concurrent calls all clear the `retired` gate before any of them settles,
-  // so N simultaneous transient 404s trip the latch just like N consecutive ones. A 200
-  // from that same in-flight batch is proof the surface was alive throughout, and it
-  // must win: retirement is permanent and only a restart re-probes, so leaving it set
-  // strands a live capability for the process lifetime.
-  //
-  // No generation token is needed to scope this. Once `retired` is set every later call
-  // short-circuits before reaching upstream, so the only successes that can arrive are
-  // the contemporaneous ones — a stale straggler cannot exist. A 410-derived "gone" is
-  // the server stating the fact, not an inference, so it is deliberately not retracted.
-  if (response.success && retired.get(capability) === "inferred") {
-    retired.delete(capability);
+  // A success invalidates every 404 still outstanding (guard 1) and, together with guard
+  // 2, makes an inferred latch unreachable while any success is in flight. So there is no
+  // retraction path here: once `retired` is set, it was set on evidence no in-flight
+  // request contradicted, and every later call short-circuits before reaching upstream.
+  // Read-then-bump off the CURRENT value, never off `generationAtIssue`: an older success
+  // settling after a newer one would otherwise move the counter backwards and re-admit a
+  // 404 that had already been invalidated.
+  if (response.success) {
+    generation.set(capability, (generation.get(capability) ?? 0) + 1);
   }
 
   return response;
