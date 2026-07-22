@@ -13,7 +13,12 @@
  *   PIPEDRIVE_API_KEY - Your Pipedrive API key (required)
  */
 
-import "dotenv/config";
+// Deliberately NO dotenv/.env preload: MCP hosts set this process's CWD to the
+// open (possibly untrusted) project, so auto-loading `./.env` would let a planted
+// file inject policy env vars (PIPEDRIVE_MODE, PIPEDRIVE_ENABLE_DESTRUCTIVE) or a
+// substitute API key beneath the operator's host config. Configuration comes only
+// from the environment the host passes in; local dev loads this repo's .env via
+// the npm scripts' `--env-file-if-exists=.env` flag (see package.json).
 
 import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -101,7 +106,9 @@ export async function handleCallTool(request: { params: { name: string; argument
 
   try {
     // Validate arguments with the tool's Zod schema (guaranteed present above).
-    const parseResult = schema.safeParse(args);
+    // Hosts may omit `arguments` entirely when a tool's params are all optional;
+    // absent means "no arguments", so normalize to {} rather than rejecting.
+    const parseResult = schema.safeParse(args ?? {});
     if (!parseResult.success) {
       const errors = parseResult.error.issues
         .map(e => `${e.path.join(".")}: ${e.message}`)

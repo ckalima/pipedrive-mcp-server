@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Circuit breaker can no longer wedge HalfOpen for the process lifetime.** The retry loop's
+  elapsed-budget bail now runs before the breaker gate, so a budget-exhausted retry can never
+  claim the half-open probe slot on its way out, and a `finally` backstop settles an
+  unrecorded probe as a failure. Previously, a request whose retries outlived the breaker
+  cooldown (breaker opened by concurrent traffic mid-request plus a long stall) could claim
+  the probe slot and return without recording an outcome, leaving every later request
+  fast-failing `CIRCUIT_OPEN` until restart.
+- **The server no longer auto-loads `.env` from its working directory.** MCP hosts set the
+  server's CWD to the open (possibly untrusted) project, so a planted `.env` could inject
+  policy env vars (`PIPEDRIVE_MODE`, `PIPEDRIVE_ENABLE_DESTRUCTIVE`) or a substitute API key
+  beneath the operator's host config. Configuration now comes only from the environment the
+  host passes in; local development loads the repo `.env` via the npm scripts'
+  `--env-file-if-exists=.env` flag. The `dotenv` runtime dependency is removed.
+- **Tool responses are serialized compactly on the wire.** `formatToolResponse` pretty-printed
+  its payload while the size caps measured compact JSON, so a structure-heavy response that
+  passed the builder cap could inflate past the dispatcher's size backstop and be withheld
+  entirely. Compact output also trims response token overhead.
+- **`tools/call` with `arguments` omitted is now accepted.** Hosts may omit `arguments` for
+  tools whose parameters are all optional; the dispatcher treats absence as `{}` instead of
+  returning a validation error.
+
 ## [2.4.0] - 2026-06-16
 
 ### Added

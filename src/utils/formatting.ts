@@ -40,9 +40,10 @@ export const MAX_RESPONSE_DATA_CHARS = 500_000;
 
 /**
  * Dispatcher backstop ceiling: the maximum summed length of a result's
- * `content[].text`. Sits above the builder cap (with headroom for the envelope
- * and pretty-printing) so its real job is to size-bound handlers that have not
- * adopted `formatToolResponse` yet.
+ * `content[].text`. Sits above the builder cap (with headroom for the envelope)
+ * so its real job is to size-bound handlers that have not adopted
+ * `formatToolResponse` yet. This headroom only holds because the builder emits
+ * compact JSON — the same form the caps below measure.
  */
 export const MAX_TOOL_RESPONSE_CHARS = 1_000_000;
 
@@ -93,7 +94,11 @@ export function formatToolResponse({ summary, data, pagination }: ToolResponseIn
   return {
     content: [{
       type: "text" as const,
-      text: JSON.stringify(payload, null, 2),
+      // Compact on purpose: boundResponseData measures COMPACT serialization, so
+      // the wire text must serialize the same way. Pretty-printing inflated
+      // structure-heavy payloads ~46% past the measured size, letting a
+      // builder-capped response breach the dispatcher backstop and be withheld.
+      text: JSON.stringify(payload),
     }],
   };
 }
