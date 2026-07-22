@@ -119,8 +119,25 @@ export function boundErrorMessage(value: string, knownSecret?: string): string {
  * model-facing message (consistent with the untrusted-data posture elsewhere).
  * The message rides the existing {@link formatErrorForMcp} / {@link mcpErrorResult}
  * path like any other `ErrorResponse`.
+ *
+ * Two variants, because the two detection signals carry different certainty:
+ *   - "gone" (HTTP 410): the server stated the surface is gone. Asserted as fact.
+ *   - "inferred" (repeated collection-root 404s): a conservative deduction, which a
+ *     sustained upstream misbehavior could still fake. Worded as a likelihood and
+ *     pointed at the restart that re-probes, so an operator is never told a healthy
+ *     capability is permanently dead.
  */
-export function capabilityRetiredError(capabilityDisplayName: string): ErrorResponse {
+export function capabilityRetiredError(
+  capabilityDisplayName: string,
+  detection: "gone" | "inferred" = "gone",
+): ErrorResponse {
+  if (detection === "inferred") {
+    return createErrorResponse(
+      "CAPABILITY_RETIRED",
+      `The ${capabilityDisplayName} capability is no longer responding on Pipedrive API v1: repeated requests to its collection root returned 404. It has most likely been retired — v1 has no v2 equivalent for it — so this tool can no longer be served.`,
+      "If this is unexpected, it may be an upstream fault rather than a retirement: restarting the MCP server re-probes the capability. Otherwise check the Pipedrive changelog for a v2 replacement: https://developers.pipedrive.com/changelog",
+    );
+  }
   return createErrorResponse(
     "CAPABILITY_RETIRED",
     `The ${capabilityDisplayName} capability has been retired by Pipedrive. It relied on Pipedrive API v1, which has no v2 equivalent, so this tool can no longer be served.`,

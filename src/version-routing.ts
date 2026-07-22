@@ -20,6 +20,17 @@
  * so later calls short-circuit without another upstream request. Every other
  * outcome — item not-found, validation, auth, rate-limit, 5xx, network/timeout —
  * is passed through unchanged (R5).
+ *
+ * The 404 secondary is deliberately hard to trip, because unlike 410 it is a guess
+ * and the latch it sets is permanent for the process:
+ *   - only an UNFILTERED request counts (see isLatchable404). A query param that
+ *     scopes the collection to another record — `filter_id`, `owner_id`,
+ *     `person_id`, … — can 404 on its own when that record does not exist, which
+ *     says nothing about the surface.
+ *   - RETIREMENT_404_THRESHOLD consecutive such 404s are required; any other
+ *     outcome for the capability resets the run. A single transient 404 no longer
+ *     retires a live capability for the rest of the session.
+ * A 410 still latches on the first sighting: the server said so.
  */
 
 import { getClient, type ApiResponse } from "./client.js";
@@ -112,17 +123,62 @@ export function isRetirementSignal(
   return false;
 }
 
+/**
+ * Query params that cannot, by themselves, turn a live collection root into a 404.
+ * An ALLOWLIST, not a blocklist: an unrecognized param is assumed to be able to
+ * scope the request to some other record (and therefore to 404 on its own), so it
+ * makes the response ineligible for the retirement latch. Anything added here must
+ * be a pure shape/order/paging control — never an identifier.
+ */
+const NON_SCOPING_PARAMS: ReadonlySet<string> = new Set([
+  "limit",
+  "start",
+  "cursor",
+  "sort",
+  "sort_by",
+  "sort_direction",
+  "include_fields",
+  "archived_flag",
+]);
+
+/** Consecutive unfiltered collection-root 404s needed before inferring retirement. */
+export const RETIREMENT_404_THRESHOLD = 3;
+
+/**
+ * Whether a 404 on this request may count toward the retirement latch: true only
+ * when every query param is non-scoping, so the 404 can be read as "the collection
+ * root itself is gone" rather than "the record you filtered on does not exist".
+ * A caller-supplied `filter_id` pointing at a deleted filter is the motivating case:
+ * it 404s the collection root while the surface is perfectly alive.
+ */
+export function isLatchable404(params?: URLSearchParams): boolean {
+  if (!params) return true;
+  for (const key of params.keys()) {
+    if (!NON_SCOPING_PARAMS.has(key)) return false;
+  }
+  return true;
+}
+
 // ─── Session state (module-level, process lifetime) ──────────────────────────────
 // Valid because the STDIO server is one process per session (KTD6). An exported
 // reset mirrors the getClient() singleton-state concern and keeps tests isolated.
 
-const retired = new Set<CapabilityKey>();
+/** Retired capabilities, keyed to how retirement was detected (drives the wording). */
+const retired = new Map<CapabilityKey, "gone" | "inferred">();
 const warned = new Set<CapabilityKey>();
+/**
+ * Length of the current run of consecutive latchable collection-root 404s, per
+ * capability. Reset by ANY other outcome for that capability (success, a filtered
+ * 404, a 5xx, a network failure) — the run has to be uninterrupted to count as
+ * evidence the surface is gone rather than that one request went wrong.
+ */
+const consecutive404s = new Map<CapabilityKey, number>();
 
-/** Clears the per-session retired and warned state. For test isolation. */
+/** Clears the per-session retired, warned, and 404-run state. For test isolation. */
 export function resetVersionRoutingState(): void {
   retired.clear();
   warned.clear();
+  consecutive404s.clear();
 }
 
 /**
@@ -145,10 +201,13 @@ function warnOnce(capability: CapabilityKey): void {
 }
 
 /** The clear "retired, no v2 equivalent" envelope (R6), shaped like any failed call. */
-function retirementResponse<T>(capability: CapabilityKey): ApiResponse<T> {
+function retirementResponse<T>(
+  capability: CapabilityKey,
+  detection: "gone" | "inferred",
+): ApiResponse<T> {
   return {
     success: false,
-    error: capabilityRetiredError(CAPABILITIES[capability].displayName),
+    error: capabilityRetiredError(CAPABILITIES[capability].displayName, detection),
   };
 }
 
@@ -162,9 +221,11 @@ async function send<T>(
   capability: CapabilityKey,
   endpoint: string,
   call: (client: ReturnType<typeof getClient>) => Promise<ApiResponse<T>>,
+  params?: URLSearchParams,
 ): Promise<ApiResponse<T>> {
-  if (retired.has(capability)) {
-    return retirementResponse<T>(capability);
+  const alreadyRetired = retired.get(capability);
+  if (alreadyRetired) {
+    return retirementResponse<T>(capability, alreadyRetired);
   }
 
   warnOnce(capability);
@@ -172,10 +233,28 @@ async function send<T>(
   const response = await call(getClient());
 
   if (!response.success && isRetirementSignal(capability, endpoint, response.httpStatus)) {
-    retired.add(capability);
-    return retirementResponse<T>(capability);
+    // 410: the server stated the surface is gone. Latch on the first sighting.
+    if (response.httpStatus === 410) {
+      retired.set(capability, "gone");
+      return retirementResponse<T>(capability, "gone");
+    }
+    // 404 on a collection root: only a guess, so it must be unfiltered AND repeated.
+    if (isLatchable404(params)) {
+      const run = (consecutive404s.get(capability) ?? 0) + 1;
+      consecutive404s.set(capability, run);
+      if (run >= RETIREMENT_404_THRESHOLD) {
+        consecutive404s.delete(capability);
+        retired.set(capability, "inferred");
+        return retirementResponse<T>(capability, "inferred");
+      }
+      // Below the threshold the caller gets the real 404 — a plain NOT_FOUND, which
+      // is also the honest answer if this turns out to be a transient upstream fault.
+      return response;
+    }
   }
 
+  // Anything else breaks the run: the evidence has to be uninterrupted.
+  consecutive404s.delete(capability);
   return response;
 }
 
@@ -195,7 +274,9 @@ export interface CapabilitySeam {
 export function createSeam(capability: CapabilityKey): CapabilitySeam {
   return {
     get<T>(endpoint: string, params: URLSearchParams | undefined) {
-      return send<T>(capability, endpoint, (client) => client.get<T>(endpoint, params, "v1"));
+      // GET is the only verb carrying query params, so it is the only one whose
+      // 404 can be caused by a caller-supplied filter rather than the surface.
+      return send<T>(capability, endpoint, (client) => client.get<T>(endpoint, params, "v1"), params);
     },
     post<T>(endpoint: string, body: Record<string, unknown> | unknown[]) {
       return send<T>(capability, endpoint, (client) => client.post<T>(endpoint, body, "v1"));

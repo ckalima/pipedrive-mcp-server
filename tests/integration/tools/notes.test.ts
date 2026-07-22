@@ -12,6 +12,7 @@ import {
   paginationFixtures,
 } from '../../helpers/mockFetch.js';
 import { createNotesFixture } from '../../helpers/fixtures.js';
+import { RETIREMENT_404_THRESHOLD } from '../../../src/version-routing.js';
 
 async function getNotesTools() {
   return import('../../../src/tools/notes.js');
@@ -304,9 +305,16 @@ describe('notes tools', () => {
       expect(result.content[0].text).toContain('Notes');
     });
 
-    it('AE2: a collection-root 404 on /notes also marks notes retired', async () => {
+    it('AE2: repeated collection-root 404s on /notes also mark notes retired', async () => {
+      // listNotes sends pagination params only, so its 404s are latch-eligible — but
+      // the latch now needs an uninterrupted run, so a lone transient 404 passes
+      // through as NOT_FOUND instead of retiring notes for the whole process.
       mockApiError(404, 'Not found');
       const { listNotes } = await getNotesTools();
+
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD - 1; i++) {
+        expect((await listNotes({})).content[0].text).toContain('NOT_FOUND');
+      }
 
       const result = await listNotes({});
 

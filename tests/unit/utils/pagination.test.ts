@@ -144,6 +144,81 @@ describe('pagination', () => {
       expect(result.next_cursor).toBe('100');
     });
 
+    // GET /leads returns a FLAT additional_data (no `pagination` wrapper, no
+    // next_start) per docs/api/openapi-v1.yaml. Reading only the wrapped shape
+    // pinned has_more to false and dropped the cursor, silently truncating every
+    // leads collection at one page.
+    describe('flat additional_data shape (GET /leads)', () => {
+      it('reads more_items_in_collection from a flat additional_data', () => {
+        const response = {
+          additional_data: { start: 0, limit: 50, more_items_in_collection: true },
+        };
+
+        expect(extractPaginationV1(response)).toEqual({
+          next_cursor: '50',
+          has_more: true,
+        });
+      });
+
+      it('synthesizes next_start as start + limit on later pages', () => {
+        const response = {
+          additional_data: { start: 50, limit: 25, more_items_in_collection: true },
+        };
+
+        expect(extractPaginationV1(response)).toEqual({
+          next_cursor: '75',
+          has_more: true,
+        });
+      });
+
+      it('returns no cursor on the last flat page', () => {
+        const response = {
+          additional_data: { start: 50, limit: 50, more_items_in_collection: false },
+        };
+
+        expect(extractPaginationV1(response)).toEqual({
+          next_cursor: undefined,
+          has_more: false,
+        });
+      });
+
+      it('does not fabricate a cursor when start or limit is missing', () => {
+        expect(extractPaginationV1({ additional_data: { limit: 50, more_items_in_collection: true } }))
+          .toEqual({ next_cursor: undefined, has_more: true });
+        expect(extractPaginationV1({ additional_data: { start: 0, more_items_in_collection: true } }))
+          .toEqual({ next_cursor: undefined, has_more: true });
+      });
+
+      it('prefers the wrapped shape when both are present', () => {
+        const response = {
+          additional_data: {
+            start: 0,
+            limit: 50,
+            more_items_in_collection: false,
+            pagination: { start: 0, limit: 50, more_items_in_collection: true, next_start: 50 },
+          },
+        };
+
+        expect(extractPaginationV1(response)).toEqual({
+          next_cursor: '50',
+          has_more: true,
+        });
+      });
+
+      it('synthesizes next_start for a wrapped shape that omits it', () => {
+        const response = {
+          additional_data: {
+            pagination: { start: 100, limit: 100, more_items_in_collection: true },
+          },
+        };
+
+        expect(extractPaginationV1(response)).toEqual({
+          next_cursor: '200',
+          has_more: true,
+        });
+      });
+    });
+
     it('should handle next_start of 0', () => {
       const response = {
         additional_data: {

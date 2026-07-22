@@ -7,6 +7,7 @@ import { getConfig, BASE_URL_V1, BASE_URL_V2, type Config } from "./config.js";
 import { handleApiError, createErrorResponse, formatErrorForMcp, redactSecrets, type ErrorResponse } from "./utils/errors.js";
 import {
   classifyOutcome,
+  isUpstreamUnhealthy,
   computeBackoffMs,
   parseRetryAfterMs,
   breakerAllowsRequest,
@@ -502,12 +503,17 @@ export class PipedriveClient {
         // ── Classify + record breaker outcome ──
         const httpStatus = parsed?.httpStatus;
         const isSuccess = parsed?.success === true;
-        const { retryable, isTripSignal } = classifyOutcome({ method, httpStatus, isNetworkError });
+        const attemptOutcome = { method, httpStatus, isNetworkError };
+        const { retryable, isTripSignal } = classifyOutcome(attemptOutcome);
         const stateBeforeRecord = getBreakerState();
         // Pass isProbe so a straggler that only settled during this request's probe
         // window cannot hijack the half-open verdict (owner-scoped breaker update).
         // Monotonic clock (not Date.now) so the window arithmetic is clock-step-safe (#133).
-        recordOutcome({ isSuccess, isTripSignal }, monotonicNowMs(), isProbe);
+        recordOutcome(
+          { isSuccess, isTripSignal, isUpstreamUnhealthy: isUpstreamUnhealthy(attemptOutcome) },
+          monotonicNowMs(),
+          isProbe,
+        );
         probeSettled = true;
         this.logBreakerTransition(stateBeforeRecord, getBreakerState(), method, logEndpoint);
 
@@ -561,7 +567,13 @@ export class PipedriveClient {
         await resilientSleep(waitMs);
       } finally {
         if (!probeSettled) {
-          recordOutcome({ isSuccess: false, isTripSignal: false }, monotonicNowMs(), true);
+          // An unrecorded probe is no evidence of recovery, so it settles as
+          // unhealthy: re-Open with a fresh cooldown rather than closing blind.
+          recordOutcome(
+            { isSuccess: false, isTripSignal: false, isUpstreamUnhealthy: true },
+            monotonicNowMs(),
+            true,
+          );
         }
       }
     }

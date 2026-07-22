@@ -10,6 +10,8 @@ import { setupValidEnv } from '../helpers/mockEnv.js';
 import { mockFetch, mockApiSuccess, mockApiError } from '../helpers/mockFetch.js';
 import {
   isRetirementSignal,
+  isLatchable404,
+  RETIREMENT_404_THRESHOLD,
   resetVersionRoutingState,
   notesV1,
   mailV1,
@@ -71,6 +73,30 @@ describe('version-routing', () => {
     });
   });
 
+  // ─── 404-latch eligibility (allowlist) ───────────────────────────────────────
+  describe('isLatchable404', () => {
+    it('no params at all is latchable', () => {
+      expect(isLatchable404(undefined)).toBe(true);
+      expect(isLatchable404(new URLSearchParams())).toBe(true);
+    });
+
+    it('pagination/sort/archived params are latchable', () => {
+      expect(isLatchable404(new URLSearchParams({ limit: '50', start: '0' }))).toBe(true);
+      expect(isLatchable404(new URLSearchParams({ archived_flag: 'false', sort: 'id' }))).toBe(true);
+    });
+
+    it.each(['filter_id', 'owner_id', 'person_id', 'organization_id', 'user_id', 'deal_id'])(
+      '%s makes the response ineligible — it can 404 on its own',
+      (key) => {
+        expect(isLatchable404(new URLSearchParams({ limit: '50', [key]: '7' }))).toBe(false);
+      },
+    );
+
+    it('an unrecognized param is ineligible (allowlist, not blocklist)', () => {
+      expect(isLatchable404(new URLSearchParams({ something_new: 'x' }))).toBe(false);
+    });
+  });
+
   // ─── Seam behavior ───────────────────────────────────────────────────────────
   describe('capability seam', () => {
     it('seam success: a 200 returns the underlying ApiResponse unchanged', async () => {
@@ -91,12 +117,91 @@ describe('version-routing', () => {
       expect(response.error?.code).toBe('CAPABILITY_RETIRED');
     });
 
-    it('marks retired on a collection-root 404 for an eligible capability (AE2)', async () => {
+    it('marks retired after RETIREMENT_404_THRESHOLD collection-root 404s (AE2)', async () => {
       mockApiError(404, 'Not found');
 
+      // Below the threshold the caller gets the honest NOT_FOUND, not a retirement.
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD - 1; i++) {
+        expect((await usersV1.get('/users', undefined)).error?.code).toBe('NOT_FOUND');
+      }
+
       const response = await usersV1.get('/users', undefined);
+      expect(response.error?.code).toBe('CAPABILITY_RETIRED');
+    });
+
+    it('does NOT retire on a single transient collection-root 404 (the eager-latch bug)', async () => {
+      // One 404 used to retire the capability for the whole process, with a message
+      // asserting Pipedrive had removed it. A transient fault must not do that.
+      mockApiError(404, 'Not found');
+      expect((await usersV1.get('/users', undefined)).error?.code).toBe('NOT_FOUND');
+
+      mockApiSuccess([{ id: 1 }]);
+      const recovered = await usersV1.get('/users', undefined);
+      expect(recovered.success).toBe(true);
+    });
+
+    it('a non-404 outcome resets the run — 404s must be consecutive', async () => {
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD - 1; i++) {
+        mockApiError(404, 'Not found');
+        await usersV1.get('/users', undefined);
+      }
+
+      mockApiSuccess([{ id: 1 }]); // run broken here
+      await usersV1.get('/users', undefined);
+
+      mockApiError(404, 'Not found');
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD - 1; i++) {
+        expect((await usersV1.get('/users', undefined)).error?.code).toBe('NOT_FOUND');
+      }
+      expect((await usersV1.get('/users', undefined)).error?.code).toBe('CAPABILITY_RETIRED');
+    });
+
+    it('404s on a FILTERED collection root never latch, however many arrive', async () => {
+      // A caller-supplied filter_id pointing at a deleted filter 404s the collection
+      // root while the surface is alive; that must never be read as a retirement.
+      mockApiError(404, 'Not found');
+      const filtered = new URLSearchParams({ limit: '50', filter_id: '999' });
+
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD * 2; i++) {
+        expect((await leadsV1.get('/leads', filtered)).error?.code).toBe('NOT_FOUND');
+      }
+
+      mockApiSuccess([]);
+      expect((await leadsV1.get('/leads', undefined)).success).toBe(true);
+    });
+
+    it('pagination-only params still latch (they cannot cause a 404 on their own)', async () => {
+      mockApiError(404, 'Not found');
+      const paging = new URLSearchParams({ limit: '50', start: '0', archived_flag: 'false' });
+
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD - 1; i++) {
+        await leadsV1.get('/leads', paging);
+      }
+      expect((await leadsV1.get('/leads', paging)).error?.code).toBe('CAPABILITY_RETIRED');
+    });
+
+    it('an inferred (404-derived) retirement is worded as a likelihood, not a fact', async () => {
+      mockApiError(404, 'Not found');
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD - 1; i++) {
+        await usersV1.get('/users', undefined);
+      }
+      const inferred = await usersV1.get('/users', undefined);
+
+      expect(inferred.error?.message).toContain('most likely');
+      expect(inferred.error?.suggestion).toContain('restarting the MCP server');
+      // The short-circuit on later calls keeps the same softened wording.
+      const later = await usersV1.get('/users', undefined);
+      expect(later.error?.message).toBe(inferred.error?.message);
+    });
+
+    it('a 410 retirement is still asserted as fact, on the first sighting', async () => {
+      mockApiError(410, 'Gone');
+
+      const response = await notesV1.get('/notes', undefined);
 
       expect(response.error?.code).toBe('CAPABILITY_RETIRED');
+      expect(response.error?.message).toContain('has been retired by Pipedrive');
+      expect(response.error?.message).not.toContain('most likely');
     });
 
     it('does NOT mark retired on an ordinary item 404 (AE1)', async () => {
