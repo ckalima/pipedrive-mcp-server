@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-07-22
+
+### Changed
+
+- **`pipedrive_convert_lead_to_deal` now requires `PIPEDRIVE_MODE=full`.** The endpoint marks
+  the source lead as deleted, so it is a destructive operation and is now gated and marked as
+  one — matching `pipedrive_convert_deal_to_lead`, which was already gated for the same reason.
+  Previously it ran under the default `safe-write` mode while advertising
+  `destructiveHint: false`, which was untrue.
+
+  **Migration:** if you call this tool, set `PIPEDRIVE_MODE=full`. Be aware that `full` also
+  exposes every other destructive tool (deletes), so weigh it against your setup. The default
+  `safe-write` tool count drops from 124 to 123, and the destructive count rises from 31 to 32.
+
+  This is shipped as a **minor** per the versioning policy in `docs/RELEASE.md`: explicitly
+  configured `full` setups keep working and the change fails safe. A stricter reading would
+  call it major.
+
+- **Minimum Node.js is now `>=22.9.0`** (was `>=22.0.0`). Required by the
+  `--env-file-if-exists` flag the npm scripts use for local development. Node 22.x LTS begins
+  at 22.11, so supported-LTS users are unaffected; only 22.0-22.8 installs will see
+  `EBADENGINE`.
+
+### Added
+
+- **`pipedrive_update_deal` accepts `visible_to`.** `create_deal` accepted it and every sibling
+  update tool (person, organization, product) accepted it, so a deal's visibility could be set
+  at creation but never changed afterward.
+
 ### Fixed
 
 - **Circuit breaker can no longer wedge HalfOpen for the process lifetime.** The retry loop's
@@ -29,6 +58,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`tools/call` with `arguments` omitted is now accepted.** Hosts may omit `arguments` for
   tools whose parameters are all optional; the dispatcher treats absence as `{}` instead of
   returning a validation error.
+- **A v1 capability can no longer be wrongly retired by transient 404s.** The seam that detects
+  v1 endpoint retirement now requires three *consecutive* 404s on an *unfiltered* collection
+  read before inferring a surface is gone, and write verbs never count toward it — previously a
+  single 404, including one caused by a caller-supplied id for a since-deleted parent record,
+  could retire notes/mail/users/leads for the rest of the process. Concurrent traffic is
+  handled too: a batch containing any success cannot latch, in either settlement order, since a
+  200 proves the surface was live. A `410 Gone` still latches immediately, as that is the
+  server stating fact rather than an inference. The inferred-retirement message now reads as a
+  likelihood and names the restart that re-probes.
+- **A half-open circuit-breaker probe no longer re-opens the breaker on a benign failure.** The
+  probe now distinguishes upstream ill health (429/503/5xx/network/timeout) from an ordinary
+  status-bearing rejection (400/403/404/410): a probe that gets a clean `404 Not Found` proves
+  the upstream is answering, so the breaker closes instead of starting another cooldown.
+- **`pipedrive_search_projects` returns pagination.** It was the lone search tool that dropped
+  it, so callers could not page past the first batch of results.
+- **`getField` lookups are bounded.** The internal field-definition cursor loop now stops after
+  a page cap and detects a repeated cursor, so a malformed or looping upstream pagination
+  response cannot spin indefinitely.
+- **Nullable parameters are advertised correctly.** 27 parameters across 8 tool files accept
+  `null` to clear a field in their Zod schema, but their published JSON Schema declared only
+  the non-null type, so a schema-validating MCP client would reject the call before it reached
+  the server and the documented clear-a-field behavior was unreachable. The two are now checked
+  against each other in both directions by a registry-walking invariant test.
+- **`extractPaginationV1` tolerates both v1 pagination shapes.** It reads the wrapped
+  `additional_data.pagination` form and the flat `additional_data` form, preferring the wrapped
+  one when both are present. This is defensive hardening, not a fix for an observed break: a
+  live probe confirmed `/leads` returns the wrapped shape despite the published spec
+  documenting the flat one for that endpoint.
 
 ## [2.4.0] - 2026-06-16
 
@@ -178,6 +235,7 @@ published from GitHub Actions with build provenance.
 - **Destructive operations gated** behind the `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`
   environment variable (disabled by default).
 
+[2.5.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.5.0
 [2.4.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.4.0
 [2.3.1]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.3.1
 [2.3.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.3.0
