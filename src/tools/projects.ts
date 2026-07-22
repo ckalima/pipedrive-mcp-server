@@ -209,9 +209,12 @@ export async function searchProjects(params: SearchProjectsParams) {
     return mcpErrorResult(response);
   }
 
+  const pagination = extractPaginationV2(response);
+
   return formatToolResponse({
     summary: `Search results for "${params.term}"`,
     data: response.data,
+    pagination,
   });
 }
 

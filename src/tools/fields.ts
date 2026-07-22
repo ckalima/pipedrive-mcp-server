@@ -62,8 +62,15 @@ import {
   buildPaginationParamsV2,
   extractPaginationV2,
 } from "../utils/pagination.js";
-import { mcpErrorResult, destructiveOperationGuard } from "../utils/errors.js";
+import { mcpErrorResult, mcpErrorFromCode, destructiveOperationGuard } from "../utils/errors.js";
 import { createListSummary, formatToolResponse } from "../utils/formatting.js";
+
+/**
+ * Hard cap on how many field pages `getField` will walk before giving up. Field sets
+ * are small (low hundreds even on heavily customized accounts) and pages hold 100, so
+ * this is far above any legitimate lookup while still terminating.
+ */
+export const MAX_FIELD_LOOKUP_PAGES = 50;
 
 // ─── U3: Field write shared helpers ───────────────────────────────────────────
 
@@ -268,8 +275,17 @@ export async function getField(params: GetFieldParams) {
   }
 
   // Paginate through all pages (v2 cursor) until the field is found or pages are exhausted.
+  //
+  // The loop is driven entirely by upstream-supplied cursors, so it is bounded twice:
+  // a hard page cap, and a repeated-cursor check. Either an upstream that keeps
+  // reporting `has_more` or one that hands back the cursor it was just given would
+  // otherwise spin this handler forever, burning the retry budget and the request
+  // budget with no way for the caller to interrupt it. Both bails return an error
+  // that names the cause rather than the misleading "field not found".
   let cursor: string | undefined;
   let field: { field_code?: string; key?: string; [k: string]: unknown } | undefined;
+  const seenCursors = new Set<string>();
+  let pages = 0;
 
   do {
     const queryParams = buildPaginationParamsV2(cursor);
@@ -286,9 +302,28 @@ export async function getField(params: GetFieldParams) {
 
     // v2 keys each field on `field_code`; fall back to legacy `key` for safety (#60).
     field = response.data.find(f => f.field_code === params.key || f.key === params.key);
+    pages++;
 
     const pagination = extractPaginationV2(response);
     cursor = pagination.has_more ? pagination.next_cursor : undefined;
+
+    if (!field && cursor) {
+      if (pages >= MAX_FIELD_LOOKUP_PAGES) {
+        return mcpErrorFromCode(
+          "API_ERROR",
+          `Gave up looking for field "${params.key}" after ${MAX_FIELD_LOOKUP_PAGES} pages of ${params.entity_type} fields.`,
+          "Use pipedrive_list_fields to page through the field list directly, or pass the exact field_code.",
+        );
+      }
+      if (seenCursors.has(cursor)) {
+        return mcpErrorFromCode(
+          "API_ERROR",
+          `Pipedrive returned a repeated pagination cursor while listing ${params.entity_type} fields, so the field lookup could not make progress.`,
+          "Retry shortly, or use pipedrive_list_fields to page through the field list directly.",
+        );
+      }
+      seenCursors.add(cursor);
+    }
   } while (!field && cursor);
 
   if (!field) {
@@ -539,7 +574,7 @@ const UI_VISIBILITY_PRODUCT = { type: "object", description: "UI visibility (pro
 const IMPORTANT_FIELDS_PROP = { type: "object", description: "Important-field highlighting: enabled, stage_ids (always references DEAL stages, even on person/org fields)." } as const;
 const REQUIRED_FIELDS_DEAL = { type: "object", description: "Required-field config: enabled, stage_ids (deal stages), statuses (per-pipeline won/lost map)." } as const;
 const REQUIRED_FIELDS_SIMPLE = { type: "object", description: "Required-field config: enabled (person/org fields support only this flag)." } as const;
-const FIELD_DESCRIPTION_PROP = { type: "string", description: "Field description" } as const;
+const FIELD_DESCRIPTION_PROP = { type: ["string", "null"], description: "Field description (null to clear)" } as const;
 
 /**
  * Tool definitions for MCP registration

@@ -426,6 +426,27 @@ describe('projects tools', () => {
 
       expect(result.isError).toBe(true);
     });
+
+    // The handler forwards `cursor`, so a caller who is never handed the next one
+    // cannot page past the first result set. Mirrors searchDeals.
+    it('should return the next cursor when the search has more results', async () => {
+      mockFetch({ data: { items: [] }, additional_data: paginationFixtures.v2WithMore });
+      const { searchProjects } = await getProjectsTools();
+
+      const parsed = JSON.parse((await searchProjects({ term: 'acme' })).content[0].text);
+
+      expect(parsed.pagination.has_more).toBe(true);
+      expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
+    });
+
+    it('should report has_more false on the last page', async () => {
+      mockFetch({ data: { items: [] }, additional_data: paginationFixtures.v2NoMore });
+      const { searchProjects } = await getProjectsTools();
+
+      const parsed = JSON.parse((await searchProjects({ term: 'acme' })).content[0].text);
+
+      expect(parsed.pagination.has_more).toBe(false);
+    });
   });
 
   describe('listProjectTasks', () => {

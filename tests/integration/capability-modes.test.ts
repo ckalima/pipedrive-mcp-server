@@ -26,7 +26,7 @@ import { mockApiSuccess, fixtures } from '../helpers/mockFetch.js';
 /** Live-registry counts; bump in lockstep with tool-annotations.test.ts. */
 const TOTAL_TOOLS = 155;
 const READ_TOOLS = 69;
-const SAFE_WRITE_TOOLS = 124;
+const SAFE_WRITE_TOOLS = 123;
 
 // A synthetic write tool whose handler exists but is absent from allTools, to prove the
 // dispatcher's undefined-allowed fall-through (U1/U4): getTool returns undefined for it,
@@ -51,7 +51,7 @@ import { handleCallTool } from '../../src/index.js';
 const textOf = (r: { content: { text: string }[] }) => r.content[0].text;
 
 describe('capability modes — tools/list filter (U3)', () => {
-  it('returns 69 / 124 / 155 definitions for read-only / safe-write / full', () => {
+  it('returns 69 / 123 / 155 definitions for read-only / safe-write / full', () => {
     expect(filterToolDefinitionsForMode(toolDefinitions, 'read-only').length).toBe(READ_TOOLS);
     expect(filterToolDefinitionsForMode(toolDefinitions, 'safe-write').length).toBe(SAFE_WRITE_TOOLS);
     expect(filterToolDefinitionsForMode(toolDefinitions, 'full').length).toBe(TOTAL_TOOLS);
@@ -92,10 +92,10 @@ describe('capability modes — tools/list filter (U3)', () => {
     }
   });
 
-  it('lists 124 tools at the unset default (the back-compat-sensitive composition)', () => {
+  it('lists 123 tools at the unset default (the back-compat-sensitive composition)', () => {
     // The ListTools handler is filterToolDefinitionsForMode(toolDefinitions,
     // resolveCapabilityMode()). Compose those two pieces with no env set to pin the
-    // exact listed surface an existing install sees on upgrade: 124, not 155 — destructive
+    // exact listed surface an existing install sees on upgrade: 123, not 155 — destructive
     // tools are now hidden by default rather than listed-then-refused. (resolveCapabilityMode
     // reads no env here because tests/setup.ts clears both vars in beforeEach.)
     const mode = resolveCapabilityMode({});

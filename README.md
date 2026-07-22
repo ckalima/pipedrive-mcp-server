@@ -99,12 +99,12 @@ To enable destructive tools, set `PIPEDRIVE_MODE=full` (or, for back-compat, `PI
 | Mode | What's available | Tools | Destructive ops |
 |------|------------------|------:|-----------------|
 | `read-only` | read verbs only (`list`/`get`/`search`) | 69 | no |
-| `safe-write` | reads + non-destructive writes | 124 | no |
+| `safe-write` | reads + non-destructive writes | 123 | no |
 | `full` | all tools | 155 | yes |
 
 **Recommended for first-time setup and agent evaluation: `read-only`.** Let the agent look before it can touch anything, then widen the tier as you build trust.
 
-**Backward compatibility.** `PIPEDRIVE_MODE` is authoritative when set. When it is unset, the mode is derived from the legacy `PIPEDRIVE_ENABLE_DESTRUCTIVE` flag (`true` → `full`, otherwise `safe-write`), so existing installs keep their *execution* behavior on upgrade: every tool that ran before still runs, and every tool gated before is still gated. The one observable change at the unset default (`safe-write`) is that the 31 destructive tools — already refused at execution unless enabled — are now also hidden from `tools/list` rather than listed-then-refused (so the listed surface is 124, not 155). An unrecognized `PIPEDRIVE_MODE` value falls back to `read-only`.
+**Backward compatibility.** `PIPEDRIVE_MODE` is authoritative when set. When it is unset, the mode is derived from the legacy `PIPEDRIVE_ENABLE_DESTRUCTIVE` flag (`true` → `full`, otherwise `safe-write`), so existing installs keep their *execution* behavior on upgrade: every tool that ran before still runs, and every tool gated before is still gated. The one observable change at the unset default (`safe-write`) is that the 32 destructive tools — already refused at execution unless enabled — are now also hidden from `tools/list` rather than listed-then-refused (so the listed surface is 123, not 155). An unrecognized `PIPEDRIVE_MODE` value falls back to `read-only`.
 
 ### 3. Start Using
 
@@ -217,7 +217,7 @@ Once configured, Claude can access your Pipedrive data:
 | `pipedrive_update_lead` | Update an existing lead in Pipedrive. |
 | `pipedrive_search_leads` | Search for leads in Pipedrive by title or associated contacts. |
 | `pipedrive_delete_lead` 🔒 | Delete a lead. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true). |
-| `pipedrive_convert_lead_to_deal` | Convert a lead into a deal (Pipedrive v2). The conversion runs asynchronously; this tool polls until it completes (typically under 5s) and returns the new deal ID. If it is still running after ~30s, it returns the conversion_id and status for manual follow-up. |
+| `pipedrive_convert_lead_to_deal` 🔒 | Convert a lead into a deal (Pipedrive v2). DESTRUCTIVE: a successful conversion marks the source lead as deleted. The conversion runs asynchronously; this tool polls until it completes (typically under 5s) and returns the new deal ID. If it is still running after ~30s, it returns the conversion_id and status for manual follow-up. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true). |
 | `pipedrive_get_lead_conversion_status` | Get the status of an async lead-to-deal conversion by conversion ID (Pipedrive v2 GET /leads/{id}/convert/status/{conversion_id}). |
 
 ### Projects

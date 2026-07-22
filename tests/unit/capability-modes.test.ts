@@ -6,7 +6,7 @@
  *   1. Resolution precedence (PIPEDRIVE_MODE authoritative, legacy-flag derivation,
  *      fail-closed-to-read-only on an unknown value) against explicit env objects.
  *   2. Classification against the LIVE `allTools` registry, with explicit counts
- *      (69 / 124 / 155) so the enforced surface cannot drift silently.
+ *      (69 / 123 / 155) so the enforced surface cannot drift silently.
  *   3. Test-isolation: the tests/setup.ts beforeEach clears both vars, so a value set in
  *      one test does not leak into the next.
  */
@@ -27,7 +27,7 @@ import {
 /** Live-registry counts; bump in lockstep with tool-annotations.test.ts. */
 const TOTAL_TOOLS = 155;
 const READ_TOOLS = 69;
-const SAFE_WRITE_TOOLS = 124; // all tools except the 31 destructive
+const SAFE_WRITE_TOOLS = 123; // all tools except the 32 destructive
 
 describe('capability modes', () => {
   describe('CAPABILITY_MODES', () => {
@@ -208,7 +208,7 @@ describe('capability modes', () => {
       }
     });
 
-    it('safe-write allows exactly 124 (every read, every non-destructive write, no destructive)', () => {
+    it('safe-write allows exactly 123 (every read, every non-destructive write, no destructive)', () => {
       expect(allowedCount('safe-write')).toBe(SAFE_WRITE_TOOLS);
       for (const tool of allTools) {
         if (isDestructive(tool)) {

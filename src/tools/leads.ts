@@ -230,12 +230,19 @@ export async function searchLeads(params: SearchLeadsParams) {
  * If still running after the ~30s backoff cap is exhausted, returns the
  * conversion_id + last status (non-error) so the caller can check later.
  *
+ * Destructive: a successful conversion marks the source lead as deleted
+ * (openapi-v2.yaml `/leads/{id}/convert/deal`), so it is gated — the same wording,
+ * and the same gate, as the twin `convertDealToLead`.
+ *
  * The `sleep` parameter is injectable purely for testing (defaults to a real timer).
  */
 export async function convertLeadToDeal(
   params: ConvertLeadToDealParams,
   sleep: SleepFn = realSleep,
 ) {
+  const guard = destructiveOperationGuard();
+  if (guard) return guard;
+
   const client = getClient();
 
   const convertBody: Record<string, unknown> = {};
@@ -497,7 +504,7 @@ export const leadsTools = [
   },
   {
     name: "pipedrive_convert_lead_to_deal",
-    description: "Convert a lead into a deal (Pipedrive v2). The conversion runs asynchronously; this tool polls until it completes (typically under 5s) and returns the new deal ID. If it is still running after ~30s, it returns the conversion_id and status for manual follow-up.",
+    description: "Convert a lead into a deal (Pipedrive v2). DESTRUCTIVE: a successful conversion marks the source lead as deleted. The conversion runs asynchronously; this tool polls until it completes (typically under 5s) and returns the new deal ID. If it is still running after ~30s, it returns the conversion_id and status for manual follow-up. Requires PIPEDRIVE_MODE=full (back-compat: PIPEDRIVE_ENABLE_DESTRUCTIVE=true).",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -507,6 +514,7 @@ export const leadsTools = [
       },
       required: ["id"],
     },
+    destructive: true,
     handler: convertLeadToDeal,
     schema: ConvertLeadToDealSchema,
   },

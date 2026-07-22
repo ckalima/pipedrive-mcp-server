@@ -185,6 +185,7 @@ export async function updateDeal(params: UpdateDealParams) {
   if (updateFields.won_time) body.won_time = updateFields.won_time;
   if (updateFields.lost_time) body.lost_time = updateFields.lost_time;
   if (updateFields.lost_reason) body.lost_reason = updateFields.lost_reason;
+  if (updateFields.visible_to) body.visible_to = updateFields.visible_to;
   if (updateFields.label_ids) body.label_ids = updateFields.label_ids;
   if (updateFields.custom_fields) body.custom_fields = updateFields.custom_fields;
 
@@ -879,6 +880,7 @@ export const dealTools = [
         won_time: { type: "string", description: "Won time (when status is 'won')" },
         lost_time: { type: "string", description: "Lost time (when status is 'lost')" },
         lost_reason: { type: "string", description: "Lost reason (when status is 'lost')" },
+        visible_to: { type: "number", enum: [1, 3, 5, 7], description: "Visibility: 1=Owner, 3=Group, 5=Subgroups, 7=Company" },
         label_ids: { type: "array", items: { type: "number" }, description: "Label IDs to set on deal" },
         custom_fields: { type: "object", description: "Custom field values as object with field keys" },
       },
@@ -1015,10 +1017,10 @@ export const dealTools = [
         is_enabled: { type: "boolean", description: "Whether the product is enabled on the deal (default true)" },
         tax_method: { type: "string", enum: ["exclusive", "inclusive", "none"], description: "How tax is applied" },
         discount_type: { type: "string", enum: ["percentage", "amount"], description: "Whether discount is a percentage or fixed amount (default percentage)" },
-        product_variation_id: { type: "number", description: "Product variation ID (null to clear)" },
+        product_variation_id: { type: ["number", "null"], description: "Product variation ID (null to clear)" },
         billing_frequency: { type: "string", enum: ["one-time", "annually", "semi-annually", "quarterly", "monthly", "weekly"], description: "Billing frequency for recurring products" },
-        billing_frequency_cycles: { type: "number", description: "Number of billing cycles (null = unlimited)" },
-        billing_start_date: { type: "string", description: "Billing start date (YYYY-MM-DD)" },
+        billing_frequency_cycles: { type: ["number", "null"], description: "Number of billing cycles (null = unlimited)" },
+        billing_start_date: { type: ["string", "null"], description: "Billing start date (YYYY-MM-DD, null to clear)" },
       },
       required: ["id", "product_id", "item_price", "quantity"],
     },
@@ -1042,10 +1044,10 @@ export const dealTools = [
         is_enabled: { type: "boolean", description: "Whether the product is enabled on the deal" },
         tax_method: { type: "string", enum: ["exclusive", "inclusive", "none"], description: "How tax is applied" },
         discount_type: { type: "string", enum: ["percentage", "amount"], description: "Whether discount is a percentage or fixed amount" },
-        product_variation_id: { type: "number", description: "Product variation ID (null to clear)" },
+        product_variation_id: { type: ["number", "null"], description: "Product variation ID (null to clear)" },
         billing_frequency: { type: "string", enum: ["one-time", "annually", "semi-annually", "quarterly", "monthly", "weekly"], description: "Billing frequency for recurring products" },
-        billing_frequency_cycles: { type: "number", description: "Number of billing cycles (null = unlimited)" },
-        billing_start_date: { type: "string", description: "Billing start date (YYYY-MM-DD)" },
+        billing_frequency_cycles: { type: ["number", "null"], description: "Number of billing cycles (null = unlimited)" },
+        billing_start_date: { type: ["string", "null"], description: "Billing start date (YYYY-MM-DD, null to clear)" },
       },
       required: ["id", "product_attachment_id"],
     },
@@ -1089,10 +1091,10 @@ export const dealTools = [
               is_enabled: { type: "boolean", description: "Whether the product is enabled on the deal (default true)" },
               tax_method: { type: "string", enum: ["exclusive", "inclusive", "none"], description: "How tax is applied" },
               discount_type: { type: "string", enum: ["percentage", "amount"], description: "Whether discount is a percentage or fixed amount" },
-              product_variation_id: { type: "number", description: "Product variation ID" },
+              product_variation_id: { type: ["number", "null"], description: "Product variation ID (null to clear)" },
               billing_frequency: { type: "string", enum: ["one-time", "annually", "semi-annually", "quarterly", "monthly", "weekly"], description: "Billing frequency for recurring products" },
-              billing_frequency_cycles: { type: "number", description: "Number of billing cycles (null = unlimited)" },
-              billing_start_date: { type: "string", description: "Billing start date (YYYY-MM-DD)" },
+              billing_frequency_cycles: { type: ["number", "null"], description: "Number of billing cycles (null = unlimited)" },
+              billing_start_date: { type: ["string", "null"], description: "Billing start date (YYYY-MM-DD, null to clear)" },
             },
             required: ["product_id", "item_price", "quantity"],
           },

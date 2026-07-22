@@ -143,18 +143,19 @@ describe('tool annotations', () => {
       }
     });
 
-    it('counts exactly 31 destructive tools', () => {
-      expect(allTools.filter((t) => buildToolAnnotations(t).destructiveHint).length).toBe(31);
+    it('counts exactly 32 destructive tools', () => {
+      expect(allTools.filter((t) => buildToolAnnotations(t).destructiveHint).length).toBe(32);
     });
 
-    it('flags the deal→lead conversion but not its non-destructive lookalikes', () => {
+    it('flags both conversions but not their non-destructive lookalikes', () => {
       const hint = (name: string) => {
         const tool = allTools.find((t) => t.name === name);
         expect(tool, `${name} should exist`).toBeDefined();
         return buildToolAnnotations(tool!);
       };
+      // Both convert endpoints delete their source entity, so both carry the hint.
       expect(hint('pipedrive_convert_deal_to_lead').destructiveHint).toBe(true);
-      expect(hint('pipedrive_convert_lead_to_deal').destructiveHint).toBe(false);
+      expect(hint('pipedrive_convert_lead_to_deal').destructiveHint).toBe(true);
       const archive = hint('pipedrive_archive_project');
       expect(archive.destructiveHint).toBe(false);
       expect(archive.readOnlyHint).toBe(false);
