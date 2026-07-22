@@ -264,6 +264,22 @@ async function send<T>(
 
   // Anything else breaks the run: the evidence has to be uninterrupted.
   consecutive404s.delete(capability);
+
+  // A success retracts an INFERRED retirement. The run counter assumes sequential
+  // traffic; concurrent calls all clear the `retired` gate before any of them settles,
+  // so N simultaneous transient 404s trip the latch just like N consecutive ones. A 200
+  // from that same in-flight batch is proof the surface was alive throughout, and it
+  // must win: retirement is permanent and only a restart re-probes, so leaving it set
+  // strands a live capability for the process lifetime.
+  //
+  // No generation token is needed to scope this. Once `retired` is set every later call
+  // short-circuits before reaching upstream, so the only successes that can arrive are
+  // the contemporaneous ones — a stale straggler cannot exist. A 410-derived "gone" is
+  // the server stating the fact, not an inference, so it is deliberately not retracted.
+  if (response.success && retired.get(capability) === "inferred") {
+    retired.delete(capability);
+  }
+
   return response;
 }
 

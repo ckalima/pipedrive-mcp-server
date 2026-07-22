@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setupValidEnv } from '../helpers/mockEnv.js';
-import { mockFetch, mockApiSuccess, mockApiError } from '../helpers/mockFetch.js';
+import { mockFetch, mockApiSuccess, mockApiError, createMockResponse } from '../helpers/mockFetch.js';
 import {
   isRetirementSignal,
   isLatchable404,
@@ -194,6 +194,68 @@ describe('version-routing', () => {
 
       mockApiSuccess([]);
       expect((await notesV1.get('/notes', undefined)).success).toBe(true);
+    });
+
+    // The "consecutive" run is only meaningful for sequential traffic. Concurrent calls
+    // all pass the `retired` gate before any of them settles, so N simultaneous transient
+    // 404s look exactly like N consecutive ones. That much is inherent. What must not
+    // happen is a CONTEMPORANEOUS success failing to undo the inferred retirement: a
+    // surface that is genuinely gone cannot also serve a 200 in the same batch, so that
+    // 200 is proof the 404s were transient. Retirement is permanent and only a restart
+    // re-probes, so getting this wrong strands a live capability for the process lifetime.
+    it('an in-flight success clears an inferred retirement latched by concurrent 404s', async () => {
+      // Hand-rolled deferred fetch so settlement ORDER is exact: the three 404s land
+      // first and trip the latch, then the success lands after it.
+      const gates: Array<(r: Response) => void> = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => new Promise<Response>((resolve) => gates.push(resolve))),
+      );
+
+      const inFlight = [
+        usersV1.get('/users', undefined),
+        usersV1.get('/users', undefined),
+        usersV1.get('/users', undefined),
+        usersV1.get('/users', undefined),
+      ];
+      await vi.waitFor(() => expect(gates).toHaveLength(4));
+
+      for (let i = 0; i < RETIREMENT_404_THRESHOLD; i++) {
+        gates[i](createMockResponse({ status: 404, ok: false, error: 'Not found' }));
+      }
+      const latched = await Promise.all(inFlight.slice(0, RETIREMENT_404_THRESHOLD));
+      expect(latched.at(-1)?.error?.code).toBe('CAPABILITY_RETIRED');
+
+      // The straggler proves the surface was alive the whole time.
+      gates[3](createMockResponse({ status: 200, data: [{ id: 1 }] }));
+      expect((await inFlight[3]).success).toBe(true);
+
+      mockApiSuccess([{ id: 1 }]);
+      const afterwards = await usersV1.get('/users', undefined);
+      expect(afterwards.error?.code).not.toBe('CAPABILITY_RETIRED');
+      expect(afterwards.success).toBe(true);
+    });
+
+    it('a 410-derived retirement is permanent and NOT cleared by an in-flight success', async () => {
+      // 410 is the server stating the surface is gone. Unlike the inferred latch that
+      // is fact, not evidence, so a straggler must not reopen it.
+      const gates: Array<(r: Response) => void> = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => new Promise<Response>((resolve) => gates.push(resolve))),
+      );
+
+      const inFlight = [usersV1.get('/users', undefined), usersV1.get('/users', undefined)];
+      await vi.waitFor(() => expect(gates).toHaveLength(2));
+
+      gates[0](createMockResponse({ status: 410, ok: false, error: 'Gone' }));
+      expect((await inFlight[0]).error?.code).toBe('CAPABILITY_RETIRED');
+
+      gates[1](createMockResponse({ status: 200, data: [{ id: 1 }] }));
+      await inFlight[1];
+
+      mockApiSuccess([{ id: 1 }]);
+      expect((await usersV1.get('/users', undefined)).error?.code).toBe('CAPABILITY_RETIRED');
     });
 
     it('a write 404 also breaks a read 404 run rather than counting toward it', async () => {
