@@ -1,13 +1,18 @@
 /**
- * Invariant: every parameter whose Zod schema accepts `null` must also declare `null`
- * in its hand-written JSON Schema `inputSchema` literal.
+ * Invariant: a parameter's hand-written JSON Schema `inputSchema` literal and its Zod
+ * schema must agree about `null`, in BOTH directions.
  *
  * The two are written by hand in separate places (the "three places per param" rule in
- * CLAUDE.md), so they can drift. When they do, the drift is silently one-directional and
- * user-hostile: the Zod schema and the tool description both say "pass null to clear this
- * field", but the advertised JSON Schema says `type: "number"`, which forbids null. A
- * schema-validating MCP client rejects the call before it ever reaches the handler, so the
- * documented clear-a-field behaviour is unreachable through those clients.
+ * CLAUDE.md), so they can drift, and each direction breaks a different way:
+ *
+ *   - literal forbids null, Zod accepts it. The Zod schema and the tool description both
+ *     say "pass null to clear this field", but the advertised JSON Schema says
+ *     `type: "number"`. A schema-validating MCP client rejects the call before it ever
+ *     reaches the handler, so the documented clear-a-field behaviour is unreachable.
+ *   - literal allows null, Zod rejects it. Worse, because it fails later and looks like a
+ *     server bug: the advertised schema invites `null`, the client duly sends it, and the
+ *     dispatcher rejects the call at runtime with a validation error. Widening a literal
+ *     to `["number", "null"]` without checking the Zod side produces exactly this.
  *
  * This walks every registered tool rather than spot-checking, and it recurses to arbitrary
  * depth through BOTH nesting forms a literal can use: `properties` (a plain nested object,
@@ -73,8 +78,9 @@ function formatPath(path: (string | number)[]): string {
 }
 
 /**
- * Every param path under `properties` whose literal forbids null while the Zod schema
- * accepts it. Recurses through plain nested objects and arrays of objects alike.
+ * Every param path under `properties` where the literal and the Zod schema disagree about
+ * null, in either direction. Recurses through plain nested objects and arrays of objects
+ * alike.
  */
 export function collectNullDrift(
   toolName: string,
@@ -87,9 +93,13 @@ export function collectNullDrift(
 
   for (const [key, prop] of Object.entries(properties)) {
     const propPath = [...path, key];
+    const schemaAccepts = schemaAcceptsNullAt(schema, buildProbe(propPath), propPath);
+    const literalAccepts = literalAllowsNull(prop);
 
-    if (schemaAcceptsNullAt(schema, buildProbe(propPath), propPath) && !literalAllowsNull(prop)) {
-      drift.push(`${toolName}.${formatPath(propPath)}`);
+    if (schemaAccepts && !literalAccepts) {
+      drift.push(`${toolName}.${formatPath(propPath)}: schema accepts null, literal omits it`);
+    } else if (literalAccepts && !schemaAccepts) {
+      drift.push(`${toolName}.${formatPath(propPath)}: literal declares null, schema rejects it`);
     }
 
     // A literal nests either way; follow both so neither form hides drift.
@@ -145,7 +155,9 @@ describe('nullable inputSchema parity', () => {
       location: { type: 'object', properties: { country: { type: 'string' } } },
     };
 
-    expect(collectNullDrift('t', schema, properties)).toEqual(['t.location.country']);
+    expect(collectNullDrift('t', schema, properties)).toEqual([
+      't.location.country: schema accepts null, literal omits it',
+    ]);
   });
 
   it('reports array-nested drift with the same path formatting as before', () => {
@@ -156,7 +168,35 @@ describe('nullable inputSchema parity', () => {
       products: { type: 'array', items: { type: 'object', properties: { discount: { type: 'number' } } } },
     };
 
-    expect(collectNullDrift('t', schema, properties)).toEqual(['t.products[].discount']);
+    expect(collectNullDrift('t', schema, properties)).toEqual([
+      't.products[].discount: schema accepts null, literal omits it',
+    ]);
+  });
+
+  // The reverse direction. Widening a literal to ["number","null"] without widening the
+  // Zod schema advertises a null the dispatcher will reject at call time, which reads to
+  // the user as a server bug rather than a bad argument. A one-directional guard ships
+  // this green, so it is worth its own case.
+  it('finds an over-declared literal whose Zod schema still rejects null', () => {
+    const schema = z.object({ priority: z.number().int().optional() });
+    const properties = { priority: { type: ['number', 'null'] } };
+
+    expect(collectNullDrift('t', schema, properties)).toEqual([
+      't.priority: literal declares null, schema rejects it',
+    ]);
+  });
+
+  it('finds an over-declared literal nested inside an array', () => {
+    const schema = z.object({
+      products: z.array(z.object({ quantity: z.number() })).optional(),
+    });
+    const properties = {
+      products: { type: 'array', items: { type: 'object', properties: { quantity: { type: ['number', 'null'] } } } },
+    };
+
+    expect(collectNullDrift('t', schema, properties)).toEqual([
+      't.products[].quantity: literal declares null, schema rejects it',
+    ]);
   });
 
   it('clears a nested param once the literal declares null', () => {
