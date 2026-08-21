@@ -39,6 +39,10 @@ import {
   isToolAllowedInMode,
   capabilityModeStartupLines,
 } from "./capability-modes.js";
+import {
+  primeConnectedIdentity,
+  connectedIdentityStartupLines,
+} from "./identity.js";
 import { mcpErrorFromCode, boundErrorMessage } from "./utils/errors.js";
 import { MAX_TOOL_RESPONSE_CHARS, measureResultTextLength } from "./utils/formatting.js";
 
@@ -181,6 +185,13 @@ async function main() {
     console.error(`[${SERVER_NAME}] ${line}`);
   }
 
+  // Start the connected-account probe now so its result is ready by the time the
+  // banner is emitted, without holding up the transport (R2). Deliberately NOT
+  // guarded on configValidation.valid: the resolver owns the invalid-config skip,
+  // and a guard here would suppress only this call while the banner seam below
+  // started the probe anyway.
+  void primeConnectedIdentity().catch(() => {});
+
   // Create MCP server
   const server = new Server(
     {
@@ -213,6 +224,23 @@ async function main() {
   await server.connect(transport);
 
   console.error(`[${SERVER_NAME}] Server running on STDIO`);
+
+  // Name the account this token actually resolves to (R1). Emitted only after the
+  // transport is up, so a slow or dead network delays this line and nothing else.
+  // Guarded because this is the first await in main() that can throw AFTER
+  // server.connect() returned, and the entrypoint below exits the process on a
+  // rejection — an identity-path defect must not kill a server that is already
+  // serving tool calls.
+  try {
+    for (const line of await connectedIdentityStartupLines()) {
+      console.error(`[${SERVER_NAME}] ${line}`);
+    }
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error(
+      `[${SERVER_NAME}] Could not verify connected account: ${boundErrorMessage(rawMessage, getCachedApiToken() ?? undefined)}`,
+    );
+  }
 }
 
 /** Injected handlers for {@link dispatchCli}, so routing is testable without booting. */
