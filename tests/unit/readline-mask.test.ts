@@ -29,15 +29,18 @@ function nullSink() {
 describe('MaskableOutput (M2 mute logic)', () => {
   function captureSink() {
     const out: string[] = [];
-    const sink = {
-      write: (s: string) => {
-        out.push(s);
-        return true;
+    // A real Writable, not an object literal with a `write` method: MaskableOutput's
+    // sink is typed as NodeJS.WritableStream, and these tests only ever exercise
+    // `write`. Matches nullSink() above.
+    const sink = new Writable({
+      write(chunk, _enc, cb) {
+        out.push(String(chunk));
+        cb();
       },
-      columns: 80,
-      rows: 24,
-      isTTY: true,
-    };
+    }) as Writable & { columns?: number; rows?: number; isTTY?: boolean };
+    sink.columns = 80;
+    sink.rows = 24;
+    sink.isTTY = true;
     return { out, sink };
   }
 

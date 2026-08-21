@@ -9,7 +9,9 @@ import {
   mockApiSuccess,
   mockApiError,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
+import { ListDealInstallmentsSchema } from '../../../src/schemas/deals.js';
 
 const installment = {
   id: 7,
@@ -35,7 +37,7 @@ describe('deal installment tools (U3, #67)', () => {
       const mockFn = mockApiSuccess([installment]);
       const { listDealInstallments } = await getDealsTools();
 
-      await listDealInstallments({ deal_ids: [1, 2, 3] });
+      await listDealInstallments(ListDealInstallmentsSchema.parse({ deal_ids: [1, 2, 3] }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/deals/installments');
@@ -45,18 +47,18 @@ describe('deal installment tools (U3, #67)', () => {
       const mockFn = mockApiSuccess([installment]);
       const { listDealInstallments } = await getDealsTools();
 
-      await listDealInstallments({ deal_ids: [1, 2, 3] });
+      await listDealInstallments(ListDealInstallmentsSchema.parse({ deal_ids: [1, 2, 3] }));
 
       const [url] = mockFn.mock.calls[0];
       // URLSearchParams encodes the comma as %2C
-      expect(decodeURIComponent(url)).toContain('deal_ids=1,2,3');
+      expect(decodeURIComponent(String(url))).toContain('deal_ids=1,2,3');
     });
 
     it('should forward cursor and sort params when provided', async () => {
       const mockFn = mockApiSuccess([installment]);
       const { listDealInstallments } = await getDealsTools();
 
-      await listDealInstallments({ deal_ids: [1], cursor: 'curs', sort_by: 'billing_date', sort_direction: 'asc' });
+      await listDealInstallments(ListDealInstallmentsSchema.parse({ deal_ids: [1], cursor: 'curs', sort_by: 'billing_date', sort_direction: 'asc' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=curs');
@@ -68,7 +70,7 @@ describe('deal installment tools (U3, #67)', () => {
       mockFetch({ data: [installment], additional_data: paginationFixtures.v2WithMore });
       const { listDealInstallments } = await getDealsTools();
 
-      const result = await listDealInstallments({ deal_ids: [1] });
+      const result = await listDealInstallments(ListDealInstallmentsSchema.parse({ deal_ids: [1] }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -78,7 +80,7 @@ describe('deal installment tools (U3, #67)', () => {
       mockApiError(403, 'Plan does not support installments');
       const { listDealInstallments } = await getDealsTools();
 
-      const result = await listDealInstallments({ deal_ids: [1] });
+      const result = await listDealInstallments(ListDealInstallmentsSchema.parse({ deal_ids: [1] }));
 
       expect(result.isError).toBe(true);
     });
@@ -94,7 +96,7 @@ describe('deal installment tools (U3, #67)', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/deals/1/installments');
       expect(options.method).toBe('POST');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.description).toBe('Q1 payment');
       expect(body.amount).toBe(100);
       expect(body.billing_date).toBe('2024-03-31');
@@ -130,7 +132,7 @@ describe('deal installment tools (U3, #67)', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/deals/1/installments/7');
       expect(options.method).toBe('PATCH');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.amount).toBe(150);
       expect(body.description).toBeUndefined();
     });

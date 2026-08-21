@@ -9,7 +9,9 @@ import {
   mockApiSuccess,
   mockApiError,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
+import { ListTasksSchema } from '../../../src/schemas/tasks.js';
 
 const task = {
   id: 1,
@@ -68,7 +70,7 @@ describe('tasks tools', () => {
       mockFetch({ data: createTasksFixture(1), additional_data: paginationFixtures.v2NoMore });
       const { listTasks } = await getTasksTools();
 
-      const result = await listTasks({});
+      const result = await listTasks(ListTasksSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       // createListSummary returns "Found 1 task."
@@ -80,7 +82,7 @@ describe('tasks tools', () => {
       mockFetch({ data: createTasksFixture(3), additional_data: paginationFixtures.v2NoMore });
       const { listTasks } = await getTasksTools();
 
-      const result = await listTasks({});
+      const result = await listTasks(ListTasksSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       // createListSummary returns "Found 3 tasks."
@@ -91,7 +93,7 @@ describe('tasks tools', () => {
       mockFetch({ data: createTasksFixture(50), additional_data: paginationFixtures.v2WithMore });
       const { listTasks } = await getTasksTools();
 
-      const result = await listTasks({ cursor: 'page1' });
+      const result = await listTasks(ListTasksSchema.parse({ cursor: 'page1' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -102,7 +104,7 @@ describe('tasks tools', () => {
       mockFetch({ data: createTasksFixture(2), additional_data: paginationFixtures.v2NoMore });
       const { listTasks } = await getTasksTools();
 
-      const result = await listTasks({});
+      const result = await listTasks(ListTasksSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(false);
@@ -112,7 +114,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({ cursor: 'pagecursor123' });
+      await listTasks(ListTasksSchema.parse({ cursor: 'pagecursor123' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=pagecursor123');
@@ -122,7 +124,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({ is_done: true });
+      await listTasks(ListTasksSchema.parse({ is_done: true }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('is_done=true');
@@ -132,7 +134,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({ is_done: false });
+      await listTasks(ListTasksSchema.parse({ is_done: false }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('is_done=false');
@@ -142,7 +144,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({});
+      await listTasks(ListTasksSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('is_done');
@@ -152,7 +154,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({ is_milestone: true });
+      await listTasks(ListTasksSchema.parse({ is_milestone: true }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('is_milestone=true');
@@ -162,7 +164,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({});
+      await listTasks(ListTasksSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('is_milestone');
@@ -172,7 +174,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({ assignee_id: 5 });
+      await listTasks(ListTasksSchema.parse({ assignee_id: 5 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('assignee_id=5');
@@ -182,7 +184,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({});
+      await listTasks(ListTasksSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('assignee_id');
@@ -192,7 +194,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({ project_id: 42 });
+      await listTasks(ListTasksSchema.parse({ project_id: 42 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('project_id=42');
@@ -202,7 +204,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({});
+      await listTasks(ListTasksSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('project_id');
@@ -212,7 +214,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({ parent_task_id: 'null' });
+      await listTasks(ListTasksSchema.parse({ parent_task_id: 'null' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('parent_task_id=null');
@@ -222,7 +224,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({});
+      await listTasks(ListTasksSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('parent_task_id');
@@ -232,7 +234,7 @@ describe('tasks tools', () => {
       mockApiError(500, 'Internal server error');
       const { listTasks } = await getTasksTools();
 
-      const result = await listTasks({});
+      const result = await listTasks(ListTasksSchema.parse({}));
 
       expect(result.isError).toBe(true);
     });
@@ -241,7 +243,7 @@ describe('tasks tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listTasks } = await getTasksTools();
 
-      await listTasks({});
+      await listTasks(ListTasksSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/tasks');
@@ -324,7 +326,7 @@ describe('tasks tools', () => {
       await createTask({ title: 'New Task', project_id: 10 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.title).toBe('New Task');
       expect(body.project_id).toBe(10);
     });
@@ -336,7 +338,7 @@ describe('tasks tools', () => {
       await createTask({ title: 'New Task', project_id: 10 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.description).toBeUndefined();
       expect(body.is_done).toBeUndefined();
       expect(body.is_milestone).toBeUndefined();
@@ -367,7 +369,7 @@ describe('tasks tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.description).toBe('A description');
       // booleans on the wire — the live v2 API ignores int done/milestone (issue #81)
       expect(body.is_done).toBe(false);
@@ -412,7 +414,7 @@ describe('tasks tools', () => {
 
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/tasks/7');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.id).toBeUndefined();
     });
 
@@ -423,7 +425,7 @@ describe('tasks tools', () => {
       await updateTask({ id: 7 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(Object.keys(body)).toHaveLength(0);
     });
 
@@ -434,7 +436,7 @@ describe('tasks tools', () => {
       await updateTask({ id: 7, title: 'New Title', is_done: true });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.title).toBe('New Title');
       expect(body.is_done).toBe(true);
       expect(body.description).toBeUndefined();

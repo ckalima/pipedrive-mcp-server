@@ -8,6 +8,7 @@ import {
   mockApiError,
   mockFetchNetworkError,
 } from '../helpers/mockFetch.js';
+import { ListDealsSchema } from '../../src/schemas/deals.js';
 
 describe('Error Handling', () => {
   beforeEach(() => {
@@ -30,7 +31,7 @@ describe('Error Handling', () => {
       mockApiError(401, 'Invalid API key');
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
 
       expect(result.content[0].text).toContain('INVALID_API_KEY');
       expect(result.content[0].text).toContain('invalid or expired');
@@ -62,7 +63,7 @@ describe('Error Handling', () => {
       mockApiError(429, 'Rate limit exceeded');
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
 
       expect(result.content[0].text).toContain('RATE_LIMITED');
       expect(result.content[0].text).toContain('Rate limit exceeded');
@@ -75,7 +76,7 @@ describe('Error Handling', () => {
       mockApiError(500, 'Internal server error');
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
 
       expect(result.content[0].text).toContain('API_ERROR');
       expect(result.content[0].text).toContain('500');
@@ -85,7 +86,7 @@ describe('Error Handling', () => {
       mockApiError(502, 'Bad gateway');
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
 
       expect(result.content[0].text).toContain('API_ERROR');
       expect(result.content[0].text).toContain('502');
@@ -95,7 +96,7 @@ describe('Error Handling', () => {
       mockApiError(503, 'Service temporarily unavailable');
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
 
       expect(result.content[0].text).toContain('API_ERROR');
       expect(result.content[0].text).toContain('503');
@@ -107,7 +108,7 @@ describe('Error Handling', () => {
       mockFetchNetworkError('Connection refused');
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
 
       expect(result.content[0].text).toContain('NETWORK_ERROR');
       expect(result.content[0].text).toContain('Connection refused');
@@ -117,7 +118,7 @@ describe('Error Handling', () => {
       mockFetchNetworkError('getaddrinfo ENOTFOUND api.pipedrive.com');
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
 
       expect(result.content[0].text).toContain('NETWORK_ERROR');
     });
@@ -126,7 +127,7 @@ describe('Error Handling', () => {
       mockFetchNetworkError('Request timeout');
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
 
       expect(result.content[0].text).toContain('NETWORK_ERROR');
       expect(result.content[0].text).toContain('timeout');
@@ -156,11 +157,19 @@ describe('Error Handling', () => {
       { name: 'users', getTools: () => import('../../src/tools/users.js'), operation: 'listUsers' },
     ];
 
+    // The handlers are looked up by name, so the module namespace has to be indexed
+    // dynamically. Their param types differ, but this table only ever calls them with an
+    // empty param set, so one structural signature covers all five — and unlike the `any`
+    // it replaces, it still types the RESULT the assertions below read.
+    type ListHandlerUnderTest = (params: Record<string, never>) => Promise<{
+      content: { type: 'text'; text: string }[];
+    }>;
+
     toolTests.forEach(({ name, getTools, operation }) => {
       it(`should handle errors in ${name} tool`, async () => {
         mockApiError(401, 'Invalid API key');
         const tools = await getTools();
-        const fn = (tools as any)[operation];
+        const fn = (tools as unknown as Record<string, ListHandlerUnderTest>)[operation];
 
         const result = await fn({});
 
@@ -186,7 +195,7 @@ describe('Error Handling', () => {
       mockApiError(429, 'Rate limit');
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
       const text = result.content[0].text;
 
       expect(text).toMatch(/Error \[RATE_LIMITED\]/);
@@ -196,7 +205,7 @@ describe('Error Handling', () => {
       mockApiError(401, 'Unauthorized');
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
       const text = result.content[0].text;
 
       expect(text).toContain('Suggestion:');

@@ -9,7 +9,9 @@ import {
   mockApiSuccess,
   mockApiError,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
+import { ListOrganizationFollowersSchema, OrganizationFollowersChangelogSchema } from '../../../src/schemas/organizations.js';
 
 const follower = {
   user_id: 7,
@@ -39,7 +41,7 @@ describe('organization follower tools (U3, #69)', () => {
       const mockFn = mockApiSuccess([]);
       const { listOrganizationFollowers } = await getOrganizationsTools();
 
-      await listOrganizationFollowers({ id: 3 });
+      await listOrganizationFollowers(ListOrganizationFollowersSchema.parse({ id: 3 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/organizations/3/followers');
@@ -49,7 +51,7 @@ describe('organization follower tools (U3, #69)', () => {
       const mockFn = mockApiSuccess([]);
       const { listOrganizationFollowers } = await getOrganizationsTools();
 
-      await listOrganizationFollowers({ id: 3, cursor: 'follcursor' });
+      await listOrganizationFollowers(ListOrganizationFollowersSchema.parse({ id: 3, cursor: 'follcursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=follcursor');
@@ -59,7 +61,7 @@ describe('organization follower tools (U3, #69)', () => {
       mockFetch({ data: [follower], additional_data: paginationFixtures.v2WithMore });
       const { listOrganizationFollowers } = await getOrganizationsTools();
 
-      const result = await listOrganizationFollowers({ id: 3 });
+      const result = await listOrganizationFollowers(ListOrganizationFollowersSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -70,7 +72,7 @@ describe('organization follower tools (U3, #69)', () => {
       mockFetch({ data: [follower, follower], additional_data: paginationFixtures.v2NoMore });
       const { listOrganizationFollowers } = await getOrganizationsTools();
 
-      const result = await listOrganizationFollowers({ id: 3 });
+      const result = await listOrganizationFollowers(ListOrganizationFollowersSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('follower');
@@ -81,7 +83,7 @@ describe('organization follower tools (U3, #69)', () => {
       mockApiError(500, 'Internal server error');
       const { listOrganizationFollowers } = await getOrganizationsTools();
 
-      const result = await listOrganizationFollowers({ id: 3 });
+      const result = await listOrganizationFollowers(ListOrganizationFollowersSchema.parse({ id: 3 }));
 
       expect(result.isError).toBe(true);
     });
@@ -90,7 +92,7 @@ describe('organization follower tools (U3, #69)', () => {
       const mockFn = mockApiSuccess([]);
       const { listOrganizationFollowers } = await getOrganizationsTools();
 
-      await listOrganizationFollowers({ id: 3 });
+      await listOrganizationFollowers(ListOrganizationFollowersSchema.parse({ id: 3 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('api_token');
@@ -116,7 +118,7 @@ describe('organization follower tools (U3, #69)', () => {
       await addOrganizationFollower({ id: 3, user_id: 7 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.user_id).toBe(7);
     });
 
@@ -136,7 +138,7 @@ describe('organization follower tools (U3, #69)', () => {
       const mockFn = mockApiSuccess([]);
       const { getOrganizationFollowersChangelog } = await getOrganizationsTools();
 
-      await getOrganizationFollowersChangelog({ id: 3 });
+      await getOrganizationFollowersChangelog(OrganizationFollowersChangelogSchema.parse({ id: 3 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/organizations/3/followers/changelog');
@@ -146,7 +148,7 @@ describe('organization follower tools (U3, #69)', () => {
       mockFetch({ data: [changelogEntry], additional_data: paginationFixtures.v2WithMore });
       const { getOrganizationFollowersChangelog } = await getOrganizationsTools();
 
-      const result = await getOrganizationFollowersChangelog({ id: 3 });
+      const result = await getOrganizationFollowersChangelog(OrganizationFollowersChangelogSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -157,7 +159,7 @@ describe('organization follower tools (U3, #69)', () => {
       mockFetch({ data: [changelogEntry], additional_data: paginationFixtures.v2NoMore });
       const { getOrganizationFollowersChangelog } = await getOrganizationsTools();
 
-      const result = await getOrganizationFollowersChangelog({ id: 3 });
+      const result = await getOrganizationFollowersChangelog(OrganizationFollowersChangelogSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('changelog');

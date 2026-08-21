@@ -10,9 +10,11 @@ import {
   mockApiError,
   fixtures,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
 import { createNotesFixture } from '../../helpers/fixtures.js';
 import { RETIREMENT_404_THRESHOLD } from '../../../src/version-routing.js';
+import { ListNotesSchema } from '../../../src/schemas/notes.js';
 
 async function getNotesTools() {
   return import('../../../src/tools/notes.js');
@@ -41,13 +43,13 @@ describe('notes tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listNotes } = await getNotesTools();
 
-      await listNotes({
+      await listNotes(ListNotesSchema.parse({
         deal_id: 1,
         person_id: 2,
         org_id: 3,
         pinned_to_deal_flag: true,
         sort: 'add_time',
-      });
+      }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('deal_id=1');
@@ -60,7 +62,7 @@ describe('notes tools', () => {
       mockFetch({ data: [], additional_data: paginationFixtures.v1WithMore });
       const { listNotes } = await getNotesTools();
 
-      const result = await listNotes({ start: 50 });
+      const result = await listNotes(ListNotesSchema.parse({ start: 50 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -70,7 +72,7 @@ describe('notes tools', () => {
       mockApiError(401, 'Invalid API key');
       const { listNotes } = await getNotesTools();
 
-      const result = await listNotes({});
+      const result = await listNotes(ListNotesSchema.parse({}));
 
       expect(result.content[0].text).toContain('INVALID_API_KEY');
       expect(result.isError).toBe(true);
@@ -80,7 +82,7 @@ describe('notes tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listNotes } = await getNotesTools();
 
-      await listNotes({});
+      await listNotes(ListNotesSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/notes');
@@ -91,7 +93,7 @@ describe('notes tools', () => {
       mockFetch({ data: null });
       const { listNotes } = await getNotesTools();
 
-      const result = await listNotes({ deal_id: 277 });
+      const result = await listNotes(ListNotesSchema.parse({ deal_id: 277 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.data).toEqual([]);
@@ -164,7 +166,7 @@ describe('notes tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.content).toBe('<p>Meeting notes</p>');
       expect(body.deal_id).toBe(10);
       expect(body.person_id).toBe(20);
@@ -228,7 +230,7 @@ describe('notes tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.pinned_to_deal_flag).toBe(1);
       expect(body.pinned_to_person_flag).toBe(0);
     });
@@ -289,7 +291,7 @@ describe('notes tools', () => {
 
       // notes was not marked retired — a follow-up list still hits the network.
       const listMock = mockApiSuccess([]);
-      const listResult = await listNotes({});
+      const listResult = await listNotes(ListNotesSchema.parse({}));
       expect(listResult.isError).toBeFalsy();
       expect(listMock).toHaveBeenCalledTimes(1);
     });
@@ -298,7 +300,7 @@ describe('notes tools', () => {
       mockApiError(410, 'Gone');
       const { listNotes } = await getNotesTools();
 
-      const result = await listNotes({});
+      const result = await listNotes(ListNotesSchema.parse({}));
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('CAPABILITY_RETIRED');
@@ -313,10 +315,10 @@ describe('notes tools', () => {
       const { listNotes } = await getNotesTools();
 
       for (let i = 0; i < RETIREMENT_404_THRESHOLD - 1; i++) {
-        expect((await listNotes({})).content[0].text).toContain('NOT_FOUND');
+        expect((await listNotes(ListNotesSchema.parse({}))).content[0].text).toContain('NOT_FOUND');
       }
 
-      const result = await listNotes({});
+      const result = await listNotes(ListNotesSchema.parse({}));
 
       expect(result.content[0].text).toContain('CAPABILITY_RETIRED');
     });
@@ -325,7 +327,7 @@ describe('notes tools', () => {
       const mockFn = mockApiError(410, 'Gone');
       const { listNotes, getNote } = await getNotesTools();
 
-      const first = await listNotes({});
+      const first = await listNotes(ListNotesSchema.parse({}));
       expect(first.content[0].text).toContain('CAPABILITY_RETIRED');
       expect(mockFn).toHaveBeenCalledTimes(1);
 

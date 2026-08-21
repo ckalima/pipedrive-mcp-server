@@ -10,8 +10,10 @@ import {
   mockApiError,
   fixtures,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
 import { createPersonsFixture } from '../../helpers/fixtures.js';
+import { ListPersonsSchema, SearchPersonsSchema } from '../../../src/schemas/persons.js';
 
 // Dynamic import to avoid module caching issues with mocks
 async function getPersonsTools() {
@@ -43,12 +45,12 @@ describe('persons tools', () => {
 
       // first_char is passed directly (bypassing Zod) so the assertion guards the
       // handler-line removal, not just the schema strip — revert-proof at handler level.
-      await listPersons({
+      await listPersons(ListPersonsSchema.parse({
         owner_id: 1,
         org_id: 5,
         sort_by: 'update_time',
         first_char: 'A',
-      } as Record<string, unknown>);
+      } as Record<string, unknown>));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('owner_id=1');
@@ -60,7 +62,7 @@ describe('persons tools', () => {
       mockFetch({ data: createPersonsFixture(50), additional_data: paginationFixtures.v2WithMore });
       const { listPersons } = await getPersonsTools();
 
-      const result = await listPersons({ cursor: 'page2' });
+      const result = await listPersons(ListPersonsSchema.parse({ cursor: 'page2' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -114,7 +116,7 @@ describe('persons tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Jane Doe');
       // v2 contract: request body must use `emails`/`phones`, not `email`/`phone`
       expect(body.emails).toEqual([{ value: 'jane@example.com', primary: true }]);
@@ -157,7 +159,7 @@ describe('persons tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.emails).toEqual([{ value: 'new@example.com', primary: true }]);
       expect(body.phones).toEqual([{ value: '+1999', primary: true }]);
       expect(body.email).toBeUndefined();
@@ -172,7 +174,7 @@ describe('persons tools', () => {
       });
       const { searchPersons } = await getPersonsTools();
 
-      const result = await searchPersons({ term: 'john' });
+      const result = await searchPersons(SearchPersonsSchema.parse({ term: 'john' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('john');
@@ -182,7 +184,7 @@ describe('persons tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchPersons } = await getPersonsTools();
 
-      await searchPersons({ term: 'test' });
+      await searchPersons(SearchPersonsSchema.parse({ term: 'test' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/persons/search');
@@ -194,13 +196,13 @@ describe('persons tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchPersons } = await getPersonsTools();
 
-      await searchPersons({
+      await searchPersons(SearchPersonsSchema.parse({
         term: 'jane',
         fields: 'email,phone',
         org_id: 5,
         exact_match: true,
         cursor: 'cur1',
-      });
+      }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('term=jane');
@@ -218,7 +220,7 @@ describe('persons tools', () => {
       mockFetch({ data: { items: [] }, additional_data: { next_cursor: 'NEXT' } });
       const { searchPersons } = await getPersonsTools();
 
-      const result = await searchPersons({ term: 'x' });
+      const result = await searchPersons(SearchPersonsSchema.parse({ term: 'x' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);

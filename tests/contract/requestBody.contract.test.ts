@@ -14,13 +14,13 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setupValidEnv } from "../helpers/mockEnv.js";
-import { mockApiSuccess, fixtures } from "../helpers/mockFetch.js";
+import { mockApiSuccess, fixtures, requestBody } from "../helpers/mockFetch.js";
 import { assertBodyConformsToSpec } from "./helpers/openapiContract.js";
 
 /** Capture the JSON body of the single mocked outbound call. */
 function capturedBody(mockFn: ReturnType<typeof mockApiSuccess>): unknown {
-  const [, init] = mockFn.mock.calls[0] as [unknown, { body?: string }];
-  return JSON.parse(init.body as string);
+  const [, init] = mockFn.mock.calls[0];
+  return requestBody(init);
 }
 
 describe("request-body contract (v2)", () => {

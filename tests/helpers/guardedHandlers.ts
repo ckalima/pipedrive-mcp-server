@@ -18,6 +18,7 @@ export const TOOLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../sr
 /** Runtime view of a tool def with its bound handler function. */
 export type ToolWithHandler = {
   name: string;
+  description: string;
   destructive?: boolean;
   handler?: (...args: unknown[]) => unknown;
 };

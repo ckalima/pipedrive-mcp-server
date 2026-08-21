@@ -11,6 +11,7 @@ import {
   paginationFixtures,
   fixtures,
 } from '../../helpers/mockFetch.js';
+import { ListArchivedDealsSchema } from '../../../src/schemas/deals.js';
 
 // Dynamic import to avoid module caching issues with mocks
 async function getDealsTools() {
@@ -28,7 +29,7 @@ describe('archived deals tool (U4, #67)', () => {
       const mockFn = mockApiSuccess([fixtures.deal]);
       const { listArchivedDeals } = await getDealsTools();
 
-      await listArchivedDeals({});
+      await listArchivedDeals(ListArchivedDealsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/deals/archived');
@@ -38,7 +39,7 @@ describe('archived deals tool (U4, #67)', () => {
       const mockFn = mockApiSuccess([fixtures.deal]);
       const { listArchivedDeals } = await getDealsTools();
 
-      await listArchivedDeals({
+      await listArchivedDeals(ListArchivedDealsSchema.parse({
         filter_id: 4,
         owner_id: 5,
         person_id: 6,
@@ -48,7 +49,7 @@ describe('archived deals tool (U4, #67)', () => {
         status: 'won',
         sort_by: 'add_time',
         sort_direction: 'asc',
-      });
+      }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('filter_id=4');
@@ -72,7 +73,7 @@ describe('archived deals tool (U4, #67)', () => {
       const mockFn = mockApiSuccess([fixtures.deal]);
       const { listArchivedDeals } = await getDealsTools();
 
-      await listArchivedDeals({});
+      await listArchivedDeals(ListArchivedDealsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('filter_id=');
@@ -83,7 +84,7 @@ describe('archived deals tool (U4, #67)', () => {
       mockFetch({ data: [fixtures.deal], additional_data: paginationFixtures.v2WithMore });
       const { listArchivedDeals } = await getDealsTools();
 
-      const result = await listArchivedDeals({});
+      const result = await listArchivedDeals(ListArchivedDealsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('archived deal');
@@ -94,7 +95,7 @@ describe('archived deals tool (U4, #67)', () => {
       mockApiError(500, 'Internal server error');
       const { listArchivedDeals } = await getDealsTools();
 
-      const result = await listArchivedDeals({});
+      const result = await listArchivedDeals(ListArchivedDealsSchema.parse({}));
 
       expect(result.isError).toBe(true);
     });

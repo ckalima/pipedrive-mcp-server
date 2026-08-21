@@ -9,7 +9,9 @@ import {
   mockApiSuccess,
   mockApiError,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
+import { ListProductVariationsSchema } from '../../../src/schemas/products.js';
 
 const variation = {
   id: 10,
@@ -34,7 +36,7 @@ describe('product variation tools (U3)', () => {
       const mockFn = mockApiSuccess([]);
       const { listProductVariations } = await getProductsTools();
 
-      await listProductVariations({ id: 5 });
+      await listProductVariations(ListProductVariationsSchema.parse({ id: 5 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/products/5/variations');
@@ -44,7 +46,7 @@ describe('product variation tools (U3)', () => {
       const mockFn = mockApiSuccess([]);
       const { listProductVariations } = await getProductsTools();
 
-      await listProductVariations({ id: 5, cursor: 'mycursor' });
+      await listProductVariations(ListProductVariationsSchema.parse({ id: 5, cursor: 'mycursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=mycursor');
@@ -54,7 +56,7 @@ describe('product variation tools (U3)', () => {
       mockFetch({ data: [variation], additional_data: paginationFixtures.v2WithMore });
       const { listProductVariations } = await getProductsTools();
 
-      const result = await listProductVariations({ id: 5 });
+      const result = await listProductVariations(ListProductVariationsSchema.parse({ id: 5 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -65,7 +67,7 @@ describe('product variation tools (U3)', () => {
       mockFetch({ data: [variation, variation], additional_data: paginationFixtures.v2NoMore });
       const { listProductVariations } = await getProductsTools();
 
-      const result = await listProductVariations({ id: 5 });
+      const result = await listProductVariations(ListProductVariationsSchema.parse({ id: 5 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('product variation');
@@ -76,7 +78,7 @@ describe('product variation tools (U3)', () => {
       mockApiError(500, 'Internal server error');
       const { listProductVariations } = await getProductsTools();
 
-      const result = await listProductVariations({ id: 5 });
+      const result = await listProductVariations(ListProductVariationsSchema.parse({ id: 5 }));
 
       expect(result.isError).toBe(true);
     });
@@ -85,7 +87,7 @@ describe('product variation tools (U3)', () => {
       const mockFn = mockApiSuccess([]);
       const { listProductVariations } = await getProductsTools();
 
-      await listProductVariations({ id: 5 });
+      await listProductVariations(ListProductVariationsSchema.parse({ id: 5 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('api_token');
@@ -111,7 +113,7 @@ describe('product variation tools (U3)', () => {
       await addProductVariation({ id: 5, name: 'Blue Variant' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Blue Variant');
     });
 
@@ -126,7 +128,7 @@ describe('product variation tools (U3)', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody<{ prices: Record<string, unknown>[] }>(options);
       expect(body.prices).toHaveLength(1);
       expect(body.prices[0].price).toBe(99.99);
       expect(body.prices[0].notes).toBe('Special pricing');
@@ -162,7 +164,7 @@ describe('product variation tools (U3)', () => {
       await updateProductVariation({ id: 5, product_variation_id: 10, name: 'Renamed' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.id).toBeUndefined();
       expect(body.product_variation_id).toBeUndefined();
       expect(body.name).toBe('Renamed');
@@ -179,7 +181,7 @@ describe('product variation tools (U3)', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody<{ prices: Record<string, unknown>[] }>(options);
       expect(body.prices).toHaveLength(1);
       expect(body.prices[0].currency).toBe('EUR');
     });

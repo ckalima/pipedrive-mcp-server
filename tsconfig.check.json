@@ -1,0 +1,24 @@
+{
+  // Typecheck-only config covering everything tsconfig.json leaves out.
+  //
+  // tsconfig.json is the BUILD config: rootDir src/, and it excludes **/*.test.ts so the
+  // published dist/ tree carries no test code. That scoping meant tests/ and scripts/ were
+  // never typechecked at all — vitest transpiles per-file without cross-file checking and
+  // tsx strips types, so a broken type in a test helper, a smoke script or the docs
+  // generator only surfaced at runtime, if ever.
+  //
+  // This config adds noEmit checking over src + tests + scripts + the root config files.
+  // `exclude` is redeclared rather than inherited: extends does not merge arrays, and the
+  // inherited "**/*.test.ts" would silently drop the very files this exists to cover.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    // Vitest's globals: true (vitest.config.ts) means a test may use describe/it/expect
+    // without importing them. src/ stays honest about this: the build config has no
+    // vitest types, so a stray global there still fails `npm run build`.
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist", "coverage", "bundle"]
+}

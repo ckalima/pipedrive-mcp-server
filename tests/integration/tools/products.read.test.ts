@@ -10,6 +10,7 @@ import {
   mockApiError,
   paginationFixtures,
 } from '../../helpers/mockFetch.js';
+import { ListProductsSchema, SearchProductsSchema } from '../../../src/schemas/products.js';
 
 const product = {
   id: 1,
@@ -74,7 +75,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({ owner_id: 42 });
+      await listProducts(ListProductsSchema.parse({ owner_id: 42 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('owner_id=42');
@@ -84,7 +85,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({});
+      await listProducts(ListProductsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('owner_id');
@@ -94,7 +95,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({ ids: '1,2,3' });
+      await listProducts(ListProductsSchema.parse({ ids: '1,2,3' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('ids=1%2C2%2C3');
@@ -104,7 +105,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({});
+      await listProducts(ListProductsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('ids=');
@@ -114,7 +115,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({ filter_id: 10 });
+      await listProducts(ListProductsSchema.parse({ filter_id: 10 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('filter_id=10');
@@ -124,7 +125,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({ sort_by: 'name' });
+      await listProducts(ListProductsSchema.parse({ sort_by: 'name' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('sort_by=name');
@@ -134,7 +135,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({});
+      await listProducts(ListProductsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('sort_by');
@@ -144,7 +145,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({ sort_direction: 'desc' });
+      await listProducts(ListProductsSchema.parse({ sort_direction: 'desc' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('sort_direction=desc');
@@ -154,7 +155,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({ updated_since: '2024-01-01T00:00:00Z' });
+      await listProducts(ListProductsSchema.parse({ updated_since: '2024-01-01T00:00:00Z' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('updated_since=');
@@ -164,7 +165,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({ custom_fields: 'field1,field2' });
+      await listProducts(ListProductsSchema.parse({ custom_fields: 'field1,field2' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('custom_fields=field1%2Cfield2');
@@ -174,7 +175,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({});
+      await listProducts(ListProductsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('custom_fields');
@@ -184,7 +185,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({ cursor: 'page2cursor' });
+      await listProducts(ListProductsSchema.parse({ cursor: 'page2cursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=page2cursor');
@@ -194,7 +195,7 @@ describe('products read tools', () => {
       mockFetch({ data: createProductsFixture(50), additional_data: paginationFixtures.v2WithMore });
       const { listProducts } = await getProductsTools();
 
-      const result = await listProducts({ cursor: 'page1' });
+      const result = await listProducts(ListProductsSchema.parse({ cursor: 'page1' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -205,7 +206,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProducts } = await getProductsTools();
 
-      await listProducts({});
+      await listProducts(ListProductsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/products');
@@ -215,7 +216,7 @@ describe('products read tools', () => {
       mockApiError(500, 'Internal server error');
       const { listProducts } = await getProductsTools();
 
-      const result = await listProducts({});
+      const result = await listProducts(ListProductsSchema.parse({}));
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('API_ERROR');
@@ -225,7 +226,7 @@ describe('products read tools', () => {
       mockApiError(404, 'Not found');
       const { listProducts } = await getProductsTools();
 
-      const result = await listProducts({});
+      const result = await listProducts(ListProductsSchema.parse({}));
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('NOT_FOUND');
@@ -293,7 +294,7 @@ describe('products read tools', () => {
       });
       const { searchProducts } = await getProductsTools();
 
-      const result = await searchProducts({ term: 'widget' });
+      const result = await searchProducts(SearchProductsSchema.parse({ term: 'widget' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('widget');
@@ -304,7 +305,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProducts } = await getProductsTools();
 
-      await searchProducts({ term: 'test' });
+      await searchProducts(SearchProductsSchema.parse({ term: 'test' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/products/search');
@@ -315,7 +316,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProducts } = await getProductsTools();
 
-      await searchProducts({ term: 'premium' });
+      await searchProducts(SearchProductsSchema.parse({ term: 'premium' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('term=premium');
@@ -325,7 +326,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProducts } = await getProductsTools();
 
-      await searchProducts({ term: 'test', fields: 'name' });
+      await searchProducts(SearchProductsSchema.parse({ term: 'test', fields: 'name' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('fields=name');
@@ -335,7 +336,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProducts } = await getProductsTools();
 
-      await searchProducts({ term: 'test' });
+      await searchProducts(SearchProductsSchema.parse({ term: 'test' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('fields=');
@@ -345,7 +346,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProducts } = await getProductsTools();
 
-      await searchProducts({ term: 'test', exact_match: true });
+      await searchProducts(SearchProductsSchema.parse({ term: 'test', exact_match: true }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('exact_match=true');
@@ -355,7 +356,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProducts } = await getProductsTools();
 
-      await searchProducts({ term: 'test' });
+      await searchProducts(SearchProductsSchema.parse({ term: 'test' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('exact_match');
@@ -365,7 +366,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProducts } = await getProductsTools();
 
-      await searchProducts({ term: 'test', include_fields: 'product.price' });
+      await searchProducts(SearchProductsSchema.parse({ term: 'test', include_fields: 'product.price' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('include_fields=product.price');
@@ -375,7 +376,7 @@ describe('products read tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProducts } = await getProductsTools();
 
-      await searchProducts({ term: 'test', cursor: 'searchcursor' });
+      await searchProducts(SearchProductsSchema.parse({ term: 'test', cursor: 'searchcursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=searchcursor');
@@ -385,7 +386,7 @@ describe('products read tools', () => {
       mockFetch({ data: { items: [{ result_score: 1.0, item: product }] }, additional_data: { next_cursor: 'NEXT' } });
       const { searchProducts } = await getProductsTools();
 
-      const result = await searchProducts({ term: 'test' });
+      const result = await searchProducts(SearchProductsSchema.parse({ term: 'test' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -396,7 +397,7 @@ describe('products read tools', () => {
       mockApiError(500, 'Internal server error');
       const { searchProducts } = await getProductsTools();
 
-      const result = await searchProducts({ term: 'test' });
+      const result = await searchProducts(SearchProductsSchema.parse({ term: 'test' }));
 
       expect(result.isError).toBe(true);
     });

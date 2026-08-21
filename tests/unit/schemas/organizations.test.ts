@@ -168,7 +168,7 @@ describe('organizations schemas', () => {
     });
 
     it('should reject visible_to as string', () => {
-      expect(() => UpdateOrganizationSchema.parse({ id: 1, visible_to: '3' as any })).toThrow();
+      expect(() => UpdateOrganizationSchema.parse({ id: 1, visible_to: '3' })).toThrow();
     });
   });
 
@@ -247,11 +247,11 @@ describe('organizations schemas', () => {
     });
 
     it('should reject a bare string — regression guard for issue #44', () => {
-      expect(() => CreateOrganizationSchema.parse({ name: 'X', address: '123 Main St' as any })).toThrow();
+      expect(() => CreateOrganizationSchema.parse({ name: 'X', address: '123 Main St' })).toThrow();
     });
 
     it('should reject a non-string subfield', () => {
-      expect(() => AddressSchema.parse({ postal_code: 94085 as any })).toThrow();
+      expect(() => AddressSchema.parse({ postal_code: 94085 })).toThrow();
     });
   });
 

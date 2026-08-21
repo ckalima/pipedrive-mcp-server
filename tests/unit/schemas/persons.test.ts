@@ -238,7 +238,7 @@ describe('persons schemas', () => {
     });
 
     it('should reject visible_to as string', () => {
-      expect(() => UpdatePersonSchema.parse({ id: 1, visible_to: '3' as any })).toThrow();
+      expect(() => UpdatePersonSchema.parse({ id: 1, visible_to: '3' })).toThrow();
     });
 
     it('should accept omitted visible_to', () => {

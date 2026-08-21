@@ -9,9 +9,9 @@ import {
   mockApiSuccess,
   fixtures,
   paginationFixtures,
-  createMockFetch,
-  createMockResponse,
+  requestBody,
 } from '../helpers/mockFetch.js';
+import { ListDealsSchema } from '../../src/schemas/deals.js';
 
 describe('CRUD Flows', () => {
   beforeEach(() => {
@@ -26,7 +26,7 @@ describe('CRUD Flows', () => {
         await import('../../src/tools/deals.js');
 
       // Step 1: Create deal
-      let mockFn = mockApiSuccess({ ...fixtures.deal, id: 100, title: 'New Enterprise Deal' });
+      mockApiSuccess({ ...fixtures.deal, id: 100, title: 'New Enterprise Deal' });
       const createResult = await createDeal({
         title: 'New Enterprise Deal',
         value: 50000,
@@ -57,9 +57,9 @@ describe('CRUD Flows', () => {
         data: [{ ...fixtures.deal, id: dealId, title: 'Updated Deal' }],
         additional_data: paginationFixtures.v2NoMore,
       });
-      const listResult = await listDeals({});
+      const listResult = await listDeals(ListDealsSchema.parse({}));
       parsed = JSON.parse(listResult.content[0].text);
-      expect(parsed.data.some((d: any) => d.id === dealId)).toBe(true);
+      expect(parsed.data.some((d: { id: number }) => d.id === dealId)).toBe(true);
 
       // Step 5: Delete deal
       vi.unstubAllGlobals();
@@ -72,7 +72,7 @@ describe('CRUD Flows', () => {
 
   describe('Person CRUD Cycle', () => {
     it('should complete full person CRUD cycle', async () => {
-      const { listPersons, createPerson, getPerson, updatePerson, deletePerson } =
+      const { createPerson, getPerson, updatePerson, deletePerson } =
         await import('../../src/tools/persons.js');
 
       // Create
@@ -118,7 +118,7 @@ describe('CRUD Flows', () => {
 
   describe('Activity CRUD Cycle', () => {
     it('should complete full activity CRUD cycle', async () => {
-      const { listActivities, createActivity, getActivity, updateActivity, deleteActivity } =
+      const { createActivity, getActivity, updateActivity, deleteActivity } =
         await import('../../src/tools/activities.js');
 
       // Create
@@ -158,7 +158,7 @@ describe('CRUD Flows', () => {
 
   describe('Organization CRUD Cycle', () => {
     it('should complete full organization CRUD cycle', async () => {
-      const { listOrganizations, createOrganization, getOrganization, updateOrganization, deleteOrganization } =
+      const { createOrganization, getOrganization, updateOrganization, deleteOrganization } =
         await import('../../src/tools/organizations.js');
 
       // Create
@@ -228,14 +228,14 @@ describe('CRUD Flows', () => {
 
       // Verify body contains linked IDs
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.person_id).toBe(10);
       expect(body.org_id).toBe(20);
     });
 
     it('should create activity linked to deal and person', async () => {
       const { createActivity } = await import('../../src/tools/activities.js');
-      const mockFn = mockApiSuccess({
+      mockApiSuccess({
         ...fixtures.activity,
         id: 600,
         deal_id: 100,

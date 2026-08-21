@@ -10,6 +10,7 @@ import {
   mockFetch,
 } from '../../helpers/mockFetch.js';
 import { createFieldFixture, paginationFixtures } from '../../helpers/fixtures.js';
+import { ListDealFieldsSchema, ListOrganizationFieldsSchema, ListPersonFieldsSchema, ListProductFieldsSchema, ListProjectFieldsSchema } from '../../../src/schemas/fields.js';
 
 async function getFieldsTools() {
   return import('../../../src/tools/fields.js');
@@ -30,7 +31,7 @@ describe('fields tools', () => {
       mockApiSuccess(fields);
       const { listOrganizationFields } = await getFieldsTools();
 
-      const result = await listOrganizationFields({});
+      const result = await listOrganizationFields(ListOrganizationFieldsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('2');
@@ -42,7 +43,7 @@ describe('fields tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listOrganizationFields } = await getFieldsTools();
 
-      await listOrganizationFields({});
+      await listOrganizationFields(ListOrganizationFieldsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/organizationFields');
@@ -66,7 +67,7 @@ describe('fields tools', () => {
       );
       const { listOrganizationFields } = await getFieldsTools();
 
-      const result = await listOrganizationFields({});
+      const result = await listOrganizationFields(ListOrganizationFieldsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
@@ -84,7 +85,7 @@ describe('fields tools', () => {
       mockApiSuccess(fields);
       const { listDealFields } = await getFieldsTools();
 
-      const result = await listDealFields({});
+      const result = await listDealFields(ListDealFieldsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('3');
@@ -95,7 +96,7 @@ describe('fields tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listDealFields } = await getFieldsTools();
 
-      await listDealFields({});
+      await listDealFields(ListDealFieldsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/dealFields');
@@ -108,7 +109,7 @@ describe('fields tools', () => {
       );
       const { listDealFields } = await getFieldsTools();
 
-      const result = await listDealFields({});
+      const result = await listDealFields(ListDealFieldsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
@@ -126,7 +127,7 @@ describe('fields tools', () => {
       mockApiSuccess(fields);
       const { listPersonFields } = await getFieldsTools();
 
-      const result = await listPersonFields({});
+      const result = await listPersonFields(ListPersonFieldsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('3');
@@ -137,7 +138,7 @@ describe('fields tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listPersonFields } = await getFieldsTools();
 
-      await listPersonFields({});
+      await listPersonFields(ListPersonFieldsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/personFields');
@@ -150,7 +151,7 @@ describe('fields tools', () => {
       );
       const { listPersonFields } = await getFieldsTools();
 
-      const result = await listPersonFields({});
+      const result = await listPersonFields(ListPersonFieldsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
@@ -168,7 +169,7 @@ describe('fields tools', () => {
       mockApiSuccess(fields);
       const { listProductFields } = await getFieldsTools();
 
-      const result = await listProductFields({});
+      const result = await listProductFields(ListProductFieldsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('3');
@@ -180,7 +181,7 @@ describe('fields tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProductFields } = await getFieldsTools();
 
-      await listProductFields({});
+      await listProductFields(ListProductFieldsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/productFields');
@@ -193,7 +194,7 @@ describe('fields tools', () => {
       );
       const { listProductFields } = await getFieldsTools();
 
-      const result = await listProductFields({});
+      const result = await listProductFields(ListProductFieldsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
@@ -204,7 +205,7 @@ describe('fields tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProductFields } = await getFieldsTools();
 
-      await listProductFields({ include_fields: 'ui_visibility' });
+      await listProductFields(ListProductFieldsSchema.parse({ include_fields: 'ui_visibility' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('include_fields=ui_visibility');
@@ -214,7 +215,7 @@ describe('fields tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProductFields } = await getFieldsTools();
 
-      await listProductFields({});
+      await listProductFields(ListProductFieldsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('include_fields');
@@ -224,7 +225,7 @@ describe('fields tools', () => {
       mockApiError(500, 'Internal Server Error');
       const { listProductFields } = await getFieldsTools();
 
-      const result = await listProductFields({});
+      const result = await listProductFields(ListProductFieldsSchema.parse({}));
 
       expect(result.isError).toBe(true);
     });
@@ -240,7 +241,7 @@ describe('fields tools', () => {
       mockApiSuccess(fields);
       const { listProjectFields } = await getFieldsTools();
 
-      const result = await listProjectFields({});
+      const result = await listProjectFields(ListProjectFieldsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('3 project fields');
@@ -251,7 +252,7 @@ describe('fields tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProjectFields } = await getFieldsTools();
 
-      await listProjectFields({});
+      await listProjectFields(ListProjectFieldsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/projectFields');
@@ -261,7 +262,7 @@ describe('fields tools', () => {
       mockFetch({ data: [createFieldFixture('name', 'Name', 'varchar')], additional_data: paginationFixtures.v2WithMore });
       const { listProjectFields } = await getFieldsTools();
 
-      const result = await listProjectFields({});
+      const result = await listProjectFields(ListProjectFieldsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
@@ -283,7 +284,7 @@ describe('fields tools', () => {
       mockApiError(500, 'Internal Server Error');
       const { listProjectFields } = await getFieldsTools();
 
-      const result = await listProjectFields({});
+      const result = await listProjectFields(ListProjectFieldsSchema.parse({}));
 
       expect(result.isError).toBe(true);
     });

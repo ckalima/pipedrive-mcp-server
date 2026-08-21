@@ -18,8 +18,10 @@ import {
   mockApiError,
   fixtures,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
 import { createDealsFixture } from '../../helpers/fixtures.js';
+import { ListDealsSchema, SearchDealsSchema } from '../../../src/schemas/deals.js';
 
 describe('deals tools', () => {
   beforeEach(() => {
@@ -55,13 +57,13 @@ describe('deals tools', () => {
     it('should pass filter parameters to API', async () => {
       const mockFn = mockApiSuccess([]);
 
-      await listDeals({
+      await listDeals(ListDealsSchema.parse({
         owner_id: 1,
         status: 'open',
         pipeline_id: 2,
         sort_by: 'update_time',
         sort_direction: 'asc',
-      });
+      }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('owner_id=1');
@@ -74,7 +76,7 @@ describe('deals tools', () => {
     it('should handle API error', async () => {
       mockApiError(401, 'Invalid API key');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
 
       const text = result.content[0].text;
       expect(text).toContain('INVALID_API_KEY');
@@ -84,7 +86,7 @@ describe('deals tools', () => {
     it('should use cursor for pagination', async () => {
       const mockFn = mockApiSuccess([]);
 
-      await listDeals({ cursor: 'next_page_cursor' });
+      await listDeals(ListDealsSchema.parse({ cursor: 'next_page_cursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=next_page_cursor');
@@ -150,7 +152,7 @@ describe('deals tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.title).toBe('Enterprise Deal');
       expect(body.value).toBe(100000);
       expect(body.currency).toBe('USD');
@@ -168,10 +170,18 @@ describe('deals tools', () => {
     it('should not send add_time in the create body (invalid in v2)', async () => {
       const mockFn = mockApiSuccess(fixtures.deal);
 
-      await createDeal({ title: 'X', add_time: '2024-01-01T00:00:00Z' } as Record<string, unknown>);
+      // Deliberately NOT routed through the create schema, unlike its neighbours:
+      // the claim under test is that the HANDLER's allowlist body drops add_time even
+      // when params carry it. Parsing first strips the key at the schema layer, so the
+      // handler would never see it and this would stop testing anything.
+      // (The schema-layer strip has its own coverage in tests/unit/schemas/deals.ts.)
+      await createDeal({
+        title: 'X',
+        add_time: '2024-01-01T00:00:00Z',
+      } as unknown as Parameters<typeof createDeal>[0]);
 
       const [, options] = mockFn.mock.calls[0];
-      expect(JSON.parse(options.body)).not.toHaveProperty('add_time');
+      expect(requestBody(options)).not.toHaveProperty('add_time');
     });
   });
 
@@ -203,7 +213,7 @@ describe('deals tools', () => {
       await updateDeal({ id: 1, visible_to: 7 });
 
       const [, options] = mockFn.mock.calls[0];
-      expect(JSON.parse(options.body).visible_to).toBe(7);
+      expect(requestBody(options).visible_to).toBe(7);
     });
 
     it('should handle status update with won_time', async () => {
@@ -216,7 +226,7 @@ describe('deals tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.status).toBe('won');
       expect(body.won_time).toBe('2024-01-15T10:00:00Z');
     });
@@ -230,7 +240,7 @@ describe('deals tools', () => {
         ],
       });
 
-      const result = await searchDeals({ term: 'test' });
+      const result = await searchDeals(SearchDealsSchema.parse({ term: 'test' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('test');
@@ -239,7 +249,7 @@ describe('deals tools', () => {
     it('should call the v2 /deals/search endpoint (not v1 itemSearch)', async () => {
       const mockFn = mockApiSuccess({ items: [] });
 
-      await searchDeals({ term: 'enterprise' });
+      await searchDeals(SearchDealsSchema.parse({ term: 'enterprise' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/deals/search');
@@ -276,7 +286,7 @@ describe('deals tools', () => {
     it('should parse next_cursor from v2 search response', async () => {
       mockFetch({ data: { items: [] }, additional_data: { next_cursor: 'NEXT' } });
 
-      const result = await searchDeals({ term: 'x' });
+      const result = await searchDeals(SearchDealsSchema.parse({ term: 'x' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.next_cursor).toBe('NEXT');

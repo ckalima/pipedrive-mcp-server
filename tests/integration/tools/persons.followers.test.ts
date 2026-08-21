@@ -9,7 +9,9 @@ import {
   mockApiSuccess,
   mockApiError,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
+import { ListPersonFollowersSchema, PersonFollowersChangelogSchema } from '../../../src/schemas/persons.js';
 
 const follower = {
   user_id: 7,
@@ -52,7 +54,7 @@ describe('person follower tools (U2, #69)', () => {
       const mockFn = mockApiSuccess([]);
       const { listPersonFollowers } = await getPersonsTools();
 
-      await listPersonFollowers({ id: 3 });
+      await listPersonFollowers(ListPersonFollowersSchema.parse({ id: 3 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/persons/3/followers');
@@ -62,7 +64,7 @@ describe('person follower tools (U2, #69)', () => {
       const mockFn = mockApiSuccess([]);
       const { listPersonFollowers } = await getPersonsTools();
 
-      await listPersonFollowers({ id: 3, cursor: 'follcursor' });
+      await listPersonFollowers(ListPersonFollowersSchema.parse({ id: 3, cursor: 'follcursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=follcursor');
@@ -72,7 +74,7 @@ describe('person follower tools (U2, #69)', () => {
       mockFetch({ data: [follower], additional_data: paginationFixtures.v2WithMore });
       const { listPersonFollowers } = await getPersonsTools();
 
-      const result = await listPersonFollowers({ id: 3 });
+      const result = await listPersonFollowers(ListPersonFollowersSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -83,7 +85,7 @@ describe('person follower tools (U2, #69)', () => {
       mockFetch({ data: [follower, follower], additional_data: paginationFixtures.v2NoMore });
       const { listPersonFollowers } = await getPersonsTools();
 
-      const result = await listPersonFollowers({ id: 3 });
+      const result = await listPersonFollowers(ListPersonFollowersSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('follower');
@@ -94,7 +96,7 @@ describe('person follower tools (U2, #69)', () => {
       mockApiError(500, 'Internal server error');
       const { listPersonFollowers } = await getPersonsTools();
 
-      const result = await listPersonFollowers({ id: 3 });
+      const result = await listPersonFollowers(ListPersonFollowersSchema.parse({ id: 3 }));
 
       expect(result.isError).toBe(true);
     });
@@ -103,7 +105,7 @@ describe('person follower tools (U2, #69)', () => {
       const mockFn = mockApiSuccess([]);
       const { listPersonFollowers } = await getPersonsTools();
 
-      await listPersonFollowers({ id: 3 });
+      await listPersonFollowers(ListPersonFollowersSchema.parse({ id: 3 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('api_token');
@@ -129,7 +131,7 @@ describe('person follower tools (U2, #69)', () => {
       await addPersonFollower({ id: 3, user_id: 7 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.user_id).toBe(7);
     });
 
@@ -149,7 +151,7 @@ describe('person follower tools (U2, #69)', () => {
       const mockFn = mockApiSuccess([]);
       const { getPersonFollowersChangelog } = await getPersonsTools();
 
-      await getPersonFollowersChangelog({ id: 3 });
+      await getPersonFollowersChangelog(PersonFollowersChangelogSchema.parse({ id: 3 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/persons/3/followers/changelog');
@@ -159,7 +161,7 @@ describe('person follower tools (U2, #69)', () => {
       mockFetch({ data: [changelogEntry], additional_data: paginationFixtures.v2WithMore });
       const { getPersonFollowersChangelog } = await getPersonsTools();
 
-      const result = await getPersonFollowersChangelog({ id: 3 });
+      const result = await getPersonFollowersChangelog(PersonFollowersChangelogSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -170,7 +172,7 @@ describe('person follower tools (U2, #69)', () => {
       mockFetch({ data: [changelogEntry], additional_data: paginationFixtures.v2NoMore });
       const { getPersonFollowersChangelog } = await getPersonsTools();
 
-      const result = await getPersonFollowersChangelog({ id: 3 });
+      const result = await getPersonFollowersChangelog(PersonFollowersChangelogSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('changelog');

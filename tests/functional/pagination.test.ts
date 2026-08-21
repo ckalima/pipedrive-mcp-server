@@ -8,9 +8,10 @@ import {
   mockFetch,
   mockApiSuccess,
   paginationFixtures,
-  fixtures,
 } from '../helpers/mockFetch.js';
-import { createDealsFixture, createPersonsFixture } from '../helpers/fixtures.js';
+import { createDealsFixture } from '../helpers/fixtures.js';
+import { ListDealsSchema } from '../../src/schemas/deals.js';
+import { ListMailThreadsSchema } from '../../src/schemas/mail.js';
 
 describe('Pagination', () => {
   beforeEach(() => {
@@ -40,7 +41,7 @@ describe('Pagination', () => {
       });
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      await listDeals({ cursor: 'page2_cursor' });
+      await listDeals(ListDealsSchema.parse({ cursor: 'page2_cursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=page2_cursor');
@@ -53,7 +54,7 @@ describe('Pagination', () => {
       });
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
       const parsed = JSON.parse(result.content[0].text);
 
       expect(parsed.pagination.has_more).toBe(false);
@@ -90,7 +91,7 @@ describe('Pagination', () => {
       });
       const { listMailThreads } = await import('../../src/tools/mail.js');
 
-      const result = await listMailThreads({});
+      const result = await listMailThreads(ListMailThreadsSchema.parse({}));
       const parsed = JSON.parse(result.content[0].text);
 
       expect(parsed.pagination.has_more).toBe(true);
@@ -103,7 +104,7 @@ describe('Pagination', () => {
       const mockFn = mockApiSuccess([]);
       const { listMailThreads } = await import('../../src/tools/mail.js');
 
-      await listMailThreads({ start: 100 });
+      await listMailThreads(ListMailThreadsSchema.parse({ start: 100 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('start=100');
@@ -116,7 +117,7 @@ describe('Pagination', () => {
       });
       const { listMailThreads } = await import('../../src/tools/mail.js');
 
-      const result = await listMailThreads({});
+      const result = await listMailThreads(ListMailThreadsSchema.parse({}));
       const parsed = JSON.parse(result.content[0].text);
 
       expect(parsed.pagination.has_more).toBe(false);
@@ -126,7 +127,7 @@ describe('Pagination', () => {
       const mockFn = mockApiSuccess([]);
       const { listMailThreads } = await import('../../src/tools/mail.js');
 
-      await listMailThreads({ limit: 500 });
+      await listMailThreads(ListMailThreadsSchema.parse({ limit: 500 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('limit=500');
@@ -141,7 +142,7 @@ describe('Pagination', () => {
       });
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
       const parsed = JSON.parse(result.content[0].text);
 
       expect(parsed.summary).toContain('More available');
@@ -154,7 +155,7 @@ describe('Pagination', () => {
       });
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
       const parsed = JSON.parse(result.content[0].text);
 
       expect(parsed.summary).not.toContain('More available');
@@ -207,7 +208,7 @@ describe('Pagination', () => {
       });
       const { listDeals } = await import('../../src/tools/deals.js');
 
-      const result = await listDeals({});
+      const result = await listDeals(ListDealsSchema.parse({}));
       const parsed = JSON.parse(result.content[0].text);
 
       expect(parsed.data).toHaveLength(0);

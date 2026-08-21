@@ -41,6 +41,13 @@ jobs:
 
       - run: npm run lint
 
+      # `npm run build` only compiles src/ (tsconfig.json has rootDir: src and excludes
+      # **/*.test.ts, so dist/ ships no test code). That left tests/ and scripts/ with no
+      # type checking at all: vitest transpiles each file in isolation and tsx strips
+      # types, so a broken type in a test helper or the docs generator surfaced only at
+      # runtime, if ever. tsconfig.check.json is the noEmit config that covers all three.
+      - run: npm run typecheck
+
       - run: npm test
 
       # Docs drift gate: regenerate README tool table + MCPB manifest from the live

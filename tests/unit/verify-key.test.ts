@@ -2,7 +2,7 @@
  * Unit tests for pasted-key validation (U2).
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { verifyApiKey } from '../../src/cli/verify-key.js';
 import { getConfig, isValidApiKeyFormat, API_KEY_LENGTH } from '../../src/config.js';
 import { setupEnvWithApiKey } from '../helpers/mockEnv.js';

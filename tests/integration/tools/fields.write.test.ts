@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setupValidEnv } from '../../helpers/mockEnv.js';
-import { mockApiSuccess, mockApiError } from '../../helpers/mockFetch.js';
+import { mockApiSuccess, mockApiError, requestBody } from '../../helpers/mockFetch.js';
 
 /** A realistic server-generated 40-character field_code hash. */
 const HASH = '946947d1b02fd3ef20798d6112ec5d895a686a21';
@@ -44,7 +44,7 @@ describe('field write tools (U3 deal/person/org, U4 product)', () => {
         expect(url).toContain(`/api/v2/${e.endpoint}`);
         expect(url).not.toContain('/v1/');
         expect(options.method).toBe('POST');
-        const body = JSON.parse(options.body);
+        const body = requestBody(options);
         expect(body.field_name).toBe('F');
         expect(body.field_type).toBe('varchar');
       });
@@ -59,7 +59,7 @@ describe('field write tools (U3 deal/person/org, U4 product)', () => {
           options: [{ label: 'High' }, { label: 'Low' }],
         });
 
-        const body = JSON.parse(mockFn.mock.calls[0][1].body);
+        const body = requestBody(mockFn.mock.calls[0][1]);
         expect(body.options).toEqual([{ label: 'High' }, { label: 'Low' }]);
       });
 
@@ -76,7 +76,7 @@ describe('field write tools (U3 deal/person/org, U4 product)', () => {
         const [url, options] = mockFn.mock.calls[0];
         expect(url).toContain(`/api/v2/${e.endpoint}/${HASH}`);
         expect(options.method).toBe('PATCH');
-        const body = JSON.parse(options.body);
+        const body = requestBody(options);
         expect(body.field_name).toBe('F2');
         expect(body.field_type).toBeUndefined(); // field_type cannot be changed
       });
@@ -115,7 +115,7 @@ describe('field write tools (U3 deal/person/org, U4 product)', () => {
         const [url, options] = mockFn.mock.calls[0];
         expect(url).toContain(`/api/v2/${e.endpoint}/${HASH}/options`);
         expect(options.method).toBe('PATCH');
-        expect(JSON.parse(options.body)).toEqual([{ id: 4, label: 'Critical' }]);
+        expect(requestBody(options)).toEqual([{ id: 4, label: 'Critical' }]);
       });
 
       it('delete-options is blocked and makes NO fetch call when guard is disabled', async () => {
@@ -141,7 +141,7 @@ describe('field write tools (U3 deal/person/org, U4 product)', () => {
         const [url, options] = mockFn.mock.calls[0];
         expect(url).toContain(`/api/v2/${e.endpoint}/${HASH}/options`);
         expect(options.method).toBe('DELETE');
-        expect(JSON.parse(options.body)).toEqual([{ id: 4 }, { id: 5 }]);
+        expect(requestBody(options)).toEqual([{ id: 4 }, { id: 5 }]);
       });
 
       it('create returns isError on API failure', async () => {
@@ -168,7 +168,7 @@ describe('field write tools (U3 deal/person/org, U4 product)', () => {
         ui_visibility: { add_visible_flag: true },
       });
 
-      const body = JSON.parse(mockFn.mock.calls[0][1].body);
+      const body = requestBody(mockFn.mock.calls[0][1]);
       expect(body.field_name).toBe('SKU');
       expect(body.ui_visibility).toEqual({ add_visible_flag: true });
       expect(body.description).toBeUndefined();
