@@ -14,7 +14,7 @@ function makeDeps(): {
   return {
     runInit: vi.fn(async () => 0),
     serve: vi.fn(async () => {}),
-    log: vi.fn(),
+    log: vi.fn((_message: string) => {}),
   };
 }
 

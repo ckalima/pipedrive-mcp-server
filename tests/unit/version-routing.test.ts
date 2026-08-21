@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setupValidEnv } from '../helpers/mockEnv.js';
-import { mockFetch, mockApiSuccess, mockApiError, createMockResponse } from '../helpers/mockFetch.js';
+import { mockApiSuccess, mockApiError, createMockResponse, requestBody } from '../helpers/mockFetch.js';
 import {
   isRetirementSignal,
   isLatchable404,
@@ -410,7 +410,7 @@ describe('version-routing', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/notes/1');
       expect(options.method).toBe('DELETE');
-      expect(JSON.parse(options.body)).toEqual({ foo: 'bar' });
+      expect(requestBody(options)).toEqual({ foo: 'bar' });
     });
 
     it('reset clears the retired and warned sets', async () => {

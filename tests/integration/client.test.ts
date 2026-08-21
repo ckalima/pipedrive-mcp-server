@@ -22,6 +22,7 @@ import {
   mockApiError,
   fixtures,
   paginationFixtures,
+  requestBody,
 } from '../helpers/mockFetch.js';
 
 describe('PipedriveClient', () => {
@@ -207,10 +208,10 @@ describe('PipedriveClient', () => {
 
       await client.post('/deals', { title: 'New Deal', value: 10000 }, 'v2');
 
-      const [url, options] = mockFn.mock.calls[0];
+      const [, options] = mockFn.mock.calls[0];
       expect(options.method).toBe('POST');
       expect(options.headers['Content-Type']).toBe('application/json');
-      expect(JSON.parse(options.body)).toEqual({ title: 'New Deal', value: 10000 });
+      expect(requestBody(options)).toEqual({ title: 'New Deal', value: 10000 });
     });
 
     it('should return created data', async () => {
@@ -282,7 +283,7 @@ describe('PipedriveClient', () => {
       const [, options] = mockFn.mock.calls[0];
       expect(options.method).toBe('PATCH');
       expect(options.headers['Content-Type']).toBe('application/json');
-      expect(JSON.parse(options.body)).toEqual([{ id: 1, label: 'Renamed' }]);
+      expect(requestBody(options)).toEqual([{ id: 1, label: 'Renamed' }]);
     });
 
     it('POST sends a top-level JSON array body', async () => {
@@ -293,7 +294,7 @@ describe('PipedriveClient', () => {
 
       const [, options] = mockFn.mock.calls[0];
       expect(options.method).toBe('POST');
-      expect(JSON.parse(options.body)).toEqual([{ id: 1 }]);
+      expect(requestBody(options)).toEqual([{ id: 1 }]);
     });
 
     it('DELETE sends a top-level JSON array body when one is supplied', async () => {
@@ -305,7 +306,7 @@ describe('PipedriveClient', () => {
       const [, options] = mockFn.mock.calls[0];
       expect(options.method).toBe('DELETE');
       expect(options.headers['Content-Type']).toBe('application/json');
-      expect(JSON.parse(options.body)).toEqual([{ id: 1 }]);
+      expect(requestBody(options)).toEqual([{ id: 1 }]);
     });
 
     it('two-arg DELETE still sends no body (no regression)', async () => {

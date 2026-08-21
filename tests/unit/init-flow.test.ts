@@ -248,12 +248,19 @@ describe('openUrl env scrub (U5 / R16)', () => {
 
   it('spawns the opener with PIPEDRIVE_API_KEY removed from the child env, detached + unref', () => {
     const unref = vi.fn();
-    const spawnFn = vi.fn(() => ({ on: vi.fn(), unref }));
+    // Typed to `spawn`'s shape so the recorded call destructures without a cast:
+    // an untyped `vi.fn(() => ...)` records `calls[0]` as `[]`.
+    const spawnFn = vi.fn(
+      (_command: string, _args: string[], _options: { env: NodeJS.ProcessEnv; detached: boolean }) => ({
+        on: vi.fn(),
+        unref,
+      }),
+    );
 
     openUrl('https://example.com', spawnFn as never);
 
     expect(spawnFn).toHaveBeenCalledTimes(1);
-    const [, , options] = spawnFn.mock.calls[0] as [string, string[], { env: NodeJS.ProcessEnv; detached: boolean }];
+    const [, , options] = spawnFn.mock.calls[0];
     expect(options.env.PIPEDRIVE_API_KEY).toBeUndefined();
     expect(options.detached).toBe(true);
     expect(unref).toHaveBeenCalled();

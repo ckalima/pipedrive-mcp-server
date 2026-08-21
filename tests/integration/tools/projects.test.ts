@@ -9,7 +9,9 @@ import {
   mockApiSuccess,
   mockApiError,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
+import { GetProjectChangelogSchema, ListArchivedProjectsSchema, ListProjectTasksSchema, ListProjectTemplatesSchema, ListProjectsSchema, SearchProjectsSchema } from '../../../src/schemas/projects.js';
 
 const projectFixture = {
   id: 1,
@@ -53,7 +55,7 @@ describe('projects tools', () => {
       mockFetch({ data: createProjectsFixture(1), additional_data: paginationFixtures.v2NoMore });
       const { listProjects } = await getProjectsTools();
 
-      const result = await listProjects({});
+      const result = await listProjects(ListProjectsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('1 project');
@@ -75,9 +77,11 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([projectFixture]);
       const { listProjects } = await getProjectsTools();
 
-      // board_id/include_fields passed directly (bypassing Zod) so the assertions
-      // guard the handler-line removals, not just the schema strip.
-      await listProjects({ phase_id: 2, status: 'open', filter_id: 3, board_id: 1, include_fields: 'tasks' } as Record<string, unknown>);
+      // Deliberately NOT routed through ListProjectsSchema, unlike its neighbours: the
+      // claim under test is that the HANDLER stopped forwarding board_id/include_fields.
+      // The schema strips both, so parsing first would mask a handler-line revert.
+      // (The schema-layer strip has its own coverage in tests/unit/schemas/projects.test.ts.)
+      await listProjects({ phase_id: 2, status: 'open', filter_id: 3, board_id: 1, include_fields: 'tasks' } as unknown as Parameters<typeof listProjects>[0]);
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('board_id');
@@ -91,7 +95,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([projectFixture]);
       const { listProjects } = await getProjectsTools();
 
-      await listProjects({ cursor: 'next_page_cursor' });
+      await listProjects(ListProjectsSchema.parse({ cursor: 'next_page_cursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=next_page_cursor');
@@ -101,7 +105,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([projectFixture]);
       const { listProjects } = await getProjectsTools();
 
-      await listProjects({});
+      await listProjects(ListProjectsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/');
@@ -112,7 +116,7 @@ describe('projects tools', () => {
       mockApiError(401, 'Unauthorized');
       const { listProjects } = await getProjectsTools();
 
-      const result = await listProjects({});
+      const result = await listProjects(ListProjectsSchema.parse({}));
 
       expect(result.isError).toBe(true);
     });
@@ -182,7 +186,7 @@ describe('projects tools', () => {
       await createProject({ title: 'Project Title', board_id: 2, phase_id: 3 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.title).toBe('Project Title');
       expect(body.board_id).toBe(2);
       expect(body.phase_id).toBe(3);
@@ -204,7 +208,7 @@ describe('projects tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.description).toBe('A description');
       expect(body.deal_ids).toEqual([1, 2]);
       expect(body.org_ids).toEqual([4]);
@@ -224,7 +228,7 @@ describe('projects tools', () => {
       await createProject({ title: 'Minimal Project', board_id: 1, phase_id: 1 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body).not.toHaveProperty('description');
       expect(body).not.toHaveProperty('owner_id');
     });
@@ -278,7 +282,7 @@ describe('projects tools', () => {
       await updateProject({ id: 1, title: 'Updated Title' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.title).toBe('Updated Title');
       expect(body).not.toHaveProperty('board_id');
       expect(body).not.toHaveProperty('phase_id');
@@ -291,7 +295,7 @@ describe('projects tools', () => {
       await updateProject({ id: 1, org_ids: [5], person_ids: [6], label_ids: [7], deal_ids: [1] });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.org_ids).toEqual([5]);
       expect(body.person_ids).toEqual([6]);
       expect(body.label_ids).toEqual([7]);
@@ -359,10 +363,10 @@ describe('projects tools', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/projects/1/archive');
       expect(options.method).toBe('POST');
-      expect(JSON.parse(options.body)).toEqual({});
+      expect(requestBody(options)).toEqual({});
       // revert-proof: must NOT be the old PATCH-with-status call
       expect(options.method).not.toBe('PATCH');
-      expect(JSON.parse(options.body)).not.toHaveProperty('status');
+      expect(requestBody(options)).not.toHaveProperty('status');
     });
   });
 
@@ -371,7 +375,7 @@ describe('projects tools', () => {
       mockApiSuccess({ items: [{ result_score: 1.0, item: projectFixture }] });
       const { searchProjects } = await getProjectsTools();
 
-      const result = await searchProjects({ term: 'acme' });
+      const result = await searchProjects(SearchProjectsSchema.parse({ term: 'acme' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('acme');
@@ -381,7 +385,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProjects } = await getProjectsTools();
 
-      await searchProjects({ term: 'test' });
+      await searchProjects(SearchProjectsSchema.parse({ term: 'test' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/projects/search');
@@ -392,7 +396,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProjects } = await getProjectsTools();
 
-      await searchProjects({ term: 'test project' });
+      await searchProjects(SearchProjectsSchema.parse({ term: 'test project' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('term=test+project');
@@ -402,7 +406,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProjects } = await getProjectsTools();
 
-      await searchProjects({ term: 'exact', exact_match: true });
+      await searchProjects(SearchProjectsSchema.parse({ term: 'exact', exact_match: true }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('exact_match=true');
@@ -412,7 +416,10 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProjects } = await getProjectsTools();
 
-      await searchProjects({ term: 'test', include_fields: 'tasks' } as Record<string, unknown>);
+      // Deliberately NOT routed through SearchProjectsSchema (see the list-filter test
+      // above): the schema strips include_fields, so parsing first would mask a
+      // handler-line revert.
+      await searchProjects({ term: 'test', include_fields: 'tasks' } as unknown as Parameters<typeof searchProjects>[0]);
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('include_fields');
@@ -422,7 +429,7 @@ describe('projects tools', () => {
       mockApiError(400, 'Bad request');
       const { searchProjects } = await getProjectsTools();
 
-      const result = await searchProjects({ term: 'test' });
+      const result = await searchProjects(SearchProjectsSchema.parse({ term: 'test' }));
 
       expect(result.isError).toBe(true);
     });
@@ -433,7 +440,7 @@ describe('projects tools', () => {
       mockFetch({ data: { items: [] }, additional_data: paginationFixtures.v2WithMore });
       const { searchProjects } = await getProjectsTools();
 
-      const parsed = JSON.parse((await searchProjects({ term: 'acme' })).content[0].text);
+      const parsed = JSON.parse((await searchProjects(SearchProjectsSchema.parse({ term: 'acme' }))).content[0].text);
 
       expect(parsed.pagination.has_more).toBe(true);
       expect(parsed.pagination.next_cursor).toBe('cursor_abc123');
@@ -443,7 +450,7 @@ describe('projects tools', () => {
       mockFetch({ data: { items: [] }, additional_data: paginationFixtures.v2NoMore });
       const { searchProjects } = await getProjectsTools();
 
-      const parsed = JSON.parse((await searchProjects({ term: 'acme' })).content[0].text);
+      const parsed = JSON.parse((await searchProjects(SearchProjectsSchema.parse({ term: 'acme' }))).content[0].text);
 
       expect(parsed.pagination.has_more).toBe(false);
     });
@@ -458,7 +465,7 @@ describe('projects tools', () => {
       mockFetch({ data: tasks, additional_data: paginationFixtures.v2NoMore });
       const { listProjectTasks } = await getProjectsTools();
 
-      const result = await listProjectTasks({ id: 1 });
+      const result = await listProjectTasks(ListProjectTasksSchema.parse({ id: 1 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('2 tasks');
@@ -469,7 +476,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProjectTasks } = await getProjectsTools();
 
-      await listProjectTasks({ id: 1 });
+      await listProjectTasks(ListProjectTasksSchema.parse({ id: 1 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/tasks');
@@ -482,7 +489,7 @@ describe('projects tools', () => {
       mockFetch({ data: [{ id: 1, project_id: 1 }], additional_data: { next_cursor: 'NEXT' } });
       const { listProjectTasks } = await getProjectsTools();
 
-      const result = await listProjectTasks({ id: 1, cursor: 'c0' });
+      const result = await listProjectTasks(ListProjectTasksSchema.parse({ id: 1, cursor: 'c0' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -493,7 +500,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProjectTasks } = await getProjectsTools();
 
-      await listProjectTasks({ id: 1, cursor: 'abc' });
+      await listProjectTasks(ListProjectTasksSchema.parse({ id: 1, cursor: 'abc' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=abc');
@@ -503,7 +510,7 @@ describe('projects tools', () => {
       mockApiError(403, 'Access denied');
       const { listProjectTasks } = await getProjectsTools();
 
-      const result = await listProjectTasks({ id: 1 });
+      const result = await listProjectTasks(ListProjectTasksSchema.parse({ id: 1 }));
 
       expect(result.isError).toBe(true);
     });
@@ -514,7 +521,7 @@ describe('projects tools', () => {
       mockFetch({ data: [{ id: 1, title: 'Template 1' }], additional_data: paginationFixtures.v2NoMore });
       const { listProjectTemplates } = await getProjectsTools();
 
-      const result = await listProjectTemplates({});
+      const result = await listProjectTemplates(ListProjectTemplatesSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('1 project template');
@@ -531,7 +538,7 @@ describe('projects tools', () => {
       mockFetch({ data: templates, additional_data: paginationFixtures.v2NoMore });
       const { listProjectTemplates } = await getProjectsTools();
 
-      const result = await listProjectTemplates({});
+      const result = await listProjectTemplates(ListProjectTemplatesSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('3 project templates');
@@ -541,7 +548,7 @@ describe('projects tools', () => {
       mockFetch({ data: [{ id: 1 }], additional_data: paginationFixtures.v2WithMore });
       const { listProjectTemplates } = await getProjectsTools();
 
-      const result = await listProjectTemplates({ cursor: 'tok1' });
+      const result = await listProjectTemplates(ListProjectTemplatesSchema.parse({ cursor: 'tok1' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -552,7 +559,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProjectTemplates } = await getProjectsTools();
 
-      await listProjectTemplates({ cursor: 'mytok' });
+      await listProjectTemplates(ListProjectTemplatesSchema.parse({ cursor: 'mytok' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=mytok');
@@ -562,7 +569,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listProjectTemplates } = await getProjectsTools();
 
-      await listProjectTemplates({});
+      await listProjectTemplates(ListProjectTemplatesSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/projectTemplates');
@@ -572,7 +579,7 @@ describe('projects tools', () => {
       mockApiError(500, 'Server error');
       const { listProjectTemplates } = await getProjectsTools();
 
-      const result = await listProjectTemplates({});
+      const result = await listProjectTemplates(ListProjectTemplatesSchema.parse({}));
 
       expect(result.isError).toBe(true);
     });
@@ -616,7 +623,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listArchivedProjects } = await getProjectsTools();
 
-      await listArchivedProjects({});
+      await listArchivedProjects(ListArchivedProjectsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/projects/archived');
@@ -626,7 +633,7 @@ describe('projects tools', () => {
       mockFetch({ data: createProjectsFixture(2), additional_data: paginationFixtures.v2NoMore });
       const { listArchivedProjects } = await getProjectsTools();
 
-      const result = await listArchivedProjects({});
+      const result = await listArchivedProjects(ListArchivedProjectsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('2 archived projects');
@@ -637,7 +644,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listArchivedProjects } = await getProjectsTools();
 
-      await listArchivedProjects({ filter_id: 10 });
+      await listArchivedProjects(ListArchivedProjectsSchema.parse({ filter_id: 10 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('filter_id=10');
@@ -647,7 +654,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listArchivedProjects } = await getProjectsTools();
 
-      await listArchivedProjects({});
+      await listArchivedProjects(ListArchivedProjectsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('filter_id');
@@ -657,7 +664,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listArchivedProjects } = await getProjectsTools();
 
-      await listArchivedProjects({ status: 'completed' });
+      await listArchivedProjects(ListArchivedProjectsSchema.parse({ status: 'completed' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('status=completed');
@@ -667,7 +674,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listArchivedProjects } = await getProjectsTools();
 
-      await listArchivedProjects({ phase_id: 3 });
+      await listArchivedProjects(ListArchivedProjectsSchema.parse({ phase_id: 3 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('phase_id=3');
@@ -677,7 +684,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listArchivedProjects } = await getProjectsTools();
 
-      await listArchivedProjects({});
+      await listArchivedProjects(ListArchivedProjectsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('phase_id');
@@ -688,7 +695,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listArchivedProjects } = await getProjectsTools();
 
-      await listArchivedProjects({ cursor: 'arch_cursor' });
+      await listArchivedProjects(ListArchivedProjectsSchema.parse({ cursor: 'arch_cursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=arch_cursor');
@@ -698,7 +705,7 @@ describe('projects tools', () => {
       mockApiError(403, 'Forbidden');
       const { listArchivedProjects } = await getProjectsTools();
 
-      const result = await listArchivedProjects({});
+      const result = await listArchivedProjects(ListArchivedProjectsSchema.parse({}));
 
       expect(result.isError).toBe(true);
     });
@@ -776,7 +783,7 @@ describe('projects tools', () => {
       });
       const { getProjectChangelog } = await getProjectsTools();
 
-      const result = await getProjectChangelog({ id: 1 });
+      const result = await getProjectChangelog(GetProjectChangelogSchema.parse({ id: 1 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('2 changelog entry');
@@ -788,7 +795,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { getProjectChangelog } = await getProjectsTools();
 
-      await getProjectChangelog({ id: 1, cursor: 'chg_cursor' });
+      await getProjectChangelog(GetProjectChangelogSchema.parse({ id: 1, cursor: 'chg_cursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=chg_cursor');
@@ -798,7 +805,7 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([]);
       const { getProjectChangelog } = await getProjectsTools();
 
-      await getProjectChangelog({ id: 7 });
+      await getProjectChangelog(GetProjectChangelogSchema.parse({ id: 7 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/projects/7/changelog');
@@ -808,7 +815,7 @@ describe('projects tools', () => {
       mockFetch({ data: [changelogEntry], additional_data: paginationFixtures.v2NoMore });
       const { getProjectChangelog } = await getProjectsTools();
 
-      const result = await getProjectChangelog({ id: 1 });
+      const result = await getProjectChangelog(GetProjectChangelogSchema.parse({ id: 1 }));
 
       const parsed = JSON.parse(result.content[0].text);
       const entry = parsed.data[0];
@@ -821,7 +828,7 @@ describe('projects tools', () => {
       mockApiError(403, 'Forbidden');
       const { getProjectChangelog } = await getProjectsTools();
 
-      const result = await getProjectChangelog({ id: 1 });
+      const result = await getProjectChangelog(GetProjectChangelogSchema.parse({ id: 1 }));
 
       expect(result.isError).toBe(true);
     });
@@ -877,7 +884,7 @@ describe('projects tools', () => {
       mockFetch({ data: createProjectsFixture(2), additional_data: paginationFixtures.v2NoMore });
       const { listProjects } = await getProjectsTools();
 
-      const parsed = JSON.parse((await listProjects({})).content[0].text);
+      const parsed = JSON.parse((await listProjects(ListProjectsSchema.parse({}))).content[0].text);
 
       expect(parsed.untrusted.notice).toMatch(/third parties can write/i);
       expect(Array.isArray(parsed.data)).toBe(true);

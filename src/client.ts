@@ -458,17 +458,33 @@ export class PipedriveClient {
       // Monotonic clock (not Date.now): a wall-clock step must not mis-time the
       // breaker's cooldown or evict an in-progress window's signals (#133).
       const allowed = breakerAllowsRequest(monotonicNowMs());
-      this.logBreakerTransition(stateBeforeGate, getBreakerState(), method, logEndpoint);
       if (!allowed) {
+        // Nothing to log about the gate itself: a refusal is state-neutral
+        // (Open-before-cooldown -> Open, HalfOpen -> HalfOpen), so the transition
+        // logger would be a no-op here. This return must also stay ABOVE the
+        // `isProbe` read below: a request refused while another one holds the
+        // probe slot observes HalfOpen and would wrongly claim their probe.
         this.logResilience(`${method} ${logEndpoint} circuit open — fast-failing without a request`);
         return { success: false, error: circuitOpenError() };
       }
       const isProbe = getBreakerState() === "HalfOpen";
-      // Once this iteration owns the probe slot, recordOutcome must run before any
-      // exit; the finally settles an unrecorded probe as a failure (re-Open, fresh
-      // cooldown) so no future edit can reintroduce a HalfOpen wedge.
+      // ── DANGER ZONE: gate -> try. `breakerAllowsRequest` above may have claimed the
+      //    single half-open probe slot for this iteration, and only `recordOutcome`
+      //    releases it. The `finally` below settles an unrecorded probe as a failure
+      //    (re-Open, fresh cooldown), but it guards ONLY the region from `try` onward,
+      //    so NOTHING that can throw may sit between the gate and the `try`, because a throw
+      //    there escapes with the slot held and wedges the breaker HalfOpen for the
+      //    process lifetime, every later call fast-failing CIRCUIT_OPEN.
+      //
+      //    That is why the gate's own Open -> HalfOpen transition is logged as the
+      //    FIRST statement inside the `try` rather than next to the gate: logging is
+      //    exactly the throwing kind of work (a host-swapped console.error, or
+      //    redactSecrets), and it is a no-op on every transition EXCEPT the slot claim.
+      //    Only the two lines below (a pure state read and a boolean assignment)
+      //    belong out here.
       let probeSettled = !isProbe;
       try {
+        this.logBreakerTransition(stateBeforeGate, getBreakerState(), method, logEndpoint);
         // ── Per-attempt timeout (KTD3): the initial attempt gets the full timeout;
         //    retries shrink as the total elapsed time nears baseTimeoutMs+budget. ──
         const attemptTimeoutMs = attemptIndex === 0

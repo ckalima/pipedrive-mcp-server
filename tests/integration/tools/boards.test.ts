@@ -8,6 +8,7 @@ import {
   mockFetch,
   mockApiSuccess,
   mockApiError,
+  requestBody,
 } from '../../helpers/mockFetch.js';
 
 const board = {
@@ -200,7 +201,7 @@ describe('boards tools', () => {
       await createBoard({ name: 'Sprint Board' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Sprint Board');
     });
 
@@ -211,7 +212,7 @@ describe('boards tools', () => {
       await createBoard({ name: 'Board', order_nr: 3 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Board');
       expect(body.order_nr).toBe(3);
     });
@@ -223,7 +224,7 @@ describe('boards tools', () => {
       await createBoard({ name: 'Board' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.order_nr).toBeUndefined();
     });
 
@@ -259,7 +260,7 @@ describe('boards tools', () => {
 
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/boards/7');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.id).toBeUndefined();
     });
 
@@ -270,7 +271,7 @@ describe('boards tools', () => {
       await updateBoard({ id: 1, name: 'Renamed Board' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Renamed Board');
       expect(body.order_nr).toBeUndefined();
     });
@@ -282,7 +283,7 @@ describe('boards tools', () => {
       await updateBoard({ id: 1 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(Object.keys(body)).toHaveLength(0);
     });
 
@@ -487,7 +488,7 @@ describe('phases tools', () => {
       await createPhase({ name: 'Sprint Phase', board_id: 5 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Sprint Phase');
       expect(body.board_id).toBe(5);
     });
@@ -499,7 +500,7 @@ describe('phases tools', () => {
       await createPhase({ name: 'Phase', board_id: 1, order_nr: 2 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.order_nr).toBe(2);
     });
 
@@ -510,7 +511,7 @@ describe('phases tools', () => {
       await createPhase({ name: 'Phase', board_id: 1 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.order_nr).toBeUndefined();
     });
 
@@ -546,7 +547,7 @@ describe('phases tools', () => {
 
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/phases/10');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.id).toBeUndefined();
     });
 
@@ -557,7 +558,7 @@ describe('phases tools', () => {
       await updatePhase({ id: 10, board_id: 99 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.board_id).toBe(99);
     });
 
@@ -568,7 +569,7 @@ describe('phases tools', () => {
       await updatePhase({ id: 10, name: 'Renamed Phase' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Renamed Phase');
       expect(body.board_id).toBeUndefined();
       expect(body.order_nr).toBeUndefined();

@@ -5,9 +5,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setupValidEnv } from '../../helpers/mockEnv.js';
 import {
-  mockFetch,
   mockApiSuccess,
   mockApiError,
+  requestBody,
 } from '../../helpers/mockFetch.js';
 
 const product = {
@@ -65,7 +65,7 @@ describe('products write tools', () => {
       await createProduct({ name: 'Premium Widget' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Premium Widget');
     });
 
@@ -76,7 +76,7 @@ describe('products write tools', () => {
       await createProduct({ name: 'Widget' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Widget');
       expect(body.code).toBeUndefined();
       expect(body.description).toBeUndefined();
@@ -106,7 +106,7 @@ describe('products write tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.code).toBe('WIDG-PRE-001');
       expect(body.description).toBe('A premium widget');
       expect(body.unit).toBe('pcs');
@@ -132,7 +132,7 @@ describe('products write tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody<{ prices: Record<string, unknown>[] }>(options);
       expect(body.prices).toHaveLength(2);
       expect(body.prices[0].currency).toBe('USD');
       expect(body.prices[0].price).toBe(99.99);
@@ -149,7 +149,7 @@ describe('products write tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody<{ custom_fields: Record<string, unknown> }>(options);
       expect(body.custom_fields).toBeDefined();
       expect(body.custom_fields.sku_key).toBe('ABC-123');
     });
@@ -161,7 +161,7 @@ describe('products write tools', () => {
       await createProduct({ name: 'Subscription Widget', billing_frequency: 'annually' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.billing_frequency).toBe('annually');
     });
 
@@ -205,7 +205,7 @@ describe('products write tools', () => {
       await updateProduct({ id: 10, name: 'Renamed Widget' });
 
       const [url, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(url).toContain('/products/10');
       expect(body.id).toBeUndefined();
       expect(body.name).toBe('Renamed Widget');
@@ -218,7 +218,7 @@ describe('products write tools', () => {
       await updateProduct({ id: 1, tax: 15, visible_to: 7 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.tax).toBe(15);
       expect(body.visible_to).toBe(7);
       expect(body.name).toBeUndefined();
@@ -235,7 +235,7 @@ describe('products write tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody<{ prices: Record<string, unknown>[] }>(options);
       expect(body.prices).toHaveLength(1);
       expect(body.prices[0].price).toBe(149.99);
     });
@@ -257,7 +257,7 @@ describe('products write tools', () => {
       await updateProduct({ id: 1, billing_frequency: 'quarterly', billing_frequency_cycles: 4 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.billing_frequency).toBe('quarterly');
       expect(body.billing_frequency_cycles).toBe(4);
     });

@@ -20,7 +20,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setupValidEnv } from "../helpers/mockEnv.js";
-import { mockApiSuccess, fixtures } from "../helpers/mockFetch.js";
+import { mockApiSuccess, fixtures, requestBody } from "../helpers/mockFetch.js";
 import {
   assertBodyConformsToSpec,
   assertArrayBodyConformsToSpec,
@@ -28,8 +28,8 @@ import {
 
 /** Capture the JSON body of the single mocked outbound call (object or array). */
 function capturedBody(mockFn: ReturnType<typeof mockApiSuccess>): unknown {
-  const [, init] = mockFn.mock.calls[0] as [unknown, { body?: string }];
-  return JSON.parse(init.body as string);
+  const [, init] = mockFn.mock.calls[0];
+  return requestBody(init);
 }
 
 const FIELD_CODE = "abc1234567890abc1234567890abc1234567890a"; // 40-char field_code hash

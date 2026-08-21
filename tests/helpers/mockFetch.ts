@@ -53,16 +53,59 @@ export function createMockResponse(options: MockResponseOptions = {}): Response 
 }
 
 /**
+ * The init every request in this codebase actually sends. Narrower than `RequestInit`
+ * on purpose, because suites read these three fields off `mock.calls[n][1]` constantly:
+ *
+ *   - `init` is NOT optional. `RequestInit | undefined` made `options.method` a type
+ *     error at ~200 call sites for a case that cannot occur, because every fetch goes through
+ *     `PipedriveClient.request`, which always passes an object. `createMockFetch`
+ *     asserts that at runtime rather than leaving the claim unchecked.
+ *   - `headers` is a plain record, which is what the client builds, so
+ *     `options.headers['Content-Type']` reads without a cast (`HeadersInit` is a union
+ *     that includes `Headers` and tuple arrays, none of which are indexable).
+ *   - `body` stays optional (GET/DELETE send none) and is the union the client can
+ *     actually produce: a JSON string from `request`, or `FormData` from
+ *     `requestMultipart`. Read the JSON form through {@link requestBody} rather than
+ *     casting at each site.
+ */
+export interface MockRequestInit extends RequestInit {
+  method: string;
+  headers: Record<string, string>;
+  body?: string | FormData;
+}
+
+/**
  * Creates a mock fetch function that returns specified responses
  */
 export function createMockFetch(responses: MockResponseOptions | MockResponseOptions[]) {
   const responseArray = Array.isArray(responses) ? responses : [responses];
   let callIndex = 0;
 
-  return vi.fn(async (_url: string | URL, _init?: RequestInit): Promise<Response> => {
+  return vi.fn(async (_url: string | URL, init: MockRequestInit): Promise<Response> => {
+    // Keeps the non-optional `init` above honest: if a code path ever calls fetch
+    // bare, this fails loudly here instead of surfacing as `undefined` at a read site
+    // whose type says it cannot be.
+    if (init === undefined) {
+      throw new Error(
+        'mock fetch was called without a RequestInit; every request is expected to go through PipedriveClient.request',
+      );
+    }
     const responseOptions = responseArray[Math.min(callIndex++, responseArray.length - 1)];
     return createMockResponse(responseOptions);
   });
+}
+
+/**
+ * Parses the JSON request body off a recorded fetch call, failing with a useful message
+ * when the request carried none. Replaces `JSON.parse(options.body)`, which does not
+ * typecheck (`body` is legitimately absent on GET/DELETE) and reports a bare
+ * "undefined is not valid JSON" when a write silently stops sending one.
+ */
+export function requestBody<T = Record<string, unknown>>(init: MockRequestInit): T {
+  if (typeof init.body !== 'string') {
+    throw new Error(`expected the request to carry a JSON body, got ${String(init.body)}`);
+  }
+  return JSON.parse(init.body) as T;
 }
 
 /**

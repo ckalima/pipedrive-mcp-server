@@ -10,7 +10,9 @@ import {
   mockFetch,
   fixtures,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
+import { ListPipelinesSchema, ListStagesSchema } from '../../../src/schemas/pipelines.js';
 
 async function getPipelinesTools() {
   return import('../../../src/tools/pipelines.js');
@@ -31,7 +33,7 @@ describe('pipelines tools', () => {
       mockApiSuccess(pipelines);
       const { listPipelines } = await getPipelinesTools();
 
-      const result = await listPipelines({});
+      const result = await listPipelines(ListPipelinesSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('2 pipeline');
@@ -42,7 +44,7 @@ describe('pipelines tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listPipelines } = await getPipelinesTools();
 
-      await listPipelines({});
+      await listPipelines(ListPipelinesSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/pipelines');
@@ -53,7 +55,7 @@ describe('pipelines tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listPipelines } = await getPipelinesTools();
 
-      await listPipelines({ cursor: 'next_page_cursor' });
+      await listPipelines(ListPipelinesSchema.parse({ cursor: 'next_page_cursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=next_page_cursor');
@@ -73,7 +75,7 @@ describe('pipelines tools', () => {
       const { listPipelines } = await getPipelinesTools();
       mockFetch({ data: [fixtures.pipeline], additional_data: paginationFixtures.v2WithMore });
 
-      const result = await listPipelines({});
+      const result = await listPipelines(ListPipelinesSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -84,7 +86,7 @@ describe('pipelines tools', () => {
       mockApiError(401, 'Invalid API key');
       const { listPipelines } = await getPipelinesTools();
 
-      const result = await listPipelines({});
+      const result = await listPipelines(ListPipelinesSchema.parse({}));
 
       expect(result.content[0].text).toContain('INVALID_API_KEY');
       expect(result.isError).toBe(true);
@@ -101,7 +103,7 @@ describe('pipelines tools', () => {
       mockApiSuccess(stages);
       const { listStages } = await getPipelinesTools();
 
-      const result = await listStages({});
+      const result = await listStages(ListStagesSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('3 stage');
@@ -112,7 +114,7 @@ describe('pipelines tools', () => {
       const mockFn = mockApiSuccess([fixtures.stage]);
       const { listStages } = await getPipelinesTools();
 
-      await listStages({ pipeline_id: 2 });
+      await listStages(ListStagesSchema.parse({ pipeline_id: 2 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('pipeline_id=2');
@@ -122,7 +124,7 @@ describe('pipelines tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listStages } = await getPipelinesTools();
 
-      await listStages({});
+      await listStages(ListStagesSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/stages');
@@ -133,7 +135,7 @@ describe('pipelines tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listStages } = await getPipelinesTools();
 
-      await listStages({ cursor: 'next_page_cursor' });
+      await listStages(ListStagesSchema.parse({ cursor: 'next_page_cursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=next_page_cursor');
@@ -153,7 +155,7 @@ describe('pipelines tools', () => {
       const { listStages } = await getPipelinesTools();
       mockFetch({ data: [fixtures.stage], additional_data: paginationFixtures.v2WithMore });
 
-      const result = await listStages({});
+      const result = await listStages(ListStagesSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -206,7 +208,7 @@ describe('pipelines tools', () => {
       expect(url).toContain('/api/v2/pipelines');
       expect(url).not.toContain('/v1/');
       expect(options.method).toBe('POST');
-      expect(JSON.parse(options.body).name).toBe('New Pipeline');
+      expect(requestBody(options).name).toBe('New Pipeline');
     });
 
     it('should forward is_deal_probability_enabled with the caller value (v2 rename)', async () => {
@@ -215,7 +217,7 @@ describe('pipelines tools', () => {
 
       await createPipeline({ name: 'P', is_deal_probability_enabled: true });
 
-      const body = JSON.parse(mockFn.mock.calls[0][1].body);
+      const body = requestBody(mockFn.mock.calls[0][1]);
       expect(body.is_deal_probability_enabled).toBe(true);
       expect(body.deal_probability).toBeUndefined();
     });
@@ -226,7 +228,7 @@ describe('pipelines tools', () => {
 
       await createPipeline({ name: 'P' });
 
-      const body = JSON.parse(mockFn.mock.calls[0][1].body);
+      const body = requestBody(mockFn.mock.calls[0][1]);
       expect(body.is_deal_probability_enabled).toBeUndefined();
     });
 
@@ -251,7 +253,7 @@ describe('pipelines tools', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/pipelines/7');
       expect(options.method).toBe('PATCH');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.id).toBeUndefined();
       expect(body.name).toBe('Renamed');
     });
@@ -305,7 +307,7 @@ describe('pipelines tools', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/stages');
       expect(options.method).toBe('POST');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Lead');
       expect(body.pipeline_id).toBe(1);
     });
@@ -322,7 +324,7 @@ describe('pipelines tools', () => {
         days_to_rotten: 7,
       });
 
-      const body = JSON.parse(mockFn.mock.calls[0][1].body);
+      const body = requestBody(mockFn.mock.calls[0][1]);
       expect(body.is_deal_rot_enabled).toBe(true);
       expect(body.days_to_rotten).toBe(7);
       expect(body.deal_probability).toBe(80);
@@ -337,7 +339,7 @@ describe('pipelines tools', () => {
 
       await createStage({ name: 'Lead', pipeline_id: 1 });
 
-      const body = JSON.parse(mockFn.mock.calls[0][1].body);
+      const body = requestBody(mockFn.mock.calls[0][1]);
       expect(body.deal_probability).toBeUndefined();
       expect(body.is_deal_rot_enabled).toBeUndefined();
       expect(body.days_to_rotten).toBeUndefined();
@@ -354,7 +356,7 @@ describe('pipelines tools', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/stages/5');
       expect(options.method).toBe('PATCH');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.id).toBeUndefined();
       expect(body.name).toBe('Renamed');
       expect(body.days_to_rotten).toBeNull();

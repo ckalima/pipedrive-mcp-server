@@ -10,8 +10,10 @@ import {
   mockApiError,
   fixtures,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
 import { createOrganizationsFixture } from '../../helpers/fixtures.js';
+import { ListOrganizationsSchema, SearchOrganizationsSchema } from '../../../src/schemas/organizations.js';
 
 async function getOrganizationsTools() {
   return import('../../../src/tools/organizations.js');
@@ -40,11 +42,11 @@ describe('organizations tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listOrganizations } = await getOrganizationsTools();
 
-      await listOrganizations({
+      await listOrganizations(ListOrganizationsSchema.parse({
         owner_id: 1,
         sort_by: 'update_time',
         sort_direction: 'asc',
-      });
+      }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('owner_id=1');
@@ -55,7 +57,7 @@ describe('organizations tools', () => {
       mockFetch({ data: [], additional_data: paginationFixtures.v2WithMore });
       const { listOrganizations } = await getOrganizationsTools();
 
-      const result = await listOrganizations({});
+      const result = await listOrganizations(ListOrganizationsSchema.parse({}));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -108,7 +110,7 @@ describe('organizations tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.name).toBe('Enterprise Corp');
       expect(body.address).toEqual({ value: '123 Business Ave' });
       expect(body.visible_to).toBe(7);
@@ -144,7 +146,7 @@ describe('organizations tools', () => {
       });
       const { searchOrganizations } = await getOrganizationsTools();
 
-      const result = await searchOrganizations({ term: 'test' });
+      const result = await searchOrganizations(SearchOrganizationsSchema.parse({ term: 'test' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('test');
@@ -154,7 +156,7 @@ describe('organizations tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchOrganizations } = await getOrganizationsTools();
 
-      await searchOrganizations({ term: 'acme' });
+      await searchOrganizations(SearchOrganizationsSchema.parse({ term: 'acme' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/organizations/search');
@@ -166,7 +168,7 @@ describe('organizations tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchOrganizations } = await getOrganizationsTools();
 
-      await searchOrganizations({ term: 'acme corp', fields: 'name,address', cursor: 'cur1', exact_match: true });
+      await searchOrganizations(SearchOrganizationsSchema.parse({ term: 'acme corp', fields: 'name,address', cursor: 'cur1', exact_match: true }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('term=acme+corp');
@@ -180,7 +182,7 @@ describe('organizations tools', () => {
       mockFetch({ data: { items: [] }, additional_data: { next_cursor: 'NEXT' } });
       const { searchOrganizations } = await getOrganizationsTools();
 
-      const result = await searchOrganizations({ term: 'x' });
+      const result = await searchOrganizations(SearchOrganizationsSchema.parse({ term: 'x' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);

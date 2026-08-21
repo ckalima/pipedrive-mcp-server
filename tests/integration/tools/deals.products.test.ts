@@ -9,7 +9,9 @@ import {
   mockApiSuccess,
   mockApiError,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
+import { ListDealProductsSchema } from '../../../src/schemas/deals.js';
 
 const dealProduct = {
   id: 42,
@@ -36,7 +38,7 @@ describe('deal product tools (U1, #67)', () => {
       const mockFn = mockApiSuccess([]);
       const { listDealProducts } = await getDealsTools();
 
-      await listDealProducts({ id: 1 });
+      await listDealProducts(ListDealProductsSchema.parse({ id: 1 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/deals/1/products');
@@ -58,7 +60,7 @@ describe('deal product tools (U1, #67)', () => {
       mockFetch({ data: [dealProduct], additional_data: paginationFixtures.v2WithMore });
       const { listDealProducts } = await getDealsTools();
 
-      const result = await listDealProducts({ id: 1 });
+      const result = await listDealProducts(ListDealProductsSchema.parse({ id: 1 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -69,7 +71,7 @@ describe('deal product tools (U1, #67)', () => {
       mockFetch({ data: [dealProduct], additional_data: paginationFixtures.v2NoMore });
       const { listDealProducts } = await getDealsTools();
 
-      const result = await listDealProducts({ id: 1 });
+      const result = await listDealProducts(ListDealProductsSchema.parse({ id: 1 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('deal product');
@@ -79,7 +81,7 @@ describe('deal product tools (U1, #67)', () => {
       mockApiError(500, 'Internal server error');
       const { listDealProducts } = await getDealsTools();
 
-      const result = await listDealProducts({ id: 1 });
+      const result = await listDealProducts(ListDealProductsSchema.parse({ id: 1 }));
 
       expect(result.isError).toBe(true);
     });
@@ -95,7 +97,7 @@ describe('deal product tools (U1, #67)', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/deals/1/products');
       expect(options.method).toBe('POST');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.product_id).toBe(5);
       expect(body.item_price).toBe(10);
       expect(body.quantity).toBe(2);
@@ -108,7 +110,7 @@ describe('deal product tools (U1, #67)', () => {
       await addDealProduct({ id: 1, product_id: 5, item_price: 10, quantity: 2 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.tax).toBeUndefined();
       expect(body.billing_frequency).toBeUndefined();
     });
@@ -120,7 +122,7 @@ describe('deal product tools (U1, #67)', () => {
       await addDealProduct({ id: 1, product_id: 5, item_price: 10, quantity: 2, billing_frequency: 'monthly' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.billing_frequency).toBe('monthly');
     });
 
@@ -154,7 +156,7 @@ describe('deal product tools (U1, #67)', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/deals/1/products/42');
       expect(options.method).toBe('PATCH');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.quantity).toBe(3);
       expect(body.product_id).toBeUndefined();
     });
@@ -230,7 +232,7 @@ describe('deal product tools (U1, #67)', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/deals/1/products/bulk');
       expect(options.method).toBe('POST');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(Array.isArray(body.data)).toBe(true);
       expect(body.data).toHaveLength(2);
     });

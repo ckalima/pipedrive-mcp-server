@@ -8,7 +8,6 @@ import {
   extractPaginationV1,
   buildPaginationParamsV2,
   buildPaginationParamsV1,
-  type PaginationInfo,
 } from '../../../src/utils/pagination.js';
 
 describe('pagination', () => {

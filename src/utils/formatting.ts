@@ -68,7 +68,20 @@ export interface ToolResponseInput {
   pagination?: unknown;
 }
 
-export type ToolTextResult = { content: { type: "text"; text: string }[] };
+export type ToolTextResult = {
+  content: { type: "text"; text: string }[];
+  /**
+   * Always absent on the success path. Declared so this type and
+   * {@link McpToolErrorResult} (`isError: true`) form a DISCRIMINATED union.
+   *
+   * Every handler returns `ToolTextResult | McpToolErrorResult`. Without this member,
+   * `result.isError` is a type error on that union (the property is missing from one
+   * side), so a caller could neither read the flag nor narrow on it. `?: undefined`
+   * rather than `?: boolean` keeps the claim exact: the success builder never sets it,
+   * and `if (result.isError)` narrows to the error branch.
+   */
+  isError?: undefined;
+};
 
 /**
  * Builds the standard `{ content: [{ type: "text", text }] }` tool result with

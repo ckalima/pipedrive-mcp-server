@@ -7,6 +7,7 @@ import { setupValidEnv } from '../../helpers/mockEnv.js';
 import {
   mockApiSuccess,
   mockApiError,
+  requestBody,
 } from '../../helpers/mockFetch.js';
 
 const DISCOUNT_UUID = '4b40248b-945a-4802-b996-60fdff8c5c69';
@@ -73,7 +74,7 @@ describe('deal discount tools (U2, #67)', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain('/deals/1/discounts');
       expect(options.method).toBe('POST');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.description).toBe('Loyalty');
       expect(body.amount).toBe(10);
       expect(body.type).toBe('percentage');
@@ -109,7 +110,7 @@ describe('deal discount tools (U2, #67)', () => {
       const [url, options] = mockFn.mock.calls[0];
       expect(url).toContain(`/deals/1/discounts/${DISCOUNT_UUID}`);
       expect(options.method).toBe('PATCH');
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.amount).toBe(15);
       expect(body.description).toBeUndefined();
     });

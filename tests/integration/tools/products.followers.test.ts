@@ -9,7 +9,9 @@ import {
   mockApiSuccess,
   mockApiError,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
+import { ListProductFollowersSchema, ProductFollowersChangelogSchema } from '../../../src/schemas/products.js';
 
 const follower = {
   user_id: 7,
@@ -39,7 +41,7 @@ describe('product follower tools (U4)', () => {
       const mockFn = mockApiSuccess([]);
       const { listProductFollowers } = await getProductsTools();
 
-      await listProductFollowers({ id: 3 });
+      await listProductFollowers(ListProductFollowersSchema.parse({ id: 3 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/api/v2/products/3/followers');
@@ -49,7 +51,7 @@ describe('product follower tools (U4)', () => {
       const mockFn = mockApiSuccess([]);
       const { listProductFollowers } = await getProductsTools();
 
-      await listProductFollowers({ id: 3, cursor: 'follcursor' });
+      await listProductFollowers(ListProductFollowersSchema.parse({ id: 3, cursor: 'follcursor' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('cursor=follcursor');
@@ -59,7 +61,7 @@ describe('product follower tools (U4)', () => {
       mockFetch({ data: [follower], additional_data: paginationFixtures.v2WithMore });
       const { listProductFollowers } = await getProductsTools();
 
-      const result = await listProductFollowers({ id: 3 });
+      const result = await listProductFollowers(ListProductFollowersSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -70,7 +72,7 @@ describe('product follower tools (U4)', () => {
       mockFetch({ data: [follower, follower], additional_data: paginationFixtures.v2NoMore });
       const { listProductFollowers } = await getProductsTools();
 
-      const result = await listProductFollowers({ id: 3 });
+      const result = await listProductFollowers(ListProductFollowersSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('follower');
@@ -81,7 +83,7 @@ describe('product follower tools (U4)', () => {
       mockApiError(500, 'Internal server error');
       const { listProductFollowers } = await getProductsTools();
 
-      const result = await listProductFollowers({ id: 3 });
+      const result = await listProductFollowers(ListProductFollowersSchema.parse({ id: 3 }));
 
       expect(result.isError).toBe(true);
     });
@@ -90,7 +92,7 @@ describe('product follower tools (U4)', () => {
       const mockFn = mockApiSuccess([]);
       const { listProductFollowers } = await getProductsTools();
 
-      await listProductFollowers({ id: 3 });
+      await listProductFollowers(ListProductFollowersSchema.parse({ id: 3 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('api_token');
@@ -116,7 +118,7 @@ describe('product follower tools (U4)', () => {
       await addProductFollower({ id: 3, user_id: 7 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.user_id).toBe(7);
     });
 
@@ -136,7 +138,7 @@ describe('product follower tools (U4)', () => {
       const mockFn = mockApiSuccess([]);
       const { getProductFollowersChangelog } = await getProductsTools();
 
-      await getProductFollowersChangelog({ id: 3 });
+      await getProductFollowersChangelog(ProductFollowersChangelogSchema.parse({ id: 3 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/products/3/followers/changelog');
@@ -146,7 +148,7 @@ describe('product follower tools (U4)', () => {
       mockFetch({ data: [changelogEntry], additional_data: paginationFixtures.v2WithMore });
       const { getProductFollowersChangelog } = await getProductsTools();
 
-      const result = await getProductFollowersChangelog({ id: 3 });
+      const result = await getProductFollowersChangelog(ProductFollowersChangelogSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -157,7 +159,7 @@ describe('product follower tools (U4)', () => {
       mockFetch({ data: [changelogEntry], additional_data: paginationFixtures.v2NoMore });
       const { getProductFollowersChangelog } = await getProductsTools();
 
-      const result = await getProductFollowersChangelog({ id: 3 });
+      const result = await getProductFollowersChangelog(ProductFollowersChangelogSchema.parse({ id: 3 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('changelog');

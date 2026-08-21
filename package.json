@@ -22,7 +22,8 @@
     "bundle:mcpb": "tsx scripts/build-mcpb.ts",
     "registry:inject": "tsx scripts/registry-inject.ts",
     "registry:publish": "tsx scripts/registry-publish.ts",
-    "lint": "eslint src/",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.check.json",
     "prepublishOnly": "npm run build"
   },
   "repository": {

@@ -10,8 +10,10 @@ import {
   mockApiError,
   fixtures,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
 import { createActivitiesFixture } from '../../helpers/fixtures.js';
+import { ListActivitiesSchema } from '../../../src/schemas/activities.js';
 
 async function getActivitiesTools() {
   return import('../../../src/tools/activities.js');
@@ -40,8 +42,12 @@ describe('activities tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listActivities } = await getActivitiesTools();
 
-      // The removed v2 list filters are passed directly (bypassing Zod) so the
-      // not.toContain assertions guard the handler-line removals, not just schema strip.
+      // Deliberately NOT routed through ListActivitiesSchema, unlike its neighbours.
+      // type/start_date/end_date/project_id were removed from the v2 list call at the
+      // HANDLER line, and that is what the not.toContain assertions below guard. The
+      // schema also strips all four, so parsing first would keep them from ever reaching
+      // the handler and the assertions would hold even if the handler forwarded them
+      // again. (The schema-layer strip has its own coverage in tests/unit/schemas/activities.test.ts.)
       await listActivities({
         owner_id: 1,
         deal_id: 5,
@@ -52,7 +58,7 @@ describe('activities tools', () => {
         start_date: '2024-01-01',
         end_date: '2024-01-02',
         project_id: 1,
-      } as Record<string, unknown>);
+      } as unknown as Parameters<typeof listActivities>[0]);
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('owner_id=1');
@@ -70,7 +76,7 @@ describe('activities tools', () => {
       mockFetch({ data: [], additional_data: paginationFixtures.v2WithMore });
       const { listActivities } = await getActivitiesTools();
 
-      const result = await listActivities({ cursor: 'cursor123' });
+      const result = await listActivities(ListActivitiesSchema.parse({ cursor: 'cursor123' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -80,7 +86,7 @@ describe('activities tools', () => {
       mockApiError(401, 'Invalid API key');
       const { listActivities } = await getActivitiesTools();
 
-      const result = await listActivities({});
+      const result = await listActivities(ListActivitiesSchema.parse({}));
 
       expect(result.content[0].text).toContain('INVALID_API_KEY');
       expect(result.isError).toBe(true);
@@ -145,7 +151,7 @@ describe('activities tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.subject).toBe('Client Meeting');
       expect(body.type).toBe('meeting');
       expect(body.due_date).toBe('2024-06-15');
@@ -174,7 +180,7 @@ describe('activities tools', () => {
       const { createActivity } = await getActivitiesTools();
       await createActivity({ subject: 'Done call', type: 'call', done: true });
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.done).toBe(true);
     });
 
@@ -183,7 +189,7 @@ describe('activities tools', () => {
       const { createActivity } = await getActivitiesTools();
       await createActivity({ subject: 'No done flag', type: 'call' });
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect('done' in body).toBe(false);
     });
   });
@@ -220,7 +226,7 @@ describe('activities tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.participants).toHaveLength(1);
       expect(body.attendees).toHaveLength(1);
     });
@@ -230,7 +236,7 @@ describe('activities tools', () => {
       const { updateActivity } = await getActivitiesTools();
       await updateActivity({ id: 1, done: true });
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.done).toBe(true);
     });
 
@@ -239,7 +245,7 @@ describe('activities tools', () => {
       const { updateActivity } = await getActivitiesTools();
       await updateActivity({ id: 1, location: { value: '456 Oak Ave', country: 'US' } });
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.location).toEqual({ value: '456 Oak Ave', country: 'US' });
     });
   });

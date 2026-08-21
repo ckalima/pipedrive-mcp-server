@@ -11,6 +11,7 @@ import {
   paginationFixtures,
 } from '../../helpers/mockFetch.js';
 import { createMailThreadFixture, createMailMessageFixture } from '../../helpers/fixtures.js';
+import { GetDealEmailsSchema, GetMailMessageSchema, GetPersonEmailsSchema, ListMailThreadsSchema } from '../../../src/schemas/mail.js';
 
 async function getMailTools() {
   return import('../../../src/tools/mail.js');
@@ -28,7 +29,7 @@ describe('mail tools', () => {
       mockApiSuccess(threads);
       const { getPersonEmails } = await getMailTools();
 
-      const result = await getPersonEmails({ id: 1 });
+      const result = await getPersonEmails(GetPersonEmailsSchema.parse({ id: 1 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('2 email');
@@ -39,7 +40,7 @@ describe('mail tools', () => {
       const mockFn = mockApiSuccess([]);
       const { getPersonEmails } = await getMailTools();
 
-      await getPersonEmails({ id: 1 });
+      await getPersonEmails(GetPersonEmailsSchema.parse({ id: 1 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/persons/1/mailMessages');
@@ -60,7 +61,7 @@ describe('mail tools', () => {
       mockApiError(404, 'Person not found');
       const { getPersonEmails } = await getMailTools();
 
-      const result = await getPersonEmails({ id: 99999 });
+      const result = await getPersonEmails(GetPersonEmailsSchema.parse({ id: 99999 }));
 
       expect(result.content[0].text).toContain('NOT_FOUND');
     });
@@ -68,7 +69,7 @@ describe('mail tools', () => {
     it('getPersonEmails returns extractPaginationV1 shape (next_cursor, not next_start)', async () => {
       mockFetch({ data: [{ id: 1 }], additional_data: paginationFixtures.v1WithMore });
       const { getPersonEmails } = await getMailTools();
-      const result = await getPersonEmails({ id: 1 });
+      const result = await getPersonEmails(GetPersonEmailsSchema.parse({ id: 1 }));
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
       expect(parsed.pagination.next_cursor).toBe('50');
@@ -79,7 +80,7 @@ describe('mail tools', () => {
       // Pipedrive v1 returns { success: true, data: null } for an empty collection.
       mockFetch({ data: null, additional_data: { pagination: { more_items_in_collection: false } } });
       const { getPersonEmails } = await getMailTools();
-      const result = await getPersonEmails({ id: 1 });
+      const result = await getPersonEmails(GetPersonEmailsSchema.parse({ id: 1 }));
       expect(result.isError).toBeFalsy();
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('0 email');
@@ -93,7 +94,7 @@ describe('mail tools', () => {
       mockApiSuccess(threads);
       const { getDealEmails } = await getMailTools();
 
-      const result = await getDealEmails({ id: 1 });
+      const result = await getDealEmails(GetDealEmailsSchema.parse({ id: 1 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('1 email');
@@ -103,7 +104,7 @@ describe('mail tools', () => {
       const mockFn = mockApiSuccess([]);
       const { getDealEmails } = await getMailTools();
 
-      await getDealEmails({ id: 1 });
+      await getDealEmails(GetDealEmailsSchema.parse({ id: 1 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/deals/1/mailMessages');
@@ -112,7 +113,7 @@ describe('mail tools', () => {
     it('getDealEmails returns extractPaginationV1 shape (next_cursor, not next_start)', async () => {
       mockFetch({ data: [{ id: 1 }], additional_data: paginationFixtures.v1WithMore });
       const { getDealEmails } = await getMailTools();
-      const result = await getDealEmails({ id: 1 });
+      const result = await getDealEmails(GetDealEmailsSchema.parse({ id: 1 }));
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
       expect(parsed.pagination.next_cursor).toBe('50');
@@ -122,7 +123,7 @@ describe('mail tools', () => {
     it('treats a v1 empty { data: null } response as 0 emails, not an "Unknown API error"', async () => {
       mockFetch({ data: null, additional_data: { pagination: { more_items_in_collection: false } } });
       const { getDealEmails } = await getMailTools();
-      const result = await getDealEmails({ id: 1 });
+      const result = await getDealEmails(GetDealEmailsSchema.parse({ id: 1 }));
       expect(result.isError).toBeFalsy();
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('0 email');
@@ -136,7 +137,7 @@ describe('mail tools', () => {
       mockApiSuccess(threads);
       const { listMailThreads } = await getMailTools();
 
-      const result = await listMailThreads({ folder: 'inbox' });
+      const result = await listMailThreads(ListMailThreadsSchema.parse({ folder: 'inbox' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('2 mail thread');
@@ -146,7 +147,7 @@ describe('mail tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listMailThreads } = await getMailTools();
 
-      await listMailThreads({ folder: 'sent' });
+      await listMailThreads(ListMailThreadsSchema.parse({ folder: 'sent' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('folder=sent');
@@ -156,7 +157,7 @@ describe('mail tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listMailThreads } = await getMailTools();
 
-      await listMailThreads({});
+      await listMailThreads(ListMailThreadsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/mailbox/mailThreads');
@@ -166,7 +167,7 @@ describe('mail tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listMailThreads } = await getMailTools();
 
-      await listMailThreads({ start: 100, limit: 25 });
+      await listMailThreads(ListMailThreadsSchema.parse({ start: 100, limit: 25 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('start=100');
@@ -176,7 +177,7 @@ describe('mail tools', () => {
     it('listMailThreads returns extractPaginationV1 shape (next_cursor, not next_start)', async () => {
       mockFetch({ data: [{ id: 1 }], additional_data: paginationFixtures.v1WithMore });
       const { listMailThreads } = await getMailTools();
-      const result = await listMailThreads({ folder: 'inbox' });
+      const result = await listMailThreads(ListMailThreadsSchema.parse({ folder: 'inbox' }));
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
       expect(parsed.pagination.next_cursor).toBe('50');
@@ -186,7 +187,7 @@ describe('mail tools', () => {
     it('treats a v1 empty { data: null } folder as 0 threads, not an "Unknown API error"', async () => {
       mockFetch({ data: null, additional_data: { pagination: { more_items_in_collection: false } } });
       const { listMailThreads } = await getMailTools();
-      const result = await listMailThreads({ folder: 'inbox' });
+      const result = await listMailThreads(ListMailThreadsSchema.parse({ folder: 'inbox' }));
       expect(result.isError).toBeFalsy();
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('0 mail thread');
@@ -231,7 +232,7 @@ describe('mail tools', () => {
       mockApiSuccess(createMailMessageFixture(1));
       const { getMailMessage } = await getMailTools();
 
-      const result = await getMailMessage({ id: 1 });
+      const result = await getMailMessage(GetMailMessageSchema.parse({ id: 1 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toBe('Mail message 1');
@@ -242,7 +243,7 @@ describe('mail tools', () => {
       const mockFn = mockApiSuccess(createMailMessageFixture(1));
       const { getMailMessage } = await getMailTools();
 
-      await getMailMessage({ id: 456 });
+      await getMailMessage(GetMailMessageSchema.parse({ id: 456 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/mailbox/mailMessages/456');
@@ -273,16 +274,16 @@ describe('mail tools', () => {
         getMailMessage,
       } = await getMailTools();
 
-      const first = await getPersonEmails({ id: 1 });
+      const first = await getPersonEmails(GetPersonEmailsSchema.parse({ id: 1 }));
       expect(first.content[0].text).toContain('CAPABILITY_RETIRED');
       expect(first.content[0].text).toContain('Mail');
       expect(mockFn).toHaveBeenCalledTimes(1);
 
       const rest = [
-        await getDealEmails({ id: 2 }),
-        await listMailThreads({}),
+        await getDealEmails(GetDealEmailsSchema.parse({ id: 2 })),
+        await listMailThreads(ListMailThreadsSchema.parse({})),
         await getMailThread({ id: 3 }),
-        await getMailMessage({ id: 4 }),
+        await getMailMessage(GetMailMessageSchema.parse({ id: 4 })),
       ];
       for (const result of rest) {
         expect(result.content[0].text).toContain('CAPABILITY_RETIRED');
@@ -294,7 +295,7 @@ describe('mail tools', () => {
     it('R3: retiring mail does NOT affect the v2 persons tool (capability-scoped, not prefix-scoped)', async () => {
       mockApiError(410, 'Gone');
       const { getPersonEmails } = await getMailTools();
-      await getPersonEmails({ id: 1 }); // retires mail
+      await getPersonEmails(GetPersonEmailsSchema.parse({ id: 1 })); // retires mail
 
       // The real v2 /persons tool never routes through the mail seam — unaffected.
       const { getPerson } = await import('../../../src/tools/persons.js');
@@ -308,8 +309,8 @@ describe('mail tools', () => {
       mockApiSuccess([]);
       const { getPersonEmails, listMailThreads } = await getMailTools();
 
-      await getPersonEmails({ id: 1 });
-      await listMailThreads({});
+      await getPersonEmails(GetPersonEmailsSchema.parse({ id: 1 }));
+      await listMailThreads(ListMailThreadsSchema.parse({}));
 
       const warnings = errorSpy.mock.calls
         .flat()

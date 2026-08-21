@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege for the GITHUB_TOKEN: this workflow only reads the repo. Without an
+# explicit block the token inherits the repository default, which on many repos is
+# read/write across contents, issues, packages and deployments. Handing every third-party
+# action (and anything a compromised dependency runs during `npm ci`) a write-capable token.
+# release.yml already declares `permissions: {}` per job; this brings CI in line.
+permissions:
+  contents: read
+
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -14,10 +22,15 @@ jobs:
       matrix:
         node-version: [22, 24]
 
+    # Actions are pinned to a full commit SHA, not a mutable tag. `@v7` is a branch-like
+    # ref the upstream owner can repoint at any commit, so a tag pin trusts the action
+    # owner (and anyone who compromises them) continuously; a SHA is immutable. The
+    # trailing comment carries the human-readable version, which is what Dependabot's
+    # github-actions ecosystem reads and rewrites on a bump.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
@@ -27,6 +40,13 @@ jobs:
       - run: npm run build
 
       - run: npm run lint
+
+      # `npm run build` only compiles src/ (tsconfig.json has rootDir: src and excludes
+      # **/*.test.ts, so dist/ ships no test code). That left tests/ and scripts/ with no
+      # type checking at all: vitest transpiles each file in isolation and tsx strips
+      # types, so a broken type in a test helper or the docs generator surfaced only at
+      # runtime, if ever. tsconfig.check.json is the noEmit config that covers all three.
+      - run: npm run typecheck
 
       - run: npm test
 

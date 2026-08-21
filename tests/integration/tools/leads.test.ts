@@ -10,8 +10,10 @@ import {
   mockApiError,
   fixtures,
   paginationFixtures,
+  requestBody,
 } from '../../helpers/mockFetch.js';
 import { createLeadsFixture } from '../../helpers/fixtures.js';
+import { ListArchivedLeadsSchema, ListLeadsSchema, SearchLeadsSchema } from '../../../src/schemas/leads.js';
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -43,7 +45,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listLeads } = await getLeadsTools();
 
-      await listLeads({});
+      await listLeads(ListLeadsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('archived_flag=false');
@@ -53,7 +55,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listLeads } = await getLeadsTools();
 
-      await listLeads({ owner_id: 42 });
+      await listLeads(ListLeadsSchema.parse({ owner_id: 42 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('owner_id=42');
@@ -63,7 +65,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listLeads } = await getLeadsTools();
 
-      await listLeads({ person_id: 10 });
+      await listLeads(ListLeadsSchema.parse({ person_id: 10 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('person_id=10');
@@ -73,7 +75,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listLeads } = await getLeadsTools();
 
-      await listLeads({ organization_id: 20 });
+      await listLeads(ListLeadsSchema.parse({ organization_id: 20 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('organization_id=20');
@@ -83,7 +85,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listLeads } = await getLeadsTools();
 
-      await listLeads({});
+      await listLeads(ListLeadsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/leads');
@@ -93,7 +95,7 @@ describe('leads tools', () => {
       mockFetch({ data: createLeadsFixture(50), additional_data: paginationFixtures.v1WithMore });
       const { listLeads } = await getLeadsTools();
 
-      const result = await listLeads({ start: 0 });
+      const result = await listLeads(ListLeadsSchema.parse({ start: 0 }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.has_more).toBe(true);
@@ -103,7 +105,7 @@ describe('leads tools', () => {
       mockApiError(401, 'Unauthorized');
       const { listLeads } = await getLeadsTools();
 
-      const result = await listLeads({});
+      const result = await listLeads(ListLeadsSchema.parse({}));
 
       expect(result.isError).toBe(true);
     });
@@ -114,7 +116,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listArchivedLeads } = await getLeadsTools();
 
-      await listArchivedLeads({});
+      await listArchivedLeads(ListArchivedLeadsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('archived_flag=true');
@@ -136,7 +138,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listArchivedLeads } = await getLeadsTools();
 
-      await listArchivedLeads({});
+      await listArchivedLeads(ListArchivedLeadsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/leads');
@@ -205,7 +207,7 @@ describe('leads tools', () => {
       await createLead({ title: 'Test Lead Title', person_id: 1 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.title).toBe('Test Lead Title');
       expect(body.person_id).toBe(1);
     });
@@ -221,7 +223,7 @@ describe('leads tools', () => {
       });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.value).toEqual({ amount: 5000, currency: 'USD' });
     });
 
@@ -232,7 +234,7 @@ describe('leads tools', () => {
       await createLead({ title: 'Minimal Lead', person_id: 1 });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body).not.toHaveProperty('value');
       expect(body).not.toHaveProperty('owner_id');
       expect(body).not.toHaveProperty('organization_id');
@@ -287,7 +289,7 @@ describe('leads tools', () => {
       await updateLead({ id: VALID_UUID, title: 'Updated Title' });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.title).toBe('Updated Title');
       expect(body).not.toHaveProperty('person_id');
       expect(body).not.toHaveProperty('organization_id');
@@ -300,7 +302,7 @@ describe('leads tools', () => {
       await updateLead({ id: VALID_UUID, is_archived: true });
 
       const [, options] = mockFn.mock.calls[0];
-      const body = JSON.parse(options.body);
+      const body = requestBody(options);
       expect(body.is_archived).toBe(true);
     });
   });
@@ -345,7 +347,7 @@ describe('leads tools', () => {
       mockApiSuccess({ items: [{ result_score: 1.0, item: fixtures.lead }] });
       const { searchLeads } = await getLeadsTools();
 
-      const result = await searchLeads({ term: 'acme' });
+      const result = await searchLeads(SearchLeadsSchema.parse({ term: 'acme' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.summary).toContain('acme');
@@ -355,7 +357,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchLeads } = await getLeadsTools();
 
-      await searchLeads({ term: 'test' });
+      await searchLeads(SearchLeadsSchema.parse({ term: 'test' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/leads/search');
@@ -366,7 +368,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchLeads } = await getLeadsTools();
 
-      await searchLeads({ term: 'test lead' });
+      await searchLeads(SearchLeadsSchema.parse({ term: 'test lead' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('term=test+lead');
@@ -376,7 +378,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchLeads } = await getLeadsTools();
 
-      await searchLeads({ term: 'exact', exact_match: true });
+      await searchLeads(SearchLeadsSchema.parse({ term: 'exact', exact_match: true }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('exact_match=true');
@@ -386,7 +388,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchLeads } = await getLeadsTools();
 
-      await searchLeads({ term: 'test', include_fields: 'lead.was_seen' });
+      await searchLeads(SearchLeadsSchema.parse({ term: 'test', include_fields: 'lead.was_seen' }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('include_fields=lead.was_seen');
@@ -396,7 +398,7 @@ describe('leads tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchLeads } = await getLeadsTools();
 
-      await searchLeads({ term: 't', fields: 'title,notes', person_id: 1, organization_id: 2 });
+      await searchLeads(SearchLeadsSchema.parse({ term: 't', fields: 'title,notes', person_id: 1, organization_id: 2 }));
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('fields=title%2Cnotes');
@@ -408,7 +410,7 @@ describe('leads tools', () => {
       mockFetch({ data: { items: [] }, additional_data: { next_cursor: 'NEXT' } });
       const { searchLeads } = await getLeadsTools();
 
-      const result = await searchLeads({ term: 'x' });
+      const result = await searchLeads(SearchLeadsSchema.parse({ term: 'x' }));
 
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.pagination.next_cursor).toBe('NEXT');
@@ -419,7 +421,7 @@ describe('leads tools', () => {
       mockApiError(400, 'Bad request');
       const { searchLeads } = await getLeadsTools();
 
-      const result = await searchLeads({ term: 'test' });
+      const result = await searchLeads(SearchLeadsSchema.parse({ term: 'test' }));
 
       expect(result.isError).toBe(true);
     });
@@ -479,7 +481,7 @@ describe('leads tools', () => {
       expect(String(postUrl)).toContain(`/leads/${VALID_UUID}/convert/deal`);
       expect(String(postUrl)).toContain('/api/v2/');
       expect(postOptions.method).toBe('POST');
-      expect(JSON.parse(postOptions.body)).toEqual({});
+      expect(requestBody(postOptions)).toEqual({});
     });
 
     it('should forward stage_id/pipeline_id in the convert body', async () => {
@@ -492,7 +494,7 @@ describe('leads tools', () => {
       await convertLeadToDeal({ id: VALID_UUID, stage_id: 3, pipeline_id: 4 }, noSleep);
 
       const [, postOptions] = mockFn.mock.calls[0];
-      expect(JSON.parse(postOptions.body)).toEqual({ stage_id: 3, pipeline_id: 4 });
+      expect(requestBody(postOptions)).toEqual({ stage_id: 3, pipeline_id: 4 });
     });
 
     it('should poll the v2 status endpoint with the conversion id', async () => {
@@ -669,7 +671,7 @@ describe('leads tools', () => {
       mockApiError(410, 'Gone');
       const { listLeads } = await getLeadsTools();
 
-      const result = await listLeads({});
+      const result = await listLeads(ListLeadsSchema.parse({}));
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('CAPABILITY_RETIRED');
@@ -684,7 +686,7 @@ describe('leads tools', () => {
       expect(notFound.content[0].text).toContain('NOT_FOUND');
 
       const listMock = mockApiSuccess([]);
-      const listResult = await listLeads({});
+      const listResult = await listLeads(ListLeadsSchema.parse({}));
       expect(listResult.isError).toBeFalsy();
       expect(listMock).toHaveBeenCalledTimes(1);
     });
@@ -694,12 +696,12 @@ describe('leads tools', () => {
       mockApiError(410, 'Gone');
       const { listLeads, searchLeads } = await getLeadsTools();
 
-      const listResult = await listLeads({});
+      const listResult = await listLeads(ListLeadsSchema.parse({}));
       expect(listResult.content[0].text).toContain('CAPABILITY_RETIRED');
 
       // Search never routes through the leads seam — it still targets v2 and works.
       const searchMock = mockApiSuccess({ items: [] });
-      const searchResult = await searchLeads({ term: 'acme' });
+      const searchResult = await searchLeads(SearchLeadsSchema.parse({ term: 'acme' }));
       expect(searchResult.isError).toBeFalsy();
       const [url] = searchMock.mock.calls[0];
       expect(String(url)).toContain('/api/v2/');

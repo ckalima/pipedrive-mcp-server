@@ -31,7 +31,6 @@ vi.mock('../../src/tools/index.js', async (importOriginal) => {
         return async () => { throw new Error('boom from handler'); };
       }
       if (name === 'pipedrive_non_error_throwing_tool') {
-        // eslint-disable-next-line @typescript-eslint/no-throw-literal
         return async () => { throw 'string failure'; };
       }
       if (name === 'pipedrive_schemaless_tool') {

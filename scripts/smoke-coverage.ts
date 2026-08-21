@@ -137,12 +137,6 @@ function rawDump(label: string, r: ToolResult): void {
   console.log("  --- end raw ---\n");
 }
 
-/** A clean not-entitled error (wrong plan / lacking permission), not a crash or a real bug. */
-function isNotEntitled(r: ToolResult): boolean {
-  const t = bodyText(r);
-  return r.isError === true && (t.includes("PERMISSION_DENIED") || /subscription plan/i.test(t));
-}
-
 /** Broader "this feature is not on the account's plan/permission" detector for Section C. */
 function planGated(r: ToolResult): boolean {
   if (!r?.isError) return false;
@@ -156,12 +150,6 @@ function planGated(r: ToolResult): boolean {
     /feature is not (available|enabled)/i.test(t) ||
     /upgrade your plan/i.test(t)
   );
-}
-
-function futureDate(daysAhead: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + daysAhead);
-  return d.toISOString().slice(0, 10);
 }
 
 function tokenTail(): string {
@@ -733,7 +721,9 @@ async function c6_variationsAndFollowers(stamp: number): Promise<void> {
       }
     }
 
-    if (typeof userId === "number") {
+    // `productId != null` restates the precondition the enclosing record() call
+    // already asserted; TS cannot narrow through a function argument.
+    if (typeof userId === "number" && productId != null) {
       await followerRoundTrip("product", productId, userId, "pipedrive_add_product_follower", "pipedrive_list_product_followers", "pipedrive_delete_product_follower");
     }
     await deleteProbe(`variation product ${productId}`, "pipedrive_delete_product", { id: productId }, prodTrack);
