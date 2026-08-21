@@ -370,6 +370,42 @@ export function recordOutcome(outcome: BreakerOutcome, nowMs: number, isProbe = 
   }
 }
 
+/**
+ * Releases the half-open probe slot WITHOUT recording a verdict, restoring the breaker
+ * to exactly the state it held before the slot was claimed (#164).
+ *
+ * The one legitimate caller is a request the CALLER cancelled (an AbortController fired)
+ * rather than one the upstream answered, refused, or timed out. A cancellation is a local
+ * decision that carries no evidence about upstream health in either direction, so neither
+ * `recordOutcome` verdict is honest:
+ *
+ *   - `isUpstreamUnhealthy: true` re-Opens and restarts a fresh BREAKER_COOLDOWN_MS that
+ *     makes every other caller in the process fast-fail CIRCUIT_OPEN for another minute,
+ *     as a penalty for something upstream never did.
+ *   - `false` Closes the breaker and clears the trip window, announcing a recovery that
+ *     nobody observed.
+ *
+ * Skipping the record entirely is NOT the alternative: the probe slot IS the HalfOpen
+ * state, so a slot that is never released wedges the breaker HalfOpen for the process
+ * lifetime and fast-fails every later request. That is precisely the failure mode the
+ * gate-to-`try` danger zone in client.ts exists to prevent.
+ *
+ * `openedAtMs` is deliberately left untouched. The cooldown had already fully elapsed in
+ * order for this probe to be granted, so leaving the timestamp alone hands the slot to the
+ * next caller immediately instead of making it sit out a second cooldown. The breaker ends
+ * up where it started, which is the whole point of "no verdict".
+ *
+ * Call ONLY from the request that owns the slot. Like `recordOutcome`'s `isProbe`
+ * parameter, this is owner-scoped: a concurrent straggler that merely happened to settle
+ * during someone else's HalfOpen must not release their probe. The client guards the call
+ * site with its own `isProbe`. No-op unless the breaker is currently HalfOpen, so a
+ * cancellation on the Closed path costs nothing.
+ */
+export function releaseProbeWithoutVerdict(): void {
+  if (breakerState !== "HalfOpen") return;
+  breakerState = "Open";
+}
+
 /** Current breaker state, for the client's probe detection and telemetry. */
 export function getBreakerState(): BreakerState {
   return breakerState;

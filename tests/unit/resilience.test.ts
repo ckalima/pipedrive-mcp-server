@@ -14,6 +14,7 @@ import {
   parseRetryAfterMs,
   breakerAllowsRequest,
   recordOutcome,
+  releaseProbeWithoutVerdict,
   getBreakerState,
   resetCircuitBreakerState,
   monotonicNowMs,
@@ -430,6 +431,64 @@ describe('circuit breaker (U2, KTD7)', () => {
     // Window cleared: a fresh THRESHOLD-1 burst stays Closed (no carryover count).
     for (let i = 0; i < BREAKER_THRESHOLD - 1; i++) recordOutcome(trip, T0);
     expect(getBreakerState()).toBe('Closed');
+  });
+});
+
+describe('releaseProbeWithoutVerdict (U2, #164)', () => {
+  const T0 = 1_000_000;
+
+  beforeEach(() => {
+    resetCircuitBreakerState();
+  });
+
+  it('releases the probe slot and restores Open WITHOUT restarting the cooldown', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    const halfOpenAt = T0 + BREAKER_COOLDOWN_MS;
+    expect(breakerAllowsRequest(halfOpenAt)).toBe(true); // this caller owns the slot
+    expect(breakerAllowsRequest(halfOpenAt)).toBe(false); // slot held: nobody else gets in
+
+    releaseProbeWithoutVerdict();
+
+    expect(getBreakerState()).toBe('Open');
+    // Free AT THE SAME INSTANT, which is the whole difference from a verdict. An
+    // unhealthy probe verdict sets openedAtMs = halfOpenAt and makes every caller in
+    // the process wait another full cooldown; "no verdict" leaves openedAtMs alone, so
+    // the breaker is exactly where it stood before the slot was claimed.
+    expect(breakerAllowsRequest(halfOpenAt)).toBe(true);
+    expect(getBreakerState()).toBe('HalfOpen');
+  });
+
+  it('leaves the next probe free to reach its own verdict', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    const halfOpenAt = T0 + BREAKER_COOLDOWN_MS;
+    breakerAllowsRequest(halfOpenAt);
+    releaseProbeWithoutVerdict();
+
+    // The released slot is a real slot, not a husk: the caller that takes it next
+    // settles the breaker normally.
+    expect(breakerAllowsRequest(halfOpenAt)).toBe(true);
+    recordOutcome(ok, halfOpenAt, true);
+    expect(getBreakerState()).toBe('Closed');
+  });
+
+  it('is a no-op while Closed', () => {
+    expect(getBreakerState()).toBe('Closed');
+    releaseProbeWithoutVerdict();
+    expect(getBreakerState()).toBe('Closed');
+    expect(breakerAllowsRequest(T0)).toBe(true);
+  });
+
+  it('is a no-op while Open (releases no slot, restarts no cooldown)', () => {
+    for (let i = 0; i < BREAKER_THRESHOLD; i++) recordOutcome(trip, T0);
+    expect(getBreakerState()).toBe('Open');
+
+    // A cancellation on a request that never held the slot must not shorten the
+    // cooldown other callers are serving.
+    releaseProbeWithoutVerdict();
+
+    expect(getBreakerState()).toBe('Open');
+    expect(breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS - 1)).toBe(false);
+    expect(breakerAllowsRequest(T0 + BREAKER_COOLDOWN_MS)).toBe(true);
   });
 });
 

@@ -124,7 +124,7 @@ function readNumber(value: unknown): number | undefined {
  * Not exported: `getConnectedIdentity()` is the only sanctioned entry point, because
  * it is the only one that enforces the one-request-per-process bound.
  */
-async function resolveConnectedIdentity(): Promise<IdentityResult> {
+async function resolveConnectedIdentity(signal: AbortSignal): Promise<IdentityResult> {
   const validation = validateConfig();
   if (!validation.valid) {
     // Deliberately not "no API key": validateConfig() also reports invalid for a
@@ -137,6 +137,10 @@ async function resolveConnectedIdentity(): Promise<IdentityResult> {
     const client = new PipedriveClient(undefined, {
       maxAttempts: IDENTITY_MAX_ATTEMPTS,
       timeoutMs: IDENTITY_TIMEOUT_MS,
+      // Lets a reset tear this request down instead of leaving it to settle into a
+      // breaker window it no longer belongs to (#164). A cancelled attempt records no
+      // breaker outcome at all; see ResilienceOverrides.signal.
+      signal,
     });
     const response = await client.get<UsersMePayload>("/users/me", undefined, "v1");
 
@@ -180,6 +184,12 @@ let resolved: IdentityResult | undefined;
 let inFlight: Promise<IdentityResult> | undefined;
 /** Bumped by every reset so a probe started before the reset cannot write back after it. */
 let generation = 0;
+/**
+ * Cancellation handle for the probe currently outstanding, so a reset can tear its
+ * request down rather than merely forgetting about it (#164). Cleared when the probe it
+ * belongs to settles into its own generation, and on reset.
+ */
+let inFlightAbort: AbortController | undefined;
 
 /**
  * The cached async accessor, and the ONLY path permitted to originate a request.
@@ -189,7 +199,9 @@ export async function getConnectedIdentity(): Promise<IdentityResult> {
   if (resolved) return resolved;
   if (!inFlight) {
     const started = generation;
-    inFlight = resolveConnectedIdentity()
+    const controller = new AbortController();
+    inFlightAbort = controller;
+    inFlight = resolveConnectedIdentity(controller.signal)
       .catch((error: unknown): IdentityResult => ({
         status: "unverified",
         reason: error instanceof Error ? error.message : "Unknown error",
@@ -201,6 +213,9 @@ export async function getConnectedIdentity(): Promise<IdentityResult> {
         if (started !== generation) return result;
         resolved = result;
         inFlight = undefined;
+        // Settled in its own generation, so the handle has nothing left to cancel.
+        // Dropping it keeps a later reset from calling abort() on a finished request.
+        inFlightAbort = undefined;
         return result;
       });
   }
@@ -231,9 +246,24 @@ export function peekConnectedIdentity(): IdentityResult | undefined {
   return resolved;
 }
 
-/** Clears the identity cache. Test isolation only; wired into the global beforeEach. */
+/**
+ * Clears the identity cache. Test isolation only; wired into the global beforeEach.
+ *
+ * Cancels the outstanding probe as well as forgetting it (#164). The generation bump
+ * alone stops a straggler from writing back into the fresh slot, but it leaves the
+ * straggler's `fetch` alive, and the circuit breaker it settles into is process-wide
+ * shared state that no generation counter guards: a late 429/503 would seed a trip
+ * window it does not belong to, and a late failure holding the half-open probe slot
+ * would re-Open the breaker for a fresh cooldown. Aborting removes the request before
+ * it can produce either signal.
+ */
 export function resetConnectedIdentityForTests(): void {
   generation += 1;
+  // Abort before clearing the handle, and note this is safe to call unconditionally:
+  // abort() on an already-settled request is a no-op, and the client only treats a
+  // cancellation as one when the abort actually killed an in-flight attempt.
+  inFlightAbort?.abort();
+  inFlightAbort = undefined;
   resolved = undefined;
   inFlight = undefined;
 }

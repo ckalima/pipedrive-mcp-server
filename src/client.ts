@@ -12,6 +12,7 @@ import {
   parseRetryAfterMs,
   breakerAllowsRequest,
   recordOutcome,
+  releaseProbeWithoutVerdict,
   getBreakerState,
   monotonicNowMs,
   circuitOpenError,
@@ -69,6 +70,22 @@ export interface ResilienceOverrides {
   maxAttempts?: number;
   /** Per-attempt timeout in ms. Defaults to REQUEST_TIMEOUT_MS. */
   timeoutMs?: number;
+  /**
+   * Caller cancellation for every attempt this client makes (#164). Composed with the
+   * per-attempt timeout via AbortSignal.any, so a request is torn down by whichever
+   * fires first, and the driver can still tell the two apart afterwards by reading
+   * `signal.aborted`.
+   *
+   * The distinction is the entire point. A per-attempt TIMEOUT is evidence the upstream
+   * is unhealthy and must debit the breaker; a CANCELLATION is a local decision that says
+   * nothing about upstream health, so it returns REQUEST_CANCELLED and records no breaker
+   * outcome at all (releasing the half-open probe slot with no verdict if it held one).
+   *
+   * The identity probe (identity.ts) is the only caller today: it lets a cache reset tear
+   * down an orphaned boot probe instead of leaving it to settle into a breaker window it
+   * no longer belongs to. Omit it and the driver behaves exactly as before.
+   */
+  signal?: AbortSignal;
 }
 
 /** Shared empty Headers for the network/timeout path, where no response headers exist. */
@@ -225,6 +242,28 @@ export class PipedriveClient {
         "NETWORK_ERROR",
         safeMessage,
         "Check your internet connection and try again"
+      ),
+    };
+  }
+
+  /**
+   * Builds the envelope for a request the caller cancelled (#164).
+   *
+   * Deliberately NOT networkError(): that logs "Network error: This operation was
+   * aborted" to operator stderr and suggests checking the internet connection, both of
+   * which are wrong and alarming for a cancellation the process asked for. The line it
+   * does emit goes through logResilience, alongside the breaker/retry telemetry it
+   * belongs with, and states that no breaker outcome was recorded so the stderr trail
+   * explains why a probe left no verdict.
+   */
+  private cancelledResponse<T>(method: string, logEndpoint: string): ApiResponse<T> {
+    this.logResilience(`${method} ${logEndpoint} cancelled by caller — no breaker outcome recorded`);
+    return {
+      success: false,
+      error: createErrorResponse(
+        "REQUEST_CANCELLED",
+        "The request was cancelled before it completed.",
+        "This is a local cancellation, not an API failure. Retry if the operation is still needed."
       ),
     };
   }
@@ -430,6 +469,8 @@ export class PipedriveClient {
     // keeps the full 4-attempt loop and 30s per-attempt timeout unchanged.
     const maxAttempts = this.resilience?.maxAttempts ?? RETRY_MAX_ATTEMPTS;
     const baseTimeoutMs = this.resilience?.timeoutMs ?? REQUEST_TIMEOUT_MS;
+    // Caller cancellation (#164), or undefined for every caller that does not opt in.
+    const cancelSignal = this.resilience?.signal;
     // Added elapsed time (KTD3): retry-attempt durations plus inter-attempt waits.
     // The initial attempt is NOT debited here — it is bounded separately by
     // baseTimeoutMs, so the total is bounded at ~baseTimeoutMs + budget.
@@ -451,6 +492,16 @@ export class PipedriveClient {
       const remainingTotalMs = baseTimeoutMs + RETRY_BUDGET_MS - (monotonicNowMs() - overallStartMs);
       if (attemptIndex > 0 && remainingTotalMs <= 0 && lastFailure) {
         return lastFailure;
+      }
+
+      // ── Caller-cancellation bail (#164). Placed here for the same reason as the
+      //    elapsed-budget bail directly above: PRE-GATE, so it is probe-slot-neutral.
+      //    Bailing after the gate could strand a slot the gate had just handed us.
+      //    This also covers a cancellation that arrives between attempts (during
+      //    resilientSleep, which is not itself interruptible), and guarantees a
+      //    request cancelled before it ever ran issues no fetch at all. ──
+      if (cancelSignal?.aborted) {
+        return this.cancelledResponse<T>(method, logEndpoint);
       }
 
       // ── Breaker gate (consulted before every attempt) ──
@@ -498,22 +549,69 @@ export class PipedriveClient {
         const attemptStartMs = monotonicNowMs();
         let parsed: ApiResponse<T> | undefined;
         let isNetworkError = false;
+        // Set only in the catch, and only when the caller's own signal is what killed
+        // this attempt. Read by the cancellation exit below (#164).
+        let cancelled = false;
         let responseHeaders: Headers | undefined;
         try {
           const response = await fetch(url.toString(), {
             method,
             headers,
             body,
-            signal: AbortSignal.timeout(attemptTimeoutMs),
+            // Timeout OR caller cancellation, whichever fires first (#164). Without a
+            // cancel signal this is byte-for-byte the previous behaviour.
+            signal: cancelSignal
+              ? AbortSignal.any([AbortSignal.timeout(attemptTimeoutMs), cancelSignal])
+              : AbortSignal.timeout(attemptTimeoutMs),
           });
           responseHeaders = response.headers;
           parsed = await this.parseResponse<T>(response);
         } catch (error) {
           isNetworkError = true;
-          lastFailure = this.networkError<T>(error);
+          // A caller cancellation lands here as an abort, and networkError() must NOT
+          // run for it (#164). It renders the wrong envelope, and it LOGS "Network
+          // error: This operation was aborted" to operator stderr before the
+          // cancellation exit below is ever reached. Worse, in a host that swapped in
+          // a throwing console.error (the scenario pinned by the probe-slot log-throw
+          // suite), that log escapes this catch entirely, so the exit below never runs,
+          // the probe slot is never released with no verdict, and the `finally`
+          // backstop records the unhealthy verdict this whole change exists to avoid.
+          //
+          // Decided here rather than re-read below so the two cannot drift: the
+          // question is whether the abort killed THIS attempt, and this is the moment
+          // it is answerable.
+          cancelled = cancelSignal?.aborted === true;
+          if (!cancelled) {
+            lastFailure = this.networkError<T>(error);
+          }
         }
         if (attemptIndex > 0) {
           budgetUsedMs += monotonicNowMs() - attemptStartMs;
+        }
+
+        // ── Caller-cancellation exit (#164). MUST precede the classify/record block:
+        //    an aborted fetch surfaces as isNetworkError, which isUpstreamUnhealthy()
+        //    reads as "upstream is still sick". That verdict is false here (we tore the
+        //    request down ourselves), and on the probe path it would re-Open the breaker
+        //    and restart a full cooldown for every caller in the process on the strength
+        //    of a local decision.
+        //
+        //    `cancelled` is set ONLY in the catch, so a response that genuinely ARRIVED
+        //    still counts: if the upstream answered before the abort landed, that is real
+        //    evidence and the breaker is entitled to it. Only a request the abort actually
+        //    killed is evidence-free. A real network failure racing a cancellation is
+        //    therefore attributed to the cancellation and not debited — deliberately
+        //    conservative, since under-counting a signal is recoverable and fabricating
+        //    one is not. ──
+        if (cancelled) {
+          if (isProbe) {
+            // Owner-scoped, exactly like recordOutcome's isProbe: only the slot holder
+            // may release it. Set probeSettled first so the finally backstop does not
+            // then record the unhealthy verdict we just went out of our way to avoid.
+            releaseProbeWithoutVerdict();
+            probeSettled = true;
+          }
+          return this.cancelledResponse<T>(method, logEndpoint);
         }
 
         // ── Classify + record breaker outcome ──

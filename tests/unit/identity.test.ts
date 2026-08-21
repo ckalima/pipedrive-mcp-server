@@ -23,7 +23,7 @@ import {
 } from '../../src/identity.js';
 import { usersV1 } from '../../src/version-routing.js';
 import { VALID_API_KEY, setupEnvWithApiKey } from '../helpers/mockEnv.js';
-import { createMockResponse, mockApiError, mockApiSuccess, mockFetchNetworkError } from '../helpers/mockFetch.js';
+import { createMockResponse, mockApiError, mockApiSuccess, mockFetchNetworkError, type MockRequestInit } from '../helpers/mockFetch.js';
 
 /** A /users/me payload shaped like the live v1 response. */
 const ME_PAYLOAD = {
@@ -258,6 +258,41 @@ describe('identity resolver', () => {
 
       // The straggler still resolves for its own awaiter, but the slot it was started
       // for is gone: repopulating it would leak one test's identity into the next.
+      expect(peekConnectedIdentity()).toBeUndefined();
+    });
+
+    it('a reset ABORTS the outstanding probe, it does not merely forget it (#164)', async () => {
+      // The generation guard above stops a straggler writing back into the fresh slot,
+      // but it leaves the straggler's request alive, and the circuit breaker it settles
+      // into is process-wide state no generation counter guards: a late 429/503 seeds a
+      // trip window it does not belong to, and a late failure holding the half-open
+      // probe slot re-Opens the breaker for a fresh cooldown. Cancelling removes the
+      // request before it can produce either signal.
+      let abortReason: string | undefined;
+      const mockFn = vi.fn((_url: string | URL, init: MockRequestInit): Promise<Response> =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init.signal;
+          if (!signal) {
+            reject(new Error('the identity probe is expected to pass an AbortSignal'));
+            return;
+          }
+          signal.addEventListener('abort', () => {
+            abortReason = (signal.reason as Error | undefined)?.name;
+            reject(signal.reason as Error);
+          });
+        }));
+      vi.stubGlobal('fetch', mockFn);
+
+      const straggler = getConnectedIdentity();
+      resetConnectedIdentityForTests();
+      const result = await straggler;
+
+      // The signal the probe handed to fetch actually fired.
+      expect(mockFn).toHaveBeenCalledTimes(1);
+      expect(abortReason).toBe('AbortError');
+      // R5 holds through cancellation: still a value, never a rejection, and reported
+      // as unverified rather than as a rejected token.
+      expect(result.status).toBe('unverified');
       expect(peekConnectedIdentity()).toBeUndefined();
     });
   });
