@@ -24,16 +24,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     a `connection` block naming the same company, so the agent knows which account the data came
     from without being asked and without spending a tool call. The check runs in the background,
     so a tool call that finishes while it is still in flight is returned unchanged and the block
-    lands on a later response instead. Every other response is byte-identical to before.
+    lands on a later response instead. Its instructions are therefore relative to receipt
+    ("now", "any further Pipedrive data") rather than to a first report that may already have
+    happened by the time the block arrives. Every other response is byte-identical to before. The
+    block is emitted once per **server run**, not once per conversation: a host that keeps one
+    server process across several conversations gives it to the first one only, and the notice
+    says so and points at `pipedrive_get_current_user` for checking on demand.
 
   The check is a single `GET /v1/users/me` at boot, bounded to one attempt with a 10-second
   timeout. It never blocks startup and never fails a tool call. `verified: true` means the token
   resolved to *an* account, not to the expected one; there is no expected-company setting yet.
 
-  Only `company_id` and `verified` are asserted by the server. `company_name` and `user_email`
-  on the verified variant, and `reason` on the unverified one, are CRM- or upstream-sourced
-  strings: stripped of control and invisible-format characters, length-capped, and labeled
-  untrusted in-band by the notice itself. See [SECURITY.md](SECURITY.md#prompt-injection-untrusted-crm-content).
+  Only `company_id` and `verified` are asserted by the server, and they sit at the top level of
+  the block. Every string the server does *not* assert is nested one level down under
+  `untrusted_display`: `company_name` and `user_email` on the verified variant, `reason` on the
+  unverified one. Those are CRM- or upstream-sourced, and are stripped of control and
+  invisible-format characters, length-capped, and labeled untrusted in-band by the notice. The
+  `notice` text itself is a fixed string with nothing interpolated into it, so a company name
+  cannot place text inside the server's own instruction to the model.
+  See [SECURITY.md](SECURITY.md#prompt-injection-untrusted-crm-content).
+
+  A successful check with no asserted company id is reported as such. The API can accept the
+  token and still return no `company_id`, and that response is genuinely verified - tool calls
+  will succeed - but `company_id` is the only identity field the server vouches for. It gets a
+  notice telling the agent not to name the connected account and to say it could not be
+  identified, instead of the default text instructing it to state the company. That covers a
+  body with no identity at all and a body carrying only a `company_name`; in the second, the
+  name still travels under `untrusted_display`, but nothing instructs the agent to report an
+  untrusted string as the verified account. A positive identity claim requires an asserted
+  anchor, and the block never issues an instruction its own contents cannot satisfy.
 
 ### Changed
 

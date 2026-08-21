@@ -130,6 +130,8 @@ If the check fails, that line says so (`Could not verify connected account: ...`
 
 **On the first tool response after the boot check settles**, a one-shot `connection` block naming the same company, so the agent knows which account the data came from without being asked and without spending a tool call. It is emitted once per process. The check runs in the background, so any tool call that finishes while it is still in flight is returned unchanged and the block lands on a later response instead. Treat it as a fact the server volunteers once it knows, not as a guarantee that every early response carries it. Delivery is also not consumption: a host that passes the block through unchanged still leaves it to the model whether to act on it, and smaller models skip it on some runs.
 
+Inside that block, `company_id` and `verified` are asserted by the server and sit at the top level. The display strings the server cannot vouch for - `company_name` and `user_email`, or `reason` when the check did not succeed - are nested under `untrusted_display`, because a company name is CRM content that anyone with write access to the account can set. If you parse the block, bind everything under that key to the same trust level you give `data`. See [SECURITY.md](SECURITY.md#prompt-injection-untrusted-crm-content).
+
 The check is a single `GET /v1/users/me` at boot, capped at one attempt with a 10-second timeout. It never blocks startup and never fails a tool call. Nothing is checked against an expected value: `verified: true` means the token resolved to *an* account, not to the right one.
 
 To read the same information on demand, call `pipedrive_get_current_user`, which returns the connected company's name, id, and domain alongside the token owner's user details.
