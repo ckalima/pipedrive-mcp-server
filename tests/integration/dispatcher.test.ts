@@ -274,6 +274,11 @@ describe('dispatcher connection notice', () => {
     return (JSON.parse(content[content.length - 1].text) as { connection?: Record<string, unknown> }).connection;
   }
 
+  /** The nested #163 fence: every string the server does NOT assert lives in here. */
+  function readDisplay(notice: Record<string, unknown> | undefined) {
+    return (notice?.untrusted_display ?? {}) as Record<string, unknown>;
+  }
+
   const CALL = { params: { name: 'pipedrive_optional_args_tool', arguments: {} } };
 
   beforeEach(() => {
@@ -295,8 +300,10 @@ describe('dispatcher connection notice', () => {
     expect(notice).toMatchObject({
       verified: true,
       company_id: 12345,
-      company_name: 'Example Corp',
-      user_email: 'ada@example.com',
+      untrusted_display: {
+        company_name: 'Example Corp',
+        user_email: 'ada@example.com',
+      },
     });
   });
 
@@ -342,9 +349,9 @@ describe('dispatcher connection notice', () => {
     const notice = readNotice(await handleCallTool(CALL));
 
     expect(notice).toMatchObject({ verified: false });
-    expect(notice?.reason).toBeTruthy();
+    expect(readDisplay(notice).reason).toBeTruthy();
     expect(notice?.company_id).toBeUndefined();
-    expect(notice?.company_name).toBeUndefined();
+    expect(readDisplay(notice).company_name).toBeUndefined();
   });
 
   it('reports an incomplete check as verified:false with no company fields', async () => {
@@ -353,7 +360,7 @@ describe('dispatcher connection notice', () => {
     const notice = readNotice(await handleCallTool(CALL));
 
     expect(notice).toMatchObject({ verified: false });
-    expect(notice?.reason).toBeTruthy();
+    expect(readDisplay(notice).reason).toBeTruthy();
     expect(notice?.company_id).toBeUndefined();
   });
 

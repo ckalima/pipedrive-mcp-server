@@ -30,10 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timeout. It never blocks startup and never fails a tool call. `verified: true` means the token
   resolved to *an* account, not to the expected one; there is no expected-company setting yet.
 
-  Only `company_id` and `verified` are asserted by the server. `company_name` and `user_email`
-  on the verified variant, and `reason` on the unverified one, are CRM- or upstream-sourced
-  strings: stripped of control and invisible-format characters, length-capped, and labeled
-  untrusted in-band by the notice itself. See [SECURITY.md](SECURITY.md#prompt-injection-untrusted-crm-content).
+  Only `company_id` and `verified` are asserted by the server, and they sit at the top level of
+  the block. Every string the server does *not* assert is nested one level down under
+  `untrusted_display`: `company_name` and `user_email` on the verified variant, `reason` on the
+  unverified one. Those are CRM- or upstream-sourced, and are stripped of control and
+  invisible-format characters, length-capped, and labeled untrusted in-band by the notice. The
+  `notice` text itself is a fixed string with nothing interpolated into it, so a company name
+  cannot place text inside the server's own instruction to the model.
+  See [SECURITY.md](SECURITY.md#prompt-injection-untrusted-crm-content).
 
 ### Changed
 
