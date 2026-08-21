@@ -42,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot place text inside the server's own instruction to the model.
   See [SECURITY.md](SECURITY.md#prompt-injection-untrusted-crm-content).
 
+  A successful check that carries no company is reported as such. The API can accept the token
+  and still return no identity, and that response is genuinely verified - tool calls will
+  succeed - but there is nothing to name. It gets a notice telling the agent not to name the
+  connected account and to say it could not be identified, instead of the default text
+  instructing it to state the company. The block never issues an instruction its own contents
+  cannot satisfy.
+
 ### Changed
 
 - **`pipedrive_get_current_user` now describes what it actually returns.** The handler always
