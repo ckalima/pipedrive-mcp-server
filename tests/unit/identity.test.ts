@@ -414,6 +414,24 @@ describe('connectionNotice', () => {
     for (const tool of named) expect(registered).toContain(tool);
   });
 
+  // The block is appended AFTER the dispatcher's size backstop has measured the
+  // result, so its length is a real (if small) overshoot past MAX_TOOL_RESPONSE_CHARS.
+  // The doc comment on withConnectionNotice quotes a size; this pins it, because that
+  // estimate silently drifted from "a few hundred characters" to 932 while the notice
+  // grew. The ceilings are deliberately loose — they catch creep, not prose edits.
+  it('keeps the notice and the whole block bounded', () => {
+    const notice = connectionNotice(OK)!;
+    expect(notice.notice.length).toBeLessThan(600);
+
+    // Worst case: both display strings at the sanitiser's cap.
+    const worst = connectionNotice({
+      ...OK,
+      companyName: 'x'.repeat(5_000),
+      userEmail: 'y'.repeat(5_000),
+    })!;
+    expect(JSON.stringify({ connection: worst }).length).toBeLessThan(2_000);
+  });
+
   it('mints a fresh token per call', () => {
     expect(connectionNotice(OK)?.token).not.toBe(connectionNotice(OK)?.token);
   });
