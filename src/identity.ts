@@ -412,11 +412,17 @@ export function withConnectionNotice<T>(result: T): T {
     const notice = connectionNotice(identity);
     if (!notice) return result;
 
-    noticeSpent = true;
-    return {
+    const augmented = {
       ...(result as object),
       content: [...content, { type: "text", text: JSON.stringify({ connection: notice }) }],
     } as T;
+
+    // Spend the latch only after construction succeeded. Spending it first would burn the
+    // one-shot on a result whose spread threw: the catch below returns the original result
+    // with no notice attached, and every later valid response would then see a spent latch
+    // and never get one either.
+    noticeSpent = true;
+    return augmented;
   } catch (error) {
     const rawMessage = error instanceof Error ? error.message : "Unknown error";
     console.error(

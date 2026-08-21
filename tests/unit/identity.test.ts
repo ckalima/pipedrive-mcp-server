@@ -452,4 +452,36 @@ describe('withConnectionNotice safety net (R5)', () => {
     expect(logged).toContain('Could not attach the connection notice');
     expect(logged).not.toContain(VALID_API_KEY);
   });
+
+  it('does not spend the one-shot latch on a result whose attachment threw', async () => {
+    mockApiSuccess(ME_PAYLOAD);
+    await primeConnectedIdentity();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Same throwing shape as above: the attachment fails and is swallowed.
+    const hostile = {
+      content: new Proxy([{ type: 'text', text: 'tool output' }], {
+        get(target, prop, receiver) {
+          if (prop === Symbol.iterator) throw new Error('boom');
+          return Reflect.get(target, prop, receiver) as unknown;
+        },
+      }),
+    };
+    expect(withConnectionNotice(hostile)).toBe(hostile);
+
+    // The latch must have survived: the next well-formed response still gets the notice.
+    // Spending it before the augmented result was built would silence the notice for the
+    // remaining life of the process.
+    const healthy = { content: [{ type: 'text', text: 'tool output' }] };
+    const returned = withConnectionNotice(healthy);
+
+    expect(returned).not.toBe(healthy);
+    expect(returned.content).toHaveLength(2);
+    const parsed = JSON.parse(returned.content[1].text) as { connection?: { company_id?: number } };
+    expect(parsed.connection?.company_id).toBe(12345);
+
+    // Still one-shot: the response after that is untouched.
+    const third = { content: [{ type: 'text', text: 'tool output' }] };
+    expect(withConnectionNotice(third)).toBe(third);
+  });
 });
