@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-08-21
+
 ### Added
 
 - **The server now names the Pipedrive account it is connected to.** A token silently resolves
@@ -60,6 +62,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returned the connected company's name, id, and domain, but the description mentioned only the
   user, so neither an agent nor a human could tell the tool answered "which company is this
   token on?". Description only; behavior and payload are unchanged.
+
+### Fixed
+
+- **A failure inside the circuit breaker's own transition logging can no longer wedge the
+  breaker.** The half-open probe slot is claimed by the gate, and only recording an outcome
+  releases it. The `finally` that settles an unrecorded probe as a failure guards the request
+  from the `try` onward, so anything that threw in the gap between the gate and that `try`
+  escaped still holding the slot, leaving every later call fast-failing `CIRCUIT_OPEN` until
+  restart. The one statement sitting in that gap was the transition log, which is a no-op on
+  every transition *except* the slot claim, so the single time it did real work was the single
+  time a throw there was unrecoverable. It now runs as the first statement inside the `try`,
+  and the gate's refusal path returns before the probe-ownership read, so a request refused
+  while another one holds the probe can no longer observe `HalfOpen` and claim their slot.
+
+### Security
+
+- **CI and release workflows are hardened.** Every workflow now declares an explicit
+  least-privilege `permissions:` block, every action is pinned to a commit SHA rather than a
+  moving tag, and the OIDC-privileged registry job verifies the `mcp-publisher` tarball against
+  a pinned sha256 before extracting it. The secret scan no longer requests write access. This
+  changes how a release is built, not what it contains.
 
 ## [2.5.0] - 2026-07-22
 
@@ -289,6 +312,7 @@ published from GitHub Actions with build provenance.
 - **Destructive operations gated** behind the `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`
   environment variable (disabled by default).
 
+[2.6.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.6.0
 [2.5.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.5.0
 [2.4.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.4.0
 [2.3.1]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.3.1
