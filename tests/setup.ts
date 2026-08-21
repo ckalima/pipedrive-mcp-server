@@ -9,6 +9,15 @@ import {
   setResilienceSleepForTests,
   resetMonotonicClockForTests,
 } from '../src/resilience.js';
+// Imported from src/identity.ts, NEVER from src/index.ts. A setup file runs before a
+// test file's hoisted vi.mock() calls register, so importing src/index.js here would
+// load the real src/tools/index.js into the module registry first and defeat the
+// vi.mock('../../src/tools/index.js') in the dispatcher and capability-mode integration
+// suites (measured: 28 passed becomes 7 failed / 21 passed).
+import {
+  resetConnectedIdentityForTests,
+  resetConnectionNoticeForTests,
+} from '../src/identity.js';
 
 // Store original environment
 const originalEnv = { ...process.env };
@@ -49,6 +58,20 @@ beforeEach(() => {
   // injectable seam like the two above, so a test that installs a controlled clock to
   // drive the cooldown/window arithmetic would otherwise leak into the next test.
   resetMonotonicClockForTests();
+
+  // Clear the connected-account cache (#147). Like the seams above it is module-level
+  // state that survives across tests in a worker, so an identity resolved by one test
+  // would otherwise make a later test's response carry a connection notice it never
+  // asked for. Clearing it to EMPTY is what keeps the existing suite unaffected: the
+  // dispatcher never initiates the probe, so an empty cache means no notice and no
+  // request.
+  resetConnectedIdentityForTests();
+
+  // Clear the one-shot notice latch, separately from the cache above. An unreset latch
+  // makes "the notice fires exactly once" assertions order-dependent. The two stay
+  // separate functions because "primed to skipped, latch not spent" is only observable
+  // by clearing one while leaving the other alone.
+  resetConnectionNoticeForTests();
 });
 
 // Restore original environment after each test
