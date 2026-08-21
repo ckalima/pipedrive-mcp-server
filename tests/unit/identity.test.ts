@@ -545,12 +545,37 @@ describe('connectionNotice', () => {
     expect(notice.notice).toContain('could not be identified');
   });
 
-  // `sanitizeDisplay` maps invisible code points to SPACES rather than deleting them, so a
-  // name of pure zero-width characters survives as a truthy but unusable string.
-  it('treats a company name that sanitises to whitespace as no name at all', () => {
-    const notice = connectionNotice({ status: 'ok', companyName: '\u200B\u200B' })!;
+  // The positive notice requires an ASSERTED anchor, and `company_id` is the only identity
+  // field this server asserts. A 200 carrying `company_name` but no id was briefly treated
+  // as named, so the block ordered the reader to state a company whose sole source was
+  // `untrusted_display.company_name` - the field the same notice says the server does not
+  // vouch for. Reporting it would present CRM-controlled text as the verified account
+  // identity, which is the wrong-account safeguard failing open.
+  it('does not claim identity from an untrusted name with no asserted company_id', () => {
+    const notice = connectionNotice({ status: 'ok', companyName: 'Acme' })!;
 
+    expect(notice.company_id).toBeNull();
     expect(notice.notice).toContain('do NOT name the connected account');
+    expect(notice.notice).not.toContain('State the connected company');
+    // The name still travels, under the fence - it just no longer triggers an instruction
+    // to report it as the connected account.
+    expect(notice.untrusted_display.company_name).toBe('Acme');
+  });
+
+  it('gates the positive notice on the asserted id, not on any display string', () => {
+    for (const result of [
+      { status: 'ok' },
+      { status: 'ok', companyName: 'Acme' },
+      { status: 'ok', companyName: '\u200B\u200B' },
+      { status: 'ok', userEmail: 'ada@example.com' },
+    ] as IdentityResult[]) {
+      expect(connectionNotice(result)!.notice).toContain('do NOT name the connected account');
+    }
+
+    // An asserted id alone is enough, with no display string at all.
+    expect(connectionNotice({ status: 'ok', companyId: 12345 })!.notice).toContain(
+      'State the connected company',
+    );
   });
 
   it('keeps the no-identity notice static, fenced and scope-accurate like the default', () => {

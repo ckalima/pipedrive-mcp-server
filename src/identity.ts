@@ -367,12 +367,18 @@ const VERIFIED_NOTICE =
  * The 200-with-no-identity variant.
  *
  * `resolveConnectedIdentity` maps every successful response to `ok`, including one whose
- * body carried no company at all — `response.data ?? {}` exists precisely because a v1
+ * body carried no usable company — `response.data ?? {}` exists precisely because a v1
  * 200 can arrive with a null body, and an upstream field rename reaches the same place
  * through `readNumber`/`readString` returning undefined. That path is genuinely verified
- * (the API accepted the token, and every tool call will succeed) but has nothing to name,
- * which is the one combination the default notice handles worst: full confidence plus an
- * instruction to state a company that is not in the block.
+ * (the API accepted the token, and every tool call will succeed) but has no ASSERTED
+ * identity, which is the combination the default notice handles worst: full confidence
+ * plus an instruction to state a company the server cannot vouch for.
+ *
+ * It covers two sub-cases, which is why the wording says "no verified company id" rather
+ * than "no company at all": a body with no identity fields whatsoever, and one carrying
+ * `company_name` without an id. The second is the more dangerous of the two — there IS a
+ * name to state, and stating it would present CRM-controlled text as the verified account
+ * identity — so both land here and both are told not to name the account.
  *
  * Downgrading it to `unverified` was the other option and was rejected: it would tell the
  * user the token could not be confirmed when it demonstrably works, collapsing "auth
@@ -383,7 +389,7 @@ const VERIFIED_NOTICE =
  * not per file, so a second constant costs nothing as long as it stays a constant.
  */
 const VERIFIED_NO_IDENTITY_NOTICE =
-  "The API accepted this token but returned no company identity: do NOT name the connected account, and tell the user now that it could not be identified. " +
+  "The API accepted this token but returned no verified company id: do NOT name the connected account, and tell the user now that it could not be identified. " +
   FENCE_SENTENCE +
   "verified true here means only that the token was accepted, and has NOT been checked against any expected value. " +
   SCOPE_SENTENCE;
@@ -410,11 +416,15 @@ export function connectionNotice(result: IdentityResult): ConnectionNotice | und
     case "ok": {
       const companyName = result.companyName ? sanitizeDisplay(result.companyName) : undefined;
       const userEmail = result.userEmail ? sanitizeDisplay(result.userEmail) : undefined;
-      // Whether anything the reader could actually NAME survived. Sanitisation runs first
-      // on purpose: a company name of pure invisible Unicode is truthy on the way in, and
-      // `sanitizeDisplay` maps those code points to SPACES rather than deleting them, so
-      // the test has to be `.trim()` — an all-whitespace name is not a name to state.
-      const named = result.companyId != null || (companyName ?? "").trim() !== "";
+      // The positive notice requires an ASSERTED anchor, and `company_id` is the only
+      // identity field this server asserts. A 200 carrying `company_name` but no id was
+      // briefly treated as named, which meant the block ordered the reader to state a
+      // company whose sole source was `untrusted_display.company_name` — the very field
+      // the same notice says the server does not vouch for. The name still travels, under
+      // the fence; what it no longer does is trigger an instruction to report it as the
+      // connected account. "A positive identity claim needs an asserted anchor" is a rule
+      // a reviewer can check at a glance, which is why it is a bare null test.
+      const named = result.companyId != null;
       return {
         verified: true,
         company_id: result.companyId ?? null,

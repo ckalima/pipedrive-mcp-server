@@ -44,12 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot place text inside the server's own instruction to the model.
   See [SECURITY.md](SECURITY.md#prompt-injection-untrusted-crm-content).
 
-  A successful check that carries no company is reported as such. The API can accept the token
-  and still return no identity, and that response is genuinely verified - tool calls will
-  succeed - but there is nothing to name. It gets a notice telling the agent not to name the
-  connected account and to say it could not be identified, instead of the default text
-  instructing it to state the company. The block never issues an instruction its own contents
-  cannot satisfy.
+  A successful check with no asserted company id is reported as such. The API can accept the
+  token and still return no `company_id`, and that response is genuinely verified - tool calls
+  will succeed - but `company_id` is the only identity field the server vouches for. It gets a
+  notice telling the agent not to name the connected account and to say it could not be
+  identified, instead of the default text instructing it to state the company. That covers a
+  body with no identity at all and a body carrying only a `company_name`; in the second, the
+  name still travels under `untrusted_display`, but nothing instructs the agent to report an
+  untrusted string as the verified account. A positive identity claim requires an asserted
+  anchor, and the block never issues an instruction its own contents cannot satisfy.
 
 ### Changed
 
