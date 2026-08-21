@@ -390,6 +390,30 @@ describe('connectionNotice', () => {
     expect(connectionNotice({ status: 'ok', userEmail: 'ada@example.com' })?.notice).toBe(baseline);
   });
 
+  // The #165 invariant. `noticeSpent` is process-scoped, so a notice promising
+  // conversation scope is a claim the code does not honor for any conversation
+  // after the first. The text must describe the latch that exists, and must name
+  // the on-demand alternative for the conversations that will never see a block.
+  it('claims the process scope it actually enforces, not conversation scope', () => {
+    const notice = connectionNotice(OK)?.notice ?? '';
+
+    expect(notice).toMatch(/once per server run/);
+    expect(notice).toMatch(/not once per conversation/);
+    expect(notice).toContain('pipedrive_get_current_user');
+    // The exact promise that the process-scoped latch cannot keep.
+    expect(notice).not.toMatch(/in this conversation/);
+  });
+
+  it('names a re-verification tool that actually exists', async () => {
+    const notice = connectionNotice(OK)?.notice ?? '';
+    const named = notice.match(/pipedrive_[a-z_]+/g) ?? [];
+    const { allTools } = await import('../../src/tools/index.js');
+    const registered = new Set(allTools.map((t) => t.name));
+
+    expect(named.length).toBeGreaterThan(0);
+    for (const tool of named) expect(registered).toContain(tool);
+  });
+
   it('mints a fresh token per call', () => {
     expect(connectionNotice(OK)?.token).not.toBe(connectionNotice(OK)?.token);
   });
