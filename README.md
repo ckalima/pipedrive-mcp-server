@@ -116,6 +116,26 @@ Once configured, Claude can access your Pipedrive data:
 - "List recent email threads in my inbox"
 - "What custom fields are defined for deals?"
 
+## Connected account
+
+The API token decides which Pipedrive company you are talking to, and until now nothing in a tool result said which one that was. Two registrations of this server in the same client (say, a project-scoped entry and a local-scoped one that reads a stale `.env`) resolve to different companies, and the one that loses precedence is invisible. The server now names the account it actually resolved, in two places.
+
+**On startup**, one line on stderr:
+
+```
+[pipedrive-mcp-server] Connected as you@example.com -> company "Example Corp" (id 12345)
+```
+
+If the check fails, that line says so (`Could not verify connected account: ...`) instead of the server starting silently. If the API key is missing or malformed it reports that the account was not checked, because no request was made.
+
+**On the first tool response after the boot check settles**, a one-shot `connection` block naming the same company, so the agent knows which account the data came from without being asked and without spending a tool call. It is emitted once per process. The check runs in the background, so any tool call that finishes while it is still in flight is returned unchanged and the block lands on a later response instead. Treat it as a fact the server volunteers once it knows, not as a guarantee that every early response carries it. Delivery is also not consumption: a host that passes the block through unchanged still leaves it to the model whether to act on it, and smaller models skip it on some runs.
+
+The check is a single `GET /v1/users/me` at boot, capped at one attempt with a 10-second timeout. It never blocks startup and never fails a tool call. Nothing is checked against an expected value: `verified: true` means the token resolved to *an* account, not to the right one.
+
+To read the same information on demand, call `pipedrive_get_current_user`, which returns the connected company's name, id, and domain alongside the token owner's user details.
+
+*For contributors:* the banner line and the notice both carry a real Pipedrive company id. If you paste either into a document in this repo, that document belongs in gitignored `docs/private/` (see `CLAUDE.md`), not in the public tree.
+
 ## Available Tools
 
 <!-- BEGIN GENERATED TOOLS -->
@@ -347,7 +367,7 @@ Once configured, Claude can access your Pipedrive data:
 |------|-------------|
 | `pipedrive_list_users` | List all users in the Pipedrive account. Useful for finding owner IDs when creating or filtering records. |
 | `pipedrive_get_user` | Get details of a specific user by ID. |
-| `pipedrive_get_current_user` | Get details of the current user (API key owner). Useful for verifying connection and getting your user ID. |
+| `pipedrive_get_current_user` | Identify the Pipedrive account this server is connected to: returns the connected company (name, id, and domain) alongside the API key owner's user details. Use it to confirm which company the data is coming from, or to get your user ID. |
 
 <!-- END GENERATED TOOLS -->
 

@@ -82,7 +82,11 @@ tool handlers call a capability-scoped seam (`notesV1`, `mailV1`, `usersV1`,
   equivalent for one of these capabilities, flip that capability's registry entry in
   `src/version-routing.ts` (and update the handler's endpoint/shape) rather than
   hunting `"v1"` literals across the tool files. The client stays a pure transport.
-- **Retirement is detected lazily from the call result**, with no startup probe. A 410
+- **Retirement is detected lazily from the call result**, with no startup probe. (The
+  connected-account check the server runs at boot is not an exception to this: it calls
+  `/users/me` through the client directly, deliberately bypassing this seam, so it can
+  neither trip nor clear retirement detection. Identity verification is eager; retirement
+  detection stays lazy.) A 410
   Gone (the strong signal), or a 404 on a capability's collection root where opted in
   (notes `/notes`; users `/users`, `/users/me`; leads `/leads`; mail is 410-only
   because its thread list legitimately 404s), marks the capability retired for the

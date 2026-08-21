@@ -22,6 +22,7 @@ src/
   version-routing.ts # v1-only capability seam: routes the four v1 capabilities + lazy sunset/retirement detection (sits above the client)
   capability-modes.ts # Resolves PIPEDRIVE_MODE → read-only/safe-write/full; pure tool-reachability classification + tools/list filtering (no new per-tool metadata)
   config.ts         # Environment validation (PIPEDRIVE_API_KEY, PIPEDRIVE_MODE, PIPEDRIVE_ENABLE_DESTRUCTIVE); shared API-key format predicate + base URLs
+  identity.ts       # Connected-account identity: one bounded GET /users/me (v1) per process at boot, bypassing the version-routing seam; startup banner lines + the one-shot `connection` notice appended to the first tool response
   cli/              # `npx … init` guided installer (subcommand routed from index.ts; not the STDIO server path)
     init.ts         # Interactive flow orchestration + flag parsing; injectable IO seams (readline/opener/validator/writer)
     config-targets.ts # Host descriptor table + renderer (per-OS path, top-level key, committed→indirection secret mechanism)
@@ -37,7 +38,7 @@ src/
     pagination.ts   # v1 (offset) and v2 (cursor) pagination helpers
 ```
 
-Request flow: tool handlers → (v1 capabilities only) version-routing seam → client `request()`/`requestMultipart()` → resilience driver (`sendWithResilience`: circuit-breaker gate + retry loop) → `fetch`. Reads retry transient failures (429/503/5xx/network); writes retry 429 only. See `docs/plans/2026-06-14-003-feat-resilient-request-core-plan.md`.
+Request flow: tool handlers → (v1 capabilities only) version-routing seam → client `request()`/`requestMultipart()` → resilience driver (`sendWithResilience`: circuit-breaker gate + retry loop) → `fetch`. Every dispatcher return, success and error alike, is wrapped by `withConnectionNotice` from `identity.ts`, which appends the connected-account block at most once per process and never initiates the probe. Reads retry transient failures (429/503/5xx/network); writes retry 429 only. See `docs/plans/2026-06-14-003-feat-resilient-request-core-plan.md`.
 
 ## API Versions
 
