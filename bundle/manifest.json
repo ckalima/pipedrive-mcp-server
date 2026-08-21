@@ -662,7 +662,7 @@
     },
     {
       "name": "pipedrive_get_current_user",
-      "description": "Get details of the current user (API key owner). Useful for verifying connection and getting your user ID."
+      "description": "Identify the Pipedrive account this server is connected to: returns the connected company (name, id, and domain) alongside the API key owner's user details. Use it to confirm which company the data is coming from, or to get your user ID."
     }
   ],
   "keywords": [

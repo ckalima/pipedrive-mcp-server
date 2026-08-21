@@ -347,7 +347,7 @@ Once configured, Claude can access your Pipedrive data:
 |------|-------------|
 | `pipedrive_list_users` | List all users in the Pipedrive account. Useful for finding owner IDs when creating or filtering records. |
 | `pipedrive_get_user` | Get details of a specific user by ID. |
-| `pipedrive_get_current_user` | Get details of the current user (API key owner). Useful for verifying connection and getting your user ID. |
+| `pipedrive_get_current_user` | Identify the Pipedrive account this server is connected to: returns the connected company (name, id, and domain) alongside the API key owner's user details. Use it to confirm which company the data is coming from, or to get your user ID. |
 
 <!-- END GENERATED TOOLS -->
 
