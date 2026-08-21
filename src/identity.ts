@@ -36,7 +36,7 @@ import { boundErrorMessage } from "./utils/errors.js";
 /** Single attempt: the probe fails fast rather than riding the retry loop (R3). */
 const IDENTITY_MAX_ATTEMPTS = 1;
 
-/** Matches the installer's VALIDATION_TIMEOUT_MS. Long enough for a cold TLS handshake. */
+/** Long enough for a cold TLS handshake, short enough that a dead network is obvious. */
 const IDENTITY_TIMEOUT_MS = 10_000;
 
 /**
@@ -76,6 +76,14 @@ export type IdentityResult =
 // ─── Sanitization ────────────────────────────────────────────────────────────
 
 /**
+ * Invisible Unicode that survives the ASCII-control strip in `boundErrorMessage`:
+ * control (Cc), format (Cf, which covers zero-width joiners, bidi overrides/isolates,
+ * the BOM, and tag characters), and the line/paragraph separators (Zl, Zp). Left in
+ * place they let a CRM-sourced name reorder or hide part of the trusted notice sentence.
+ */
+const INVISIBLE_UNICODE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
+
+/**
  * Bounds a CRM- or backend-sourced string before it reaches stderr or the model.
  *
  * `boundErrorMessage` redacts the configured token, strips ASCII control characters
@@ -89,7 +97,7 @@ export type IdentityResult =
  * response fence. That is why the notice states its own trust split in-band.
  */
 function sanitizeDisplay(value: string): string {
-  return boundErrorMessage(value, getCachedApiToken() ?? undefined);
+  return boundErrorMessage(value, getCachedApiToken() ?? undefined).replace(INVISIBLE_UNICODE, " ");
 }
 
 /** Reads a payload field as a display string, or `undefined` when it is absent/not a string. */
@@ -170,6 +178,8 @@ async function resolveConnectedIdentity(): Promise<IdentityResult> {
 
 let resolved: IdentityResult | undefined;
 let inFlight: Promise<IdentityResult> | undefined;
+/** Bumped by every reset so a probe started before the reset cannot write back after it. */
+let generation = 0;
 
 /**
  * The cached async accessor, and the ONLY path permitted to originate a request.
@@ -178,12 +188,17 @@ let inFlight: Promise<IdentityResult> | undefined;
 export async function getConnectedIdentity(): Promise<IdentityResult> {
   if (resolved) return resolved;
   if (!inFlight) {
+    const started = generation;
     inFlight = resolveConnectedIdentity()
       .catch((error: unknown): IdentityResult => ({
         status: "unverified",
         reason: error instanceof Error ? error.message : "Unknown error",
       }))
       .then((result) => {
+        // A reset while this probe was outstanding bumped the generation. The straggler
+        // still resolves for whoever is awaiting it, but it must not populate the fresh
+        // slot or clear an `inFlight` promise that now belongs to a later probe.
+        if (started !== generation) return result;
         resolved = result;
         inFlight = undefined;
         return result;
@@ -218,6 +233,7 @@ export function peekConnectedIdentity(): IdentityResult | undefined {
 
 /** Clears the identity cache. Test isolation only; wired into the global beforeEach. */
 export function resetConnectedIdentityForTests(): void {
+  generation += 1;
   resolved = undefined;
   inFlight = undefined;
 }
@@ -293,9 +309,14 @@ export function connectionNotice(result: IdentityResult): ConnectionNotice | und
       return undefined;
     case "ok": {
       const companyId = result.companyId ?? null;
+      // The prose says "unknown" where the structured field says null, matching the
+      // startup banner. `company_id null` in an English sentence reads as a real value.
+      const companyIdDisplay = companyId ?? "unknown";
       const companyName = result.companyName ? sanitizeDisplay(result.companyName) : undefined;
       const userEmail = result.userEmail ? sanitizeDisplay(result.userEmail) : undefined;
-      const label = companyName ? `"${companyName}" (company_id ${companyId})` : `company_id ${companyId}`;
+      const label = companyName
+        ? `"${companyName}" (company_id ${companyIdDisplay})`
+        : `company_id ${companyIdDisplay}`;
       return {
         verified: true,
         company_id: companyId,

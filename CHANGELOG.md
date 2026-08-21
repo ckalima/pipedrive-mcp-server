@@ -30,8 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolved to *an* account, not to the expected one; there is no expected-company setting yet.
 
   Only `company_id` and `verified` are asserted by the server. `company_name` and `user_email`
-  are CRM-sourced display strings, control-stripped and length-capped, and the notice labels
-  them as untrusted in-band. See [SECURITY.md](SECURITY.md#prompt-injection-untrusted-crm-content).
+  on the verified variant, and `reason` on the unverified one, are CRM- or upstream-sourced
+  strings: stripped of control and invisible-format characters, length-capped, and labeled
+  untrusted in-band by the notice itself. See [SECURITY.md](SECURITY.md#prompt-injection-untrusted-crm-content).
 
 ### Changed
 
