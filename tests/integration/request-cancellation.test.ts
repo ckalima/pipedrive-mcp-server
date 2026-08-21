@@ -203,6 +203,74 @@ describe('PipedriveClient caller cancellation (#164)', () => {
     expect(second.error?.code).toBe('CIRCUIT_OPEN');
   });
 
+  it('a cancellation emits no "Network error" line', async () => {
+    // The catch used to render every abort through networkError() before the
+    // cancellation exit was reached, so an operator watching stderr saw "Network error:
+    // This operation was aborted" for a teardown the process itself ordered.
+    const lines: string[] = [];
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      if (typeof args[0] === 'string') lines.push(args[0]);
+    });
+    const started = deferred();
+    mockFetchHangsUntilAborted(started.resolve);
+    const controller = new AbortController();
+    const client = new PipedriveClient(undefined, {
+      maxAttempts: 1,
+      timeoutMs: 30_000,
+      signal: controller.signal,
+    });
+
+    const pending = client.get('/deals', undefined, 'v2');
+    await started.promise;
+    controller.abort();
+    await pending;
+
+    expect(lines.filter((line) => line.includes('Network error'))).toEqual([]);
+    expect(lines.some((line) => line.includes('cancelled by caller'))).toBe(true);
+  });
+
+  it('a throwing console.error cannot turn a cancelled probe into a breaker penalty', async () => {
+    // Same class as the probe-slot log-throw regression: a host that swaps in a
+    // throwing console.error. networkError() logging inside the catch put that throw
+    // BEFORE the cancellation exit, so it escaped the try with the probe slot still
+    // held, and the `finally` backstop recorded the unhealthy verdict — restoring the
+    // exact fresh-cooldown penalty this change removes, in the one host where the
+    // repo already treats a throwing logger as real.
+    let mono = 1_000_000;
+    setMonotonicClockForTests(() => mono);
+    mono = openBreakerAndCoolDown(mono);
+
+    const boom = new Error('console.error is unavailable');
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      if (typeof args[0] === 'string' && args[0].includes('Network error')) throw boom;
+    });
+
+    const started = deferred();
+    mockFetchHangsUntilAborted(started.resolve);
+    const controller = new AbortController();
+    const client = new PipedriveClient(undefined, {
+      maxAttempts: 1,
+      timeoutMs: 30_000,
+      signal: controller.signal,
+    });
+
+    const pending = client.get('/deals', undefined, 'v2');
+    await started.promise;
+    expect(getBreakerState()).toBe('HalfOpen');
+    controller.abort();
+
+    // No throw escapes, because the line that used to throw is no longer emitted.
+    await expect(pending).resolves.toMatchObject({ error: { code: 'REQUEST_CANCELLED' } });
+    expect(getBreakerState()).toBe('Open');
+
+    // And still no verdict: the next caller wins the slot at the same instant.
+    const probeMock = mockFetch({ status: 200, data: fixtures.deal });
+    const probe = await new PipedriveClient().get('/deals', undefined, 'v2');
+    expect(probeMock).toHaveBeenCalledTimes(1);
+    expect(probe.success).toBe(true);
+    expect(getBreakerState()).toBe('Closed');
+  });
+
   it('a response that arrived before the abort landed still counts as evidence', async () => {
     // Cancellation only excuses a request the abort actually killed. If the upstream
     // answered first, that answer is real evidence and the breaker is entitled to it.

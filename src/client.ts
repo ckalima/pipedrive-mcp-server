@@ -549,6 +549,9 @@ export class PipedriveClient {
         const attemptStartMs = monotonicNowMs();
         let parsed: ApiResponse<T> | undefined;
         let isNetworkError = false;
+        // Set only in the catch, and only when the caller's own signal is what killed
+        // this attempt. Read by the cancellation exit below (#164).
+        let cancelled = false;
         let responseHeaders: Headers | undefined;
         try {
           const response = await fetch(url.toString(), {
@@ -565,7 +568,22 @@ export class PipedriveClient {
           parsed = await this.parseResponse<T>(response);
         } catch (error) {
           isNetworkError = true;
-          lastFailure = this.networkError<T>(error);
+          // A caller cancellation lands here as an abort, and networkError() must NOT
+          // run for it (#164). It renders the wrong envelope, and it LOGS "Network
+          // error: This operation was aborted" to operator stderr before the
+          // cancellation exit below is ever reached. Worse, in a host that swapped in
+          // a throwing console.error (the scenario pinned by the probe-slot log-throw
+          // suite), that log escapes this catch entirely, so the exit below never runs,
+          // the probe slot is never released with no verdict, and the `finally`
+          // backstop records the unhealthy verdict this whole change exists to avoid.
+          //
+          // Decided here rather than re-read below so the two cannot drift: the
+          // question is whether the abort killed THIS attempt, and this is the moment
+          // it is answerable.
+          cancelled = cancelSignal?.aborted === true;
+          if (!cancelled) {
+            lastFailure = this.networkError<T>(error);
+          }
         }
         if (attemptIndex > 0) {
           budgetUsedMs += monotonicNowMs() - attemptStartMs;
@@ -578,13 +596,14 @@ export class PipedriveClient {
         //    and restart a full cooldown for every caller in the process on the strength
         //    of a local decision.
         //
-        //    Gated on isNetworkError so a response that genuinely ARRIVED still counts.
-        //    If the upstream answered before the abort landed, that is real evidence and
-        //    the breaker is entitled to it; only a request the abort actually killed is
-        //    evidence-free. A real network failure racing a cancellation is therefore
-        //    attributed to the cancellation and not debited — deliberately conservative,
-        //    since under-counting a signal is recoverable and fabricating one is not. ──
-        if (isNetworkError && cancelSignal?.aborted) {
+        //    `cancelled` is set ONLY in the catch, so a response that genuinely ARRIVED
+        //    still counts: if the upstream answered before the abort landed, that is real
+        //    evidence and the breaker is entitled to it. Only a request the abort actually
+        //    killed is evidence-free. A real network failure racing a cancellation is
+        //    therefore attributed to the cancellation and not debited — deliberately
+        //    conservative, since under-counting a signal is recoverable and fabricating
+        //    one is not. ──
+        if (cancelled) {
           if (isProbe) {
             // Owner-scoped, exactly like recordOutcome's isProbe: only the slot holder
             // may release it. Set probeSettled first so the finally backstop does not

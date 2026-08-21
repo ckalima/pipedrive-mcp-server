@@ -20,8 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a timeout is evidence the upstream is sick and still counts, while a cancellation carries no
   evidence in either direction, so it releases the probe slot with no verdict and leaves the
   breaker exactly where it stood. Cancelled requests report a new `REQUEST_CANCELLED` code
-  rather than a misleading `NETWORK_ERROR`. Only the boot probe cancels anything today, so no
-  tool response changes.
+  rather than a misleading `NETWORK_ERROR`, and no longer log one either: rendering the abort
+  through the network-error path also put its stderr line ahead of the cancellation exit, which
+  in a host with a throwing `console.error` escaped before the probe slot could be released and
+  let the backstop restore the very penalty this removes. Only the boot probe cancels anything
+  today, so no tool response changes.
 
 ## [2.6.0] - 2026-08-21
 
