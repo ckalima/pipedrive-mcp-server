@@ -77,9 +77,11 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess([projectFixture]);
       const { listProjects } = await getProjectsTools();
 
-      // board_id/include_fields passed directly (bypassing Zod) so the assertions
-      // guard the handler-line removals, not just the schema strip.
-      await listProjects(ListProjectsSchema.parse({ phase_id: 2, status: 'open', filter_id: 3, board_id: 1, include_fields: 'tasks' } as Record<string, unknown>));
+      // Deliberately NOT routed through ListProjectsSchema, unlike its neighbours: the
+      // claim under test is that the HANDLER stopped forwarding board_id/include_fields.
+      // The schema strips both, so parsing first would mask a handler-line revert.
+      // (The schema-layer strip has its own coverage in tests/unit/schemas/projects.test.ts.)
+      await listProjects({ phase_id: 2, status: 'open', filter_id: 3, board_id: 1, include_fields: 'tasks' } as unknown as Parameters<typeof listProjects>[0]);
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('board_id');
@@ -414,7 +416,10 @@ describe('projects tools', () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProjects } = await getProjectsTools();
 
-      await searchProjects(SearchProjectsSchema.parse({ term: 'test', include_fields: 'tasks' } as Record<string, unknown>));
+      // Deliberately NOT routed through SearchProjectsSchema (see the list-filter test
+      // above): the schema strips include_fields, so parsing first would mask a
+      // handler-line revert.
+      await searchProjects({ term: 'test', include_fields: 'tasks' } as unknown as Parameters<typeof searchProjects>[0]);
 
       const [url] = mockFn.mock.calls[0];
       expect(url).not.toContain('include_fields');

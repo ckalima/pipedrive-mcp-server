@@ -43,14 +43,16 @@ describe('persons tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listPersons } = await getPersonsTools();
 
-      // first_char is passed directly (bypassing Zod) so the assertion guards the
-      // handler-line removal, not just the schema strip — revert-proof at handler level.
-      await listPersons(ListPersonsSchema.parse({
+      // Deliberately NOT routed through ListPersonsSchema, unlike its neighbours: the
+      // claim under test is that the HANDLER stopped forwarding first_char. The schema
+      // strips it too, so parsing first would mask a handler-line revert.
+      // (The schema-layer strip has its own coverage in tests/unit/schemas/persons.test.ts.)
+      await listPersons({
         owner_id: 1,
         org_id: 5,
         sort_by: 'update_time',
         first_char: 'A',
-      } as Record<string, unknown>));
+      } as unknown as Parameters<typeof listPersons>[0]);
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('owner_id=1');

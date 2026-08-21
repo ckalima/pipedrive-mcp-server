@@ -42,9 +42,13 @@ describe('activities tools', () => {
       const mockFn = mockApiSuccess([]);
       const { listActivities } = await getActivitiesTools();
 
-      // The removed v2 list filters are passed directly (bypassing Zod) so the
-      // not.toContain assertions guard the handler-line removals, not just schema strip.
-      await listActivities(ListActivitiesSchema.parse({
+      // Deliberately NOT routed through ListActivitiesSchema, unlike its neighbours.
+      // type/start_date/end_date/project_id were removed from the v2 list call at the
+      // HANDLER line, and that is what the not.toContain assertions below guard. The
+      // schema also strips all four, so parsing first would keep them from ever reaching
+      // the handler and the assertions would hold even if the handler forwarded them
+      // again. (The schema-layer strip has its own coverage in tests/unit/schemas/activities.test.ts.)
+      await listActivities({
         owner_id: 1,
         deal_id: 5,
         person_id: 10,
@@ -54,7 +58,7 @@ describe('activities tools', () => {
         start_date: '2024-01-01',
         end_date: '2024-01-02',
         project_id: 1,
-      } as Record<string, unknown>));
+      } as unknown as Parameters<typeof listActivities>[0]);
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('owner_id=1');

@@ -197,7 +197,7 @@ describe("request-params contract (v2)", () => {
     });
 
     // Revert-proof: FAILS if `fields` carries a token outside [code, custom_fields,
-    // name] or `include_fields` outside [product.price] — both are enum-constrained
+    // name] or `include_fields` outside [product.price]: both are enum-constrained
     // on searchProducts, unlike the looser person/deal search field lists.
     it("searchProducts query conforms (fields/include_fields in enum)", async () => {
       const mockFn = mockApiSuccess({ items: [] });
@@ -207,8 +207,11 @@ describe("request-params contract (v2)", () => {
         term: "widget",
         // Single token, not "name,code": the Zod enum on searchProducts admits one
         // value, so the dispatcher would reject a comma-separated list before any
-        // handler ran. Tracked separately as a schema-vs-spec gap (the v2 spec does
-        // allow a list); this test asserts the query shape, not the enum width.
+        // handler ran. That is a real schema-vs-spec gap (the v2 spec calls this a
+        // comma-separated array, and every sibling search schema accepts one) filed as
+        // #170, not something this test narrowing introduced, since the old value was
+        // handed straight to the handler and never crossed the dispatcher either. This
+        // test asserts the query shape; restore the list case with #170.
         fields: "name",
         exact_match: true,
         include_fields: "product.price",
