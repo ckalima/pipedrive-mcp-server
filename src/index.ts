@@ -42,6 +42,7 @@ import {
 import {
   primeConnectedIdentity,
   connectedIdentityStartupLines,
+  withConnectionNotice,
 } from "./identity.js";
 import { mcpErrorFromCode, boundErrorMessage } from "./utils/errors.js";
 import { MAX_TOOL_RESPONSE_CHARS, measureResultTextLength } from "./utils/formatting.js";
@@ -52,11 +53,23 @@ const SERVER_NAME = "pipedrive-mcp-server";
 // (this string is hand-maintained and the release workflow only checks package.json).
 export const SERVER_VERSION = "2.5.0";
 
+/** The request shape the CallTool dispatcher accepts. */
+type CallToolRequest = { params: { name: string; arguments?: unknown } };
+
 /**
  * Dispatcher for CallToolRequest — extracted so tests can import and invoke it directly
  * without booting the STDIO transport.
+ *
+ * Every return routes through withConnectionNotice so the one-shot connection block
+ * rides the first response of the process whichever exit the call takes, including the
+ * error exits. The wrapper reads an already-settled identity and never initiates a
+ * request, so this adds no latency and no traffic (R9).
  */
-export async function handleCallTool(request: { params: { name: string; arguments?: unknown } }) {
+export async function handleCallTool(request: CallToolRequest) {
+  return withConnectionNotice(await dispatchCallTool(request));
+}
+
+async function dispatchCallTool(request: CallToolRequest) {
   const { name, arguments: args } = request.params;
 
   console.error(`[${SERVER_NAME}] Calling tool: ${name}`);

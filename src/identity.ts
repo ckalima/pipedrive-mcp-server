@@ -327,3 +327,80 @@ export function connectionNotice(result: IdentityResult): ConnectionNotice | und
       };
   }
 }
+
+// ─── One-shot response notice (R8) ───────────────────────────────────────────
+
+/**
+ * Whether the connection notice has already ridden a response this process.
+ *
+ * This latch lives here rather than in `src/index.ts`, and that placement is
+ * load-bearing rather than stylistic. `tests/setup.ts` resets it in the global
+ * `beforeEach`, and setup files execute BEFORE a test file's hoisted `vi.mock()`
+ * calls register. A setup file that imported `src/index.js` would therefore load
+ * the real `src/tools/index.js` into the module registry first and defeat the
+ * `vi.mock('../../src/tools/index.js')` in the dispatcher and capability-mode
+ * integration suites. Measured on this tree: those two suites go from 28 passed
+ * to 7 failed / 21 passed. Importing this module costs nothing, because
+ * `tests/setup.ts` already pulls in `src/version-routing.js` and therefore
+ * `src/client.js`, the only module this one adds.
+ */
+let noticeSpent = false;
+
+/** Clears the one-shot latch. Test isolation only; wired into the global beforeEach. */
+export function resetConnectionNoticeForTests(): void {
+  noticeSpent = false;
+}
+
+/**
+ * Appends the one-shot `connection` block to a tool result, at most once per process.
+ *
+ * Wrapped around EVERY dispatcher return, success and error alike, so a session that
+ * opens with a failing call still learns which account it is talking to.
+ *
+ * Three properties this must preserve:
+ *
+ * - **It never initiates the probe** (R9). It reads the settled slot synchronously and
+ *   returns untouched when nothing has settled, so tool latency is unchanged, a failing
+ *   probe is not retried once per tool call, and suites that never prime identity see
+ *   exactly today's behavior.
+ * - **The latch check through the latch spend is synchronous**, so concurrent first
+ *   calls in one turn cannot both emit.
+ * - **It cannot throw** (R5). The dispatcher's own try/catch sits INSIDE the function
+ *   this wraps, so there is no error containment above this helper: an unguarded defect
+ *   here would turn a working call into a rejected MCP request across all 155 tools.
+ *
+ * `content` is appended to, never mutated in place, and `content[0]` is left
+ * byte-identical so existing consumers are unaffected. Note that the appended block
+ * lands AFTER the dispatcher's size backstop has measured the result, so
+ * MAX_TOOL_RESPONSE_CHARS stops being a strict ceiling by the notice's length. The
+ * overshoot is a few hundred characters, once per process, and is accepted.
+ */
+export function withConnectionNotice<T>(result: T): T {
+  try {
+    if (noticeSpent) return result;
+
+    // Mirrors the guard measureResultTextLength already applies: a handler that
+    // returns something without a content array passes through untouched, and the
+    // latch is not spent on it.
+    const content = (result as { content?: unknown } | null | undefined)?.content;
+    if (!Array.isArray(content)) return result;
+
+    const identity = peekConnectedIdentity();
+    if (!identity) return result;
+
+    const notice = connectionNotice(identity);
+    if (!notice) return result;
+
+    noticeSpent = true;
+    return {
+      ...(result as object),
+      content: [...content, { type: "text", text: JSON.stringify({ connection: notice }) }],
+    } as T;
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error(
+      `[pipedrive-mcp] Could not attach the connection notice: ${sanitizeDisplay(rawMessage)}`,
+    );
+    return result;
+  }
+}
