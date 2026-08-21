@@ -57,7 +57,7 @@ export function createMockResponse(options: MockResponseOptions = {}): Response 
  * on purpose, because suites read these three fields off `mock.calls[n][1]` constantly:
  *
  *   - `init` is NOT optional. `RequestInit | undefined` made `options.method` a type
- *     error at ~200 call sites for a case that cannot occur — every fetch goes through
+ *     error at ~200 call sites for a case that cannot occur, because every fetch goes through
  *     `PipedriveClient.request`, which always passes an object. `createMockFetch`
  *     asserts that at runtime rather than leaving the claim unchecked.
  *   - `headers` is a plain record, which is what the client builds, so
@@ -87,7 +87,7 @@ export function createMockFetch(responses: MockResponseOptions | MockResponseOpt
     // whose type says it cannot be.
     if (init === undefined) {
       throw new Error(
-        'mock fetch was called without a RequestInit — every request is expected to go through PipedriveClient.request',
+        'mock fetch was called without a RequestInit; every request is expected to go through PipedriveClient.request',
       );
     }
     const responseOptions = responseArray[Math.min(callIndex++, responseArray.length - 1)];

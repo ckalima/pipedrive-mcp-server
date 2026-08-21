@@ -462,7 +462,7 @@ export class PipedriveClient {
         // Nothing to log about the gate itself: a refusal is state-neutral
         // (Open-before-cooldown -> Open, HalfOpen -> HalfOpen), so the transition
         // logger would be a no-op here. This return must also stay ABOVE the
-        // `isProbe` read below — a request refused while another one holds the
+        // `isProbe` read below: a request refused while another one holds the
         // probe slot observes HalfOpen and would wrongly claim their probe.
         this.logResilience(`${method} ${logEndpoint} circuit open — fast-failing without a request`);
         return { success: false, error: circuitOpenError() };
@@ -472,7 +472,7 @@ export class PipedriveClient {
       //    single half-open probe slot for this iteration, and only `recordOutcome`
       //    releases it. The `finally` below settles an unrecorded probe as a failure
       //    (re-Open, fresh cooldown), but it guards ONLY the region from `try` onward,
-      //    so NOTHING that can throw may sit between the gate and the `try` — a throw
+      //    so NOTHING that can throw may sit between the gate and the `try`, because a throw
       //    there escapes with the slot held and wedges the breaker HalfOpen for the
       //    process lifetime, every later call fast-failing CIRCUIT_OPEN.
       //
@@ -480,7 +480,7 @@ export class PipedriveClient {
       //    FIRST statement inside the `try` rather than next to the gate: logging is
       //    exactly the throwing kind of work (a host-swapped console.error, or
       //    redactSecrets), and it is a no-op on every transition EXCEPT the slot claim.
-      //    Only the two lines below — a pure state read and a boolean assignment —
+      //    Only the two lines below (a pure state read and a boolean assignment)
       //    belong out here.
       let probeSettled = !isProbe;
       try {

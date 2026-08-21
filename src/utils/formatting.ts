@@ -71,7 +71,7 @@ export interface ToolResponseInput {
 export type ToolTextResult = {
   content: { type: "text"; text: string }[];
   /**
-   * Always absent on the success path — declared so this type and
+   * Always absent on the success path. Declared so this type and
    * {@link McpToolErrorResult} (`isError: true`) form a DISCRIMINATED union.
    *
    * Every handler returns `ToolTextResult | McpToolErrorResult`. Without this member,

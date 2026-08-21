@@ -8,7 +8,7 @@ on:
 
 # Least privilege for the GITHUB_TOKEN: this workflow only reads the repo. Without an
 # explicit block the token inherits the repository default, which on many repos is
-# read/write across contents, issues, packages and deployments — handing every third-party
+# read/write across contents, issues, packages and deployments. Handing every third-party
 # action (and anything a compromised dependency runs during `npm ci`) a write-capable token.
 # release.yml already declares `permissions: {}` per job; this brings CI in line.
 permissions:

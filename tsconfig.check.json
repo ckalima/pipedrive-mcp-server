@@ -3,7 +3,7 @@
   //
   // tsconfig.json is the BUILD config: rootDir src/, and it excludes **/*.test.ts so the
   // published dist/ tree carries no test code. That scoping meant tests/ and scripts/ were
-  // never typechecked at all — vitest transpiles per-file without cross-file checking and
+  // never typechecked at all: vitest transpiles per-file without cross-file checking and
   // tsx strips types, so a broken type in a test helper, a smoke script or the docs
   // generator only surfaced at runtime, if ever.
   //

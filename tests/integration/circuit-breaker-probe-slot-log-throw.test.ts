@@ -5,7 +5,7 @@
  * The original P0-1 fix moved the elapsed-budget bail above the breaker gate and added
  * a `finally` that settles an unrecorded probe as a failure. But the `finally` only
  * guards the region from the `try` onward, and `breakerAllowsRequest()` claims the
- * single half-open probe slot BEFORE it — so any statement between the two escapes the
+ * single half-open probe slot BEFORE it, so any statement between the two escapes the
  * guarantee. `logBreakerTransition(...)` sat in exactly that gap, and it is a no-op on
  * every transition EXCEPT the one the gate itself produces (Open -> HalfOpen, i.e. the
  * slot claim). The single case where it did real work was the single case where a throw
@@ -15,7 +15,7 @@
  * The fix logs that transition as the first statement INSIDE the `try`, so the `finally`
  * settles the probe even when logging throws. The trigger is narrow in production
  * (Node's global console sets `_ignoreErrors`, so stderr EPIPE does not propagate; it
- * needs a host that swaps in a throwing `console.error`, or `redactSecrets` throwing) —
+ * needs a host that swaps in a throwing `console.error`, or `redactSecrets` throwing),
  * but the failure mode is process-wide and permanent, which is what earns a pinned test.
  */
 
@@ -39,7 +39,7 @@ function tripBreakerOpen(): void {
   expect(getBreakerState()).toBe('Open');
 }
 
-describe('PipedriveClient circuit breaker — a throwing transition log cannot wedge the probe slot (review P0-1 residual)', () => {
+describe('PipedriveClient circuit breaker: a throwing transition log cannot wedge the probe slot (review P0-1 residual)', () => {
   beforeEach(() => {
     setupValidEnv();
     vi.unstubAllGlobals();
@@ -71,7 +71,7 @@ describe('PipedriveClient circuit breaker — a throwing transition log cannot w
     await expect(client.get('/deals', undefined, 'v2')).rejects.toThrow(boom);
     expect(fetchMock).not.toHaveBeenCalled();
 
-    // The probe was settled on the way out — as a failure, since a request that never
+    // The probe was settled on the way out, as a failure, since a request that never
     // reached the upstream is no evidence of recovery. Pre-fix the log ran OUTSIDE the
     // try, so the slot stayed claimed and this read was 'HalfOpen' forever.
     expect(getBreakerState()).toBe('Open');

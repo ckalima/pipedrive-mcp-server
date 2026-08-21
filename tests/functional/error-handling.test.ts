@@ -159,7 +159,7 @@ describe('Error Handling', () => {
 
     // The handlers are looked up by name, so the module namespace has to be indexed
     // dynamically. Their param types differ, but this table only ever calls them with an
-    // empty param set, so one structural signature covers all five — and unlike the `any`
+    // empty param set, so one structural signature covers all five, and unlike the `any`
     // it replaces, it still types the RESULT the assertions below read.
     type ListHandlerUnderTest = (params: Record<string, never>) => Promise<{
       content: { type: 'text'; text: string }[];

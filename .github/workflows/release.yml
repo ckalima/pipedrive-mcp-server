@@ -275,14 +275,14 @@ jobs:
         #
         # The version pin alone is not enough. GitHub release assets stay mutable after
         # publication, so a tag pin still fetches whatever bytes sit behind that URL today,
-        # and the old form piped them straight into `tar` — the archive was executed before
+        # and the old form piped them straight into `tar`, so the archive was executed before
         # anything could inspect it. This job carries `id-token: write` for the registry, which
         # makes mcp-publisher the most privileged third-party code in the pipeline, so the
         # download now lands in a file and is checked against a hash verified out-of-band when
         # the version was pinned. MCP_PUBLISHER_VERSION and MCP_PUBLISHER_SHA256 are one unit:
         # bump both together, never one alone. Hashes ship in the release's
         # `registry_<ver>_checksums.txt` (confirm against the asset itself, not just that file
-        # — an actor who can rewrite one asset can rewrite both).
+        # (an actor who can rewrite one asset can rewrite both).
         env:
           MCP_PUBLISHER_VERSION: v1.7.9
           # sha256 of mcp-publisher_linux_amd64.tar.gz at v1.7.9.
@@ -292,7 +292,7 @@ jobs:
           OS=$(uname -s | tr '[:upper:]' '[:lower:]')
           ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
           # The pinned hash is per-platform. If a runner-image change ever moves this job off
-          # linux/amd64, fail loudly — silently skipping the check is the one outcome worse
+          # linux/amd64, fail loudly: silently skipping the check is the one outcome worse
           # than not having it.
           if [ "$OS/$ARCH" != "linux/amd64" ]; then
             echo "::error::no pinned mcp-publisher sha256 for $OS/$ARCH (MCP_PUBLISHER_SHA256 is linux/amd64); pin the hash for this platform before releasing"
