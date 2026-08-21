@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The server now names the Pipedrive account it is connected to.** A token silently resolves
+  to exactly one company, and nothing in the server's output said which one. When the same
+  server is registered in two client scopes (for example a project-scoped entry and a
+  local-scoped one that reads a stale `.env`), the entry that wins precedence is invisible, and
+  the symptom is data from the wrong company with no error anywhere.
+
+  - **Startup banner.** One stderr line after the transport is up:
+    `Connected as you@example.com -> company "Example Corp" (id 12345)`. If the check fails the
+    line says the account could not be verified rather than the server starting silently; if the
+    API key is missing or malformed it reports that the account was not checked, because no
+    request was made.
+  - **One-shot connection notice.** The first tool response of each server run carries a
+    `connection` block naming the same company, so the agent knows which account the data came
+    from without being asked and without spending a tool call. Subsequent responses are
+    byte-identical to before.
+
+  The check is a single `GET /v1/users/me` at boot, bounded to one attempt with a 10-second
+  timeout. It never blocks startup and never fails a tool call. `verified: true` means the token
+  resolved to *an* account, not to the expected one; there is no expected-company setting yet.
+
+  Only `company_id` and `verified` are asserted by the server. `company_name` and `user_email`
+  are CRM-sourced display strings, control-stripped and length-capped, and the notice labels
+  them as untrusted in-band. See [SECURITY.md](SECURITY.md#prompt-injection-untrusted-crm-content).
+
+### Changed
+
+- **`pipedrive_get_current_user` now describes what it actually returns.** The handler always
+  returned the connected company's name, id, and domain, but the description mentioned only the
+  user, so neither an agent nor a human could tell the tool answered "which company is this
+  token on?". Description only; behavior and payload are unchanged.
+
 ## [2.5.0] - 2026-07-22
 
 ### Changed

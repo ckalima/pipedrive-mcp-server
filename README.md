@@ -116,6 +116,26 @@ Once configured, Claude can access your Pipedrive data:
 - "List recent email threads in my inbox"
 - "What custom fields are defined for deals?"
 
+## Connected account
+
+The API token decides which Pipedrive company you are talking to, and until now nothing in a tool result said which one that was. Two registrations of this server in the same client (say, a project-scoped entry and a local-scoped one that reads a stale `.env`) resolve to different companies, and the one that loses precedence is invisible. The server now names the account it actually resolved, in two places.
+
+**On startup**, one line on stderr:
+
+```
+[pipedrive-mcp-server] Connected as you@example.com -> company "Example Corp" (id 12345)
+```
+
+If the check fails, that line says so (`Could not verify connected account: ...`) instead of the server starting silently. If the API key is missing or malformed it reports that the account was not checked, because no request was made.
+
+**On the first tool response of each server run**, a one-shot `connection` block naming the same company, so the agent knows which account the data came from without being asked and without spending a tool call. It is emitted once per process, on whichever tool happens to run first.
+
+The check is a single `GET /v1/users/me` at boot, capped at one attempt with a 10-second timeout. It never blocks startup and never fails a tool call. Nothing is checked against an expected value: `verified: true` means the token resolved to *an* account, not to the right one.
+
+To read the same information on demand, call `pipedrive_get_current_user`, which returns the connected company's name, id, and domain alongside the token owner's user details.
+
+*For contributors:* the banner line and the notice both carry a real Pipedrive company id. If you paste either into a document in this repo, that document belongs in gitignored `docs/private/` (see `CLAUDE.md`), not in the public tree.
+
 ## Available Tools
 
 <!-- BEGIN GENERATED TOOLS -->
