@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A cancelled request can no longer punish every other caller through the shared circuit
+  breaker.** The identity probe runs once at boot, and a cache reset used to bump a generation
+  counter so a straggler could not write back into the fresh slot. That guarded the cache, but
+  not the breaker, which is process-wide state no generation counter covers: the abandoned
+  request stayed alive, and if it happened to hold the single half-open probe slot, its
+  eventual failure re-Opened the breaker and started a fresh cooldown that fast-failed every
+  other call for a minute. A reset now aborts the outstanding probe instead of merely
+  forgetting it, and the driver tells a caller cancellation apart from a per-attempt timeout:
+  a timeout is evidence the upstream is sick and still counts, while a cancellation carries no
+  evidence in either direction, so it releases the probe slot with no verdict and leaves the
+  breaker exactly where it stood. Cancelled requests report a new `REQUEST_CANCELLED` code
+  rather than a misleading `NETWORK_ERROR`. Only the boot probe cancels anything today, so no
+  tool response changes.
+
 ## [2.6.0] - 2026-08-21
 
 ### Added

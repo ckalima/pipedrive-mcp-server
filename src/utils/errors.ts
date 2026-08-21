@@ -28,7 +28,13 @@ export type ErrorCode =
   // Tool blocked by the active capability tier (PIPEDRIVE_MODE). Distinct from
   // DESTRUCTIVE_DISABLED so the model and telemetry can tell "blocked by the active
   // mode" apart from "destructive specifically disabled" (KTD7).
-  | "MODE_RESTRICTED";
+  | "MODE_RESTRICTED"
+  // The caller cancelled the request before it settled (an AbortSignal supplied via
+  // ResilienceOverrides fired). Distinct from NETWORK_ERROR because nothing went wrong
+  // on the wire: this is a local decision, and labelling it a network fault would put a
+  // misleading line on operator stderr and invite a pointless "check your connection"
+  // suggestion. Also distinct from CIRCUIT_OPEN, which is a local refusal to send at all.
+  | "REQUEST_CANCELLED";
 
 export type McpToolErrorResult = { content: { type: "text"; text: string }[]; isError: true };
 

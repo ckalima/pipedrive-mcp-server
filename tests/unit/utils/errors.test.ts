@@ -62,6 +62,7 @@ describe('errors', () => {
         'CAPABILITY_RETIRED',
         'CIRCUIT_OPEN',
         'MODE_RESTRICTED',
+        'REQUEST_CANCELLED',
       ] as const;
 
       codes.forEach((code) => {
