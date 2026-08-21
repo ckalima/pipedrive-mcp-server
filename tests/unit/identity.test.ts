@@ -507,6 +507,25 @@ describe('connectionNotice', () => {
     expect(notice?.notice).not.toMatch(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u);
   });
 
+  // Delivery is deferred: `withConnectionNotice` returns responses unchanged while the
+  // probe is in flight, so this block routinely arrives AFTER Pipedrive data has already
+  // been reported. An instruction keyed to "the first time" names a deadline that has by
+  // then already passed, and an instruction whose trigger is in the past reads as one that
+  // no longer applies — silencing the disclosure in the slow-probe case that needs it most.
+  it('keys every instruction to receipt, not to an event that may already have passed', () => {
+    const variants = [
+      connectionNotice(OK)!.notice,
+      connectionNotice({ status: 'ok' })!.notice,
+      connectionNotice({ status: 'unverified', reason: 'timed out' })!.notice,
+      connectionNotice({ status: 'rejected', httpStatus: 401, reason: 'refused' })!.notice,
+    ];
+
+    for (const notice of variants) {
+      expect(notice).not.toMatch(/the first time/i);
+      expect(notice).toMatch(/\bnow\b/);
+    }
+  });
+
   // A 200 can carry no identity at all: `resolveConnectedIdentity` maps every successful
   // response to `ok`, and `response.data ?? {}` exists because a v1 200 can arrive with a
   // null body. An earlier draft emitted the default notice there, so the block asserted
@@ -549,6 +568,31 @@ describe('withConnectionNotice safety net (R5)', () => {
     setupEnvWithApiKey(VALID_API_KEY);
     resetConnectedIdentityForTests();
     resetConnectionNoticeForTests();
+  });
+
+  // The path the timing wording exists for: a fast tool call finishes while the probe is
+  // still in flight, is returned unannotated, and the block lands on a later response —
+  // by which point Pipedrive data has already been reported to the user.
+  it('leaves a response unannotated while the probe is pending, then annotates a later one', async () => {
+    let release: (response: Response) => void = () => {};
+    const pending = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal('fetch', vi.fn(() => pending));
+
+    const probe = getConnectedIdentity();
+
+    const early = withConnectionNotice({ content: [{ type: 'text', text: 'deal data' }] });
+    expect(early.content).toHaveLength(1);
+
+    release(createMockResponse({ data: ME_PAYLOAD }));
+    await probe;
+
+    const later = withConnectionNotice({ content: [{ type: 'text', text: 'more deal data' }] });
+    expect(later.content).toHaveLength(2);
+    expect(JSON.parse(later.content[1].text) as Record<string, unknown>).toHaveProperty(
+      'connection',
+    );
   });
 
   it('swallows an unexpected throw and returns the tool result untouched', async () => {

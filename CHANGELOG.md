@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     a `connection` block naming the same company, so the agent knows which account the data came
     from without being asked and without spending a tool call. The check runs in the background,
     so a tool call that finishes while it is still in flight is returned unchanged and the block
-    lands on a later response instead. Every other response is byte-identical to before. The
+    lands on a later response instead. Its instructions are therefore relative to receipt
+    ("now", "any further Pipedrive data") rather than to a first report that may already have
+    happened by the time the block arrives. Every other response is byte-identical to before. The
     block is emitted once per **server run**, not once per conversation: a host that keeps one
     server process across several conversations gives it to the first one only, and the notice
     says so and points at `pipedrive_get_current_user` for checking on demand.
