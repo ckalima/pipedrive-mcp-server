@@ -78,8 +78,10 @@ that names `data` as untrusted. Response sizes are bounded so a single record ca
 the model's context.
 
 **The connection notice is a second server-authored block, and it is not inside that fence.**
-Once per server run, the first tool response carries an extra `connection` block naming the
-Pipedrive account the configured token resolved to (see *Connected account* in the README).
+Once per server run, the first tool response after the boot check settles carries an extra
+`connection` block naming the Pipedrive account the configured token resolved to (see
+*Connected account* in the README). Responses returned while that check is still in flight do
+not carry it, so its absence on an early response is not evidence that the account is unverified.
 Three of its fields are not server-asserted: `company_name` and `user_email` on the verified
 variant, CRM-sourced strings that anyone with write access to the account can influence, and
 `reason` on the unverified variant, an upstream error string. They sit beside `data`, not in it.

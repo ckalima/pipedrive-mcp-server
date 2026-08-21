@@ -20,10 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     line says the account could not be verified rather than the server starting silently; if the
     API key is missing or malformed it reports that the account was not checked, because no
     request was made.
-  - **One-shot connection notice.** The first tool response of each server run carries a
-    `connection` block naming the same company, so the agent knows which account the data came
-    from without being asked and without spending a tool call. Subsequent responses are
-    byte-identical to before.
+  - **One-shot connection notice.** The first tool response after the boot check settles carries
+    a `connection` block naming the same company, so the agent knows which account the data came
+    from without being asked and without spending a tool call. The check runs in the background,
+    so a tool call that finishes while it is still in flight is returned unchanged and the block
+    lands on a later response instead. Every other response is byte-identical to before.
 
   The check is a single `GET /v1/users/me` at boot, bounded to one attempt with a 10-second
   timeout. It never blocks startup and never fails a tool call. `verified: true` means the token
