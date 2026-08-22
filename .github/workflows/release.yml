@@ -267,6 +267,46 @@ jobs:
           fi
           echo "server.json mcpb hash matches the attached bundle: $EXPECT"
 
+      - name: Verify the Release asset is live before publishing an immutable entry
+        # The registry entry is IMMUTABLE and its mcpb identifier points at a GitHub Release
+        # asset, so publishing before that asset is live permanently advertises a URL that
+        # 404s - recoverable only by cutting a whole new version. Nothing upstream prevents
+        # that today: "Create GitHub Release" is deliberately continue-on-error (npm publish
+        # is the irreversible step, so a release-notes or API hiccup must not red an
+        # already-published version), that same step is what uploads the bundle, and this job
+        # only `needs: publish` - the job, which still succeeds when that step soft-failed.
+        #
+        # So fail closed here instead. The npm publish stands either way, and the registry
+        # entry can be back-published later from the durable asset once the Release exists
+        # (`npm run registry:publish`) - see docs/RELEASE.md.
+        #
+        # Download and re-hash rather than probing with HEAD: this proves the anonymous URL
+        # clients actually use serves the exact bytes whose hash this job is about to publish,
+        # and it catches a truncated or partially-uploaded asset that a HEAD reports as fine.
+        env:
+          EXPECT: ${{ needs.publish.outputs.mcpb_sha256 }}
+        run: |
+          URL=$(jq -r '.packages[] | select(.registryType=="mcpb") | .identifier' server.json)
+          [ -n "$URL" ] && [ "$URL" != "null" ] || { echo "::error::server.json has no mcpb identifier URL"; exit 1; }
+          echo "release asset: $URL"
+          OUT="$RUNNER_TEMP/released.mcpb"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL -o "$OUT" "$URL"; then
+              GOT=$(sha256sum "$OUT" | awk '{print $1}')
+              if [ "$GOT" = "$EXPECT" ]; then
+                echo "release asset is live and byte-identical to the bundle being published: $GOT"
+                exit 0
+              fi
+              # Present but different bytes. That is not propagation lag, so do not retry it.
+              echo "::error::release asset at $URL hashes $GOT, expected $EXPECT - refusing to publish an immutable entry whose advertised hash does not match the asset"
+              exit 1
+            fi
+            echo "attempt $i: asset not downloadable yet, retrying in 10s..."
+            sleep 10
+          done
+          echo "::error::release asset $URL is not downloadable, so the GitHub Release step most likely soft-failed. npm publish is unaffected; create the Release by hand, then back-publish the registry entry with 'npm run registry:publish' (docs/RELEASE.md)."
+          exit 1
+
       - name: Install mcp-publisher
         # Pinned to a known version (not releases/latest) so a future mcp-publisher release
         # can't silently change publish behavior in this OIDC-privileged job, matching how the
