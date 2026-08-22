@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@ckalima/pipedrive-mcp-server?logo=npm)](https://www.npmjs.com/package/@ckalima/pipedrive-mcp-server)
 [![CI](https://github.com/ckalima/pipedrive-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/ckalima/pipedrive-mcp-server/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-1%2C700%2B%20passing-brightgreen)](https://github.com/ckalima/pipedrive-mcp-server/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-2%2C300%2B%20passing-brightgreen)](https://github.com/ckalima/pipedrive-mcp-server/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 An MCP (Model Context Protocol) server for Pipedrive CRM integration with Claude Code and Claude Desktop. Query, create, and update CRM data directly from your AI assistant.
