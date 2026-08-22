@@ -328,6 +328,29 @@ describe('deals schemas', () => {
       expect(result.cursor).toBe('abc');
     });
 
+    // #170: `fields` enforces the spec's per-token enum (title, notes, custom_fields) rather
+    // than passing an arbitrary string through. Before this the schema accepted any
+    // string and forwarded it, so a wrong token reached Pipedrive to be rejected or,
+    // worse, silently ignored.
+    it('should normalize whitespace in a fields list', () => {
+      expect(SearchDealsSchema.parse({ term: 'x', fields: 'title, notes' }).fields).toBe('title,notes');
+    });
+
+    it('should collapse a repeated fields token', () => {
+      expect(SearchDealsSchema.parse({ term: 'x', fields: 'title,title' }).fields)
+        .toBe('title');
+    });
+
+    it('should reject a fields token outside the spec enum', () => {
+      expect(() => SearchDealsSchema.parse({ term: 'x', fields: 'value' })).toThrow();
+      expect(() => SearchDealsSchema.parse({ term: 'x', fields: 'title,value' })).toThrow();
+    });
+
+    it('should reject an empty or trailing-separator fields value', () => {
+      expect(() => SearchDealsSchema.parse({ term: 'x', fields: '' })).toThrow();
+      expect(() => SearchDealsSchema.parse({ term: 'x', fields: 'title,' })).toThrow();
+    });
+
     it('should reject empty term', () => {
       expect(() => SearchDealsSchema.parse({ term: '' })).toThrow();
     });

@@ -13,6 +13,7 @@ import {
   BoundedQueryParamSchema,
   BoundedCustomFieldsSchema,
   boundedArray,
+  commaSeparatedEnum,
 } from "./common.js";
 
 /**
@@ -118,10 +119,17 @@ export const UpdateOrganizationSchema = IdParamSchema.extend({
 /**
  * Search organizations parameters
  */
+/**
+ * The tokens `/organizations/search` accepts in `fields`, in spec order. The v2 spec calls the
+ * parameter "a comma-separated string array" and uses its enum to constrain each token,
+ * so this is a list membership check, not a single-value enum (#170).
+ */
+export const ORGANIZATION_SEARCH_FIELDS = ["address", "custom_fields", "notes", "name"] as const;
+
 export const SearchOrganizationsSchema = z.object({
   term: SearchTermSchema
     .describe("Search term for organization name or address"),
-  fields: BoundedQueryParamSchema.optional()
+  fields: commaSeparatedEnum(ORGANIZATION_SEARCH_FIELDS).optional()
     .describe("Comma-separated fields to search (allowed: name, address, notes, custom_fields). Defaults to all."),
   exact_match: z.boolean().optional().default(false)
     .describe("Use exact match instead of fuzzy search"),

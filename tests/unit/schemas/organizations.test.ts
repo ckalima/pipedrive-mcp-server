@@ -202,6 +202,29 @@ describe('organizations schemas', () => {
       expect(result.cursor).toBe('abc');
     });
 
+    // #170: `fields` enforces the spec's per-token enum (name, address, notes, custom_fields) rather
+    // than passing an arbitrary string through. Before this the schema accepted any
+    // string and forwarded it, so a wrong token reached Pipedrive to be rejected or,
+    // worse, silently ignored.
+    it('should normalize whitespace in a fields list', () => {
+      expect(SearchOrganizationsSchema.parse({ term: 'x', fields: 'name, address' }).fields).toBe('name,address');
+    });
+
+    it('should collapse a repeated fields token', () => {
+      expect(SearchOrganizationsSchema.parse({ term: 'x', fields: 'name,name' }).fields)
+        .toBe('name');
+    });
+
+    it('should reject a fields token outside the spec enum', () => {
+      expect(() => SearchOrganizationsSchema.parse({ term: 'x', fields: 'email' })).toThrow();
+      expect(() => SearchOrganizationsSchema.parse({ term: 'x', fields: 'name,email' })).toThrow();
+    });
+
+    it('should reject an empty or trailing-separator fields value', () => {
+      expect(() => SearchOrganizationsSchema.parse({ term: 'x', fields: '' })).toThrow();
+      expect(() => SearchOrganizationsSchema.parse({ term: 'x', fields: 'name,' })).toThrow();
+    });
+
     it('should reject empty term', () => {
       expect(() => SearchOrganizationsSchema.parse({ term: '' })).toThrow();
     });

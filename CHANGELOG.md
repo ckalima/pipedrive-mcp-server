@@ -26,6 +26,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   let the backstop restore the very penalty this removes. Only the boot probe cancels anything
   today, so no tool response changes.
 
+- **All five `search_*` tools now enforce the `fields` contract the v2 spec actually states.**
+  The spec models `fields` on every search endpoint as "a comma-separated string array" whose
+  `enum` constrains each *token*. `search_products` read that enum as a single value, so
+  `fields: "name,code"` was rejected before the handler ran. The other four went the opposite
+  way and accepted any string at all, forwarding a token like `bogus` to Pipedrive to be
+  rejected or, worse, silently ignored. Both halves are now one shared validator: every token
+  is checked against that endpoint's allow-list, whitespace is trimmed so `"name, code"`
+  reaches the wire as `"name,code"` rather than silently narrowing the search against a token
+  Pipedrive matches literally, a trailing separator is a rejection rather than a no-op, and a
+  repeated token collapses instead of erroring, since a field-selection list is set membership.
+  The allow-lists are the ones the tool descriptions already published, so no call that
+  followed the documented parameter changes behavior. `search_products` additionally drops the
+  `enum` from its hand-written `inputSchema` literal, which is the only shape hosts see and
+  where a JSON Schema `enum` means exact match.
+
 ## [2.6.0] - 2026-08-21
 
 ### Added

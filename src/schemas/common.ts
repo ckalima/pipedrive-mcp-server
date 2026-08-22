@@ -156,6 +156,51 @@ export const BoundedNameSchema = z.string().max(MAX_NAME_LENGTH);
 /** Opaque / comma-separated query passthrough string, length-bounded. */
 export const BoundedQueryParamSchema = z.string().max(MAX_QUERY_PARAM_LENGTH);
 
+/**
+ * A comma-separated list whose every token must be one of `values`.
+ *
+ * The v2 spec models the `fields` param on all five search endpoints as "a comma-separated
+ * string array" with an `enum` that constrains each *token*, not the whole string. A bare
+ * `z.enum([...])` reads that as a single-value field and rejects the list form the API
+ * documents, which is what made `search_products` the outlier (#170).
+ *
+ * Three properties worth keeping if this is edited:
+ *
+ * - **Tokens are trimmed**, so `"name, code"` reaches the wire as `"name,code"`.
+ *   Normalizing rather than passing through is load-bearing: Pipedrive matches these
+ *   tokens literally, so a leading space would silently narrow the search instead of
+ *   failing, and a silently wrong result is the worst outcome available here.
+ * - **An empty token is a rejection, not a no-op.** `"name,"` splits to `["name", ""]`
+ *   and `""` is not an allowed value, so trailing separators fail loudly rather than
+ *   reaching the API as a malformed list.
+ * - **Duplicates collapse rather than erroring.** A field-selection list is set
+ *   membership, so `"name,name"` means exactly what `"name"` means; rejecting it would
+ *   invent a rule the spec does not state, and forwarding it would pad the query for
+ *   no reason. This also bounds the token count without a separate cap: after the
+ *   dedupe no list can exceed `values.length` entries.
+ */
+export function commaSeparatedEnum(values: readonly string[]) {
+  const allowed = new Set(values);
+
+  // Zod 4 runs refinements even when an earlier string check has already failed, so the
+  // `.max()` below does NOT gate this split. Bail here instead. Without the guard a
+  // multi-megabyte `,,,,` payload expands into a multi-million-element array before
+  // anything rejects it (measured: 2MB of commas costs ~90ms and ~31MB of heap), an
+  // amplification the single-value `z.enum` this replaces could not produce. Returning
+  // no tokens is safe precisely because the parse has already failed on length: the
+  // refinements below pass vacuously, and `.transform()` never runs on a failed parse.
+  const tokensOf = (value: string): string[] =>
+    value.length > MAX_QUERY_PARAM_LENGTH ? [] : value.split(",").map((token) => token.trim());
+
+  return z
+    .string()
+    .max(MAX_QUERY_PARAM_LENGTH)
+    .refine((value) => tokensOf(value).every((token) => allowed.has(token)), {
+      message: `must be a comma-separated list of: ${values.join(", ")}`,
+    })
+    .transform((value) => [...new Set(tokensOf(value))].join(","));
+}
+
 /** Wrap an element schema in a length-bounded array. */
 export function boundedArray<T extends z.ZodTypeAny>(
   element: T,

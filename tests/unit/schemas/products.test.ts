@@ -101,15 +101,42 @@ describe('products schemas', () => {
       expect(() => SearchProductsSchema.parse({ term: 'a'.repeat(501) })).toThrow();
     });
 
-    it('should accept valid fields enum values', () => {
+    it('should accept each allowed fields token on its own', () => {
       ['code', 'custom_fields', 'name'].forEach((fields) => {
         const result = SearchProductsSchema.parse({ term: 'test', fields });
         expect(result.fields).toBe(fields);
       });
     });
 
-    it('should reject invalid fields enum value', () => {
+    it('should accept a comma-separated fields list', () => {
+      // The v2 spec models `fields` as a comma-separated string array whose enum
+      // constrains each token. A single-value enum here rejected the documented
+      // list form (#170).
+      const result = SearchProductsSchema.parse({ term: 'test', fields: 'name,code' });
+      expect(result.fields).toBe('name,code');
+    });
+
+    it('should normalize whitespace in a fields list', () => {
+      const result = SearchProductsSchema.parse({ term: 'test', fields: 'name, code' });
+      expect(result.fields).toBe('name,code');
+    });
+
+    it('should reject invalid fields token', () => {
       expect(() => SearchProductsSchema.parse({ term: 'test', fields: 'description' })).toThrow();
+    });
+
+    it('should reject a fields list containing an invalid token', () => {
+      expect(() => SearchProductsSchema.parse({ term: 'test', fields: 'name,bogus' })).toThrow();
+    });
+
+    it('should reject an empty or trailing-separator fields value', () => {
+      expect(() => SearchProductsSchema.parse({ term: 'test', fields: '' })).toThrow();
+      expect(() => SearchProductsSchema.parse({ term: 'test', fields: 'name,' })).toThrow();
+    });
+
+    it('should collapse a repeated fields token rather than reject it', () => {
+      const result = SearchProductsSchema.parse({ term: 'test', fields: 'name,name,code' });
+      expect(result.fields).toBe('name,code');
     });
 
     it('should accept include_fields product.price', () => {

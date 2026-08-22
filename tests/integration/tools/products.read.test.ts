@@ -332,6 +332,33 @@ describe('products read tools', () => {
       expect(url).toContain('fields=name');
     });
 
+    it('should forward a comma-separated fields list (#170)', async () => {
+      const mockFn = mockApiSuccess({ items: [] });
+      const { searchProducts } = await getProductsTools();
+
+      await searchProducts(SearchProductsSchema.parse({ term: 'test', fields: 'name, code' }));
+
+      const [url] = mockFn.mock.calls[0];
+      // Read through searchParams rather than substring-matching the URL: the comma is
+      // percent-encoded on the wire, and the point of the assertion is the decoded,
+      // whitespace-normalized token list Pipedrive will match literally.
+      expect(new URL(String(url)).searchParams.get('fields')).toBe('name,code');
+    });
+
+    it('advertises fields to hosts without a single-value enum (three-places lockstep, #170)', async () => {
+      const { getTool } = await import('../../../src/tools/index.js');
+      const inputSchema = getTool('pipedrive_search_products')?.inputSchema as {
+        properties: Record<string, Record<string, unknown>>;
+      };
+
+      // The hand-written inputSchema is the only one hosts see. A JSON Schema `enum`
+      // means exact match, so re-adding one here would have hosts refuse the
+      // comma-separated list the Zod schema and the v2 spec both accept, even though
+      // every server-side test still passed.
+      expect(inputSchema.properties.fields).not.toHaveProperty('enum');
+      expect(inputSchema.properties.fields.type).toBe('string');
+    });
+
     it('should not include fields when absent', async () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { searchProducts } = await getProductsTools();

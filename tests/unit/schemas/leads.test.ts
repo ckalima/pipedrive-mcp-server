@@ -398,6 +398,29 @@ describe('leads schemas', () => {
       expect(r.organization_id).toBe(2);
     });
 
+    // #170: `fields` enforces the spec's per-token enum (title, notes, custom_fields) rather
+    // than passing an arbitrary string through. Before this the schema accepted any
+    // string and forwarded it, so a wrong token reached Pipedrive to be rejected or,
+    // worse, silently ignored.
+    it('should normalize whitespace in a fields list', () => {
+      expect(SearchLeadsSchema.parse({ term: 'x', fields: 'title, notes' }).fields).toBe('title,notes');
+    });
+
+    it('should collapse a repeated fields token', () => {
+      expect(SearchLeadsSchema.parse({ term: 'x', fields: 'title,title' }).fields)
+        .toBe('title');
+    });
+
+    it('should reject a fields token outside the spec enum', () => {
+      expect(() => SearchLeadsSchema.parse({ term: 'x', fields: 'owner' })).toThrow();
+      expect(() => SearchLeadsSchema.parse({ term: 'x', fields: 'title,owner' })).toThrow();
+    });
+
+    it('should reject an empty or trailing-separator fields value', () => {
+      expect(() => SearchLeadsSchema.parse({ term: 'x', fields: '' })).toThrow();
+      expect(() => SearchLeadsSchema.parse({ term: 'x', fields: 'title,' })).toThrow();
+    });
+
     it('should reject an include_fields value other than lead.was_seen', () => {
       expect(() => SearchLeadsSchema.parse({ term: 'x', include_fields: 'person' })).toThrow();
     });

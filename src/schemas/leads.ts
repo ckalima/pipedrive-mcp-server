@@ -10,6 +10,7 @@ import {
   DateStringSchema,
   BoundedQueryParamSchema,
   boundedArray,
+  commaSeparatedEnum,
 } from "./common.js";
 
 /**
@@ -126,10 +127,17 @@ export const GetLeadConversionStatusSchema = LeadIdSchema.extend({
 /**
  * Search leads parameters (v2 endpoint)
  */
+/**
+ * The tokens `/leads/search` accepts in `fields`, in spec order. The v2 spec calls the
+ * parameter "a comma-separated string array" and uses its enum to constrain each token,
+ * so this is a list membership check, not a single-value enum (#170).
+ */
+export const LEAD_SEARCH_FIELDS = ["custom_fields", "notes", "title"] as const;
+
 export const SearchLeadsSchema = z.object({
   term: SearchTermSchema
     .describe("Search term for lead title, notes, or custom fields"),
-  fields: BoundedQueryParamSchema.optional()
+  fields: commaSeparatedEnum(LEAD_SEARCH_FIELDS).optional()
     .describe("Comma-separated fields to search (allowed: title, notes, custom_fields). Defaults to all."),
   person_id: z.number().int().positive().optional()
     .describe("Filter leads by linked person ID"),
