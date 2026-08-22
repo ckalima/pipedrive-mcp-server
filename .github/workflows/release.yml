@@ -23,6 +23,13 @@ on:
       - 'v*.*.*'
   workflow_dispatch: {}
 
+# Serialize runs for a given tag. Two concurrent runs of the same tag would race on the
+# Release asset and on the registry publish; `cancel-in-progress: false` because cancelling a
+# run mid-publish is worse than queueing it - npm and the registry are both irreversible.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 # Restrictive workflow-wide default; the publish job opts up to exactly what it needs.
 permissions: {}
 
@@ -196,6 +203,15 @@ jobs:
         with:
           name: ${{ github.ref_name }}
           body_path: RELEASE_NOTES.md
+          # The attached .mcpb is the artifact an IMMUTABLE registry entry hashes and points at,
+          # so it must never be swapped after the fact. This action defaults `overwrite_files` to
+          # true and implements it as delete-then-upload, which means a "Re-run all jobs" on an
+          # already-published tag would replace the asset with a fresh build - and the bundle is
+          # not byte-reproducible, so every client install would then fail hash verification
+          # against the immutable entry. Worse, a failed re-upload after the delete leaves the
+          # published URL 404ing. Keep the first attached asset authoritative; the registry job's
+          # precondition below independently fails the run if it ever disagrees with this build.
+          overwrite_files: false
           files: |
             ${{ steps.mcpb.outputs.file }}
             ${{ steps.mcpb.outputs.file }}.sha256
@@ -291,7 +307,10 @@ jobs:
           echo "release asset: $URL"
           OUT="$RUNNER_TEMP/released.mcpb"
           for i in 1 2 3 4 5 6; do
-            if curl -fsSL -o "$OUT" "$URL"; then
+            # Bounded: without --max-time a CDN that accepts the connection and then stops
+            # sending bytes hangs attempt 1 forever, so attempts 2-6 never run and the job sits
+            # until the Actions job timeout.
+            if curl -fsSL --connect-timeout 10 --max-time 300 -o "$OUT" "$URL"; then
               GOT=$(sha256sum "$OUT" | awk '{print $1}')
               if [ "$GOT" = "$EXPECT" ]; then
                 echo "release asset is live and byte-identical to the bundle being published: $GOT"
@@ -301,8 +320,10 @@ jobs:
               echo "::error::release asset at $URL hashes $GOT, expected $EXPECT - refusing to publish an immutable entry whose advertised hash does not match the asset"
               exit 1
             fi
-            echo "attempt $i: asset not downloadable yet, retrying in 10s..."
-            sleep 10
+            if [ "$i" -lt 6 ]; then
+              echo "attempt $i: asset not downloadable yet, retrying in 10s..."
+              sleep 10
+            fi
           done
           echo "::error::release asset $URL is not downloadable, so the GitHub Release step most likely soft-failed. npm publish is unaffected; create the Release by hand, then back-publish the registry entry with 'npm run registry:publish' (docs/RELEASE.md)."
           exit 1
