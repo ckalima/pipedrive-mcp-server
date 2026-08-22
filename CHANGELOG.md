@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-08-21
+
 ### Fixed
 
 - **A cancelled request can no longer punish every other caller through the shared circuit
@@ -346,6 +348,7 @@ published from GitHub Actions with build provenance.
 - **Destructive operations gated** behind the `PIPEDRIVE_ENABLE_DESTRUCTIVE=true`
   environment variable (disabled by default).
 
+[2.7.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.7.0
 [2.6.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.6.0
 [2.5.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.5.0
 [2.4.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.4.0
