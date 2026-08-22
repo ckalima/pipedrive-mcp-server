@@ -6,10 +6,11 @@
  * comes back empty. Both failure modes are silent and both have actually happened here:
  *
  *  - `406d7e1` ("chore(release): prepare 2.2.0") RENAMED the `## [2.1.0]` heading to `## [2.2.0]`
- *    and prepended the new notes above the old body. 2.1.0 survived only as a link definition, so
- *    its release shipped the empty-notes fallback, while 2.2.0's GitHub Release body was published
- *    carrying 2.1.0's entire changelog (two `### Added` blocks). Nine version headings went by
- *    before anyone noticed.
+ *    and prepended the new notes above the old body. v2.1.0 had already shipped correct notes by
+ *    then, so the empty-notes fallback never fired; what shipped wrong was v2.2.0, whose GitHub
+ *    Release body was built from the merged section and carries 2.1.0's entries under a second
+ *    `### Added` heading. In the file, 2.1.0 survived only as a link definition, and nine version
+ *    headings went by before anyone noticed. Re-cutting that tag today WOULD hit the fallback.
  *  - The first attempt to repair that re-inserted 2.1.0's section without removing the orphaned
  *    copy still sitting under 2.2.0, leaving the same body in the file twice.
  *
