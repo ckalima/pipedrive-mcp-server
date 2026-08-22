@@ -57,7 +57,7 @@ This project follows semver. Judgment calls that have come up:
 Both used to be manual; the Release workflow now does them on the tag push:
 
 - **`.mcpb` bundle**: the `publish` job builds it (`npm run bundle:mcpb` from a fresh build; `bundle/server/` is gitignored and rebuilt at pack time) and attaches the `.mcpb` plus a `.sha256` sidecar to the GitHub Release.
-- **MCP registry**: the `registry` job publishes the bumped `server.json` (npm + mcpb packages) via `mcp-publisher login github-oidc`, after injecting the attached bundle's real hash. Keep `server.json`'s `environmentVariables` accurate (currently `PIPEDRIVE_API_KEY`, `PIPEDRIVE_MODE`, `PIPEDRIVE_ENABLE_DESTRUCTIVE`, `PIPEDRIVE_IMAGE_BASE_DIR`).
+- **MCP registry**: the `registry` job publishes the bumped `server.json` (npm + mcpb packages) via `mcp-publisher login github-oidc`, after injecting the attached bundle's real hash. Immediately before publishing, it downloads the bundle from the very URL it is about to advertise and re-hashes it, so a Release step that soft-failed reds the registry job instead of permanently advertising a 404. That step is `continue-on-error` on purpose (npm publish is the irreversible one) and it is also what uploads the bundle, so without this precondition a missing asset would sail straight into an immutable entry. Keep `server.json`'s `environmentVariables` accurate (currently `PIPEDRIVE_API_KEY`, `PIPEDRIVE_MODE`, `PIPEDRIVE_ENABLE_DESTRUCTIVE`, `PIPEDRIVE_IMAGE_BASE_DIR`).
 
 ### Verifying a release
 
@@ -93,13 +93,15 @@ Step 3's `jq` path is fussier than it looks, and getting it wrong produces a con
 
 ### Manual fallback / back-publishing a missed version
 
-If the `registry` job did not run (e.g. it predates a release) or you need to publish a version whose entry was never created, run the local fallback. The registry version is immutable, so the published `fileSha256` MUST match the bytes clients download — fetch the target release's `.mcpb` asset and pass its path so the hash comes from that exact file (never a rebuild, never hand-typed):
+If the `registry` job did not run (e.g. it predates a release), failed its Release-asset precondition, or you need to publish a version whose entry was never created, run the local fallback. The registry version is immutable, so the published `fileSha256` MUST match the bytes clients download — fetch the target release's `.mcpb` asset and pass its path so the hash comes from that exact file (never a rebuild, never hand-typed):
 
 ```
 gh release download vX.Y.Z --pattern '*.mcpb'      # the durable asset for that version
 npm run registry:publish -- ./pipedrive-mcp-server-X.Y.Z.mcpb
 git checkout server.json                           # restore the committed sentinel hash
 ```
+
+If the job failed specifically on **Verify the Release asset is live**, the sequence matters: npm already published (immutable, fine), but the GitHub Release or its `.mcpb` upload did not land. Repair that first - create the Release from `CHANGELOG.md`, then `gh release upload vX.Y.Z pipedrive-mcp-server-X.Y.Z.mcpb pipedrive-mcp-server-X.Y.Z.mcpb.sha256` - and only then back-publish the registry entry. Do not reach for a workaround that publishes anyway; an immutable entry pointing at a missing asset is exactly the outcome the check exists to prevent.
 
 `registry:publish` authenticates with `gh auth token` and runs `mcp-publisher validate && publish`. A version published with the WRONG hash is unrecoverable (immutable) — you would have to cut a new version.
 
