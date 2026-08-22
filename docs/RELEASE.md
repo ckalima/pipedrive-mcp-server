@@ -79,15 +79,20 @@ This project follows semver. Judgment calls that have come up:
    leave a fresh empty `## [Unreleased]` above it, and add the
    `[X.Y.Z]: https://github.com/.../releases/tag/vX.Y.Z` link line.
 3. **Run the full gate locally**: `npm test` (includes the version-consistency and
-   gen-docs drift tests), `npx tsc --noEmit`, `npm run lint`, `npm ci --dry-run`
-   (the only check on the hand-edited lockfile). Optionally
+   gen-docs drift tests), `npm run typecheck`, `npm run lint`, `npm ci --dry-run`
+   (the only check on the hand-edited lockfile). Use `npm run typecheck`, not
+   `npx tsc --noEmit`: the latter reads `tsconfig.json`, whose `include` is
+   `src/**/*`, so it silently skips `tests/` and `scripts/` - the exact gap
+   `tsconfig.check.json` was added to close. Optionally
    `workflow_dispatch` the Release workflow from `main` for a publish-skipping
    dry-run that still builds and validates the tarball.
 4. **Merge** the release commit to `main` (via PR).
 5. **Tag and push**: `git tag vX.Y.Z && git push origin vX.Y.Z` (admin). The
    workflow publishes to npm with provenance and cuts the GitHub Release.
-6. **Verify**: npm shows the version with a provenance badge; the GitHub Release
-   exists with the CHANGELOG notes.
+6. **Verify all four targets**, using the commands in
+   [Verifying a release](#verifying-a-release). A green workflow is necessary but
+   not sufficient - the registry hash in particular can publish successfully and
+   still be wrong.
 
 ## Post-release (now automated by the workflow)
 
@@ -100,6 +105,38 @@ Both used to be manual; the Release workflow now does them on the tag push:
   via `mcp-publisher login github-oidc`, after injecting the attached bundle's real hash. Keep
   `server.json`'s `environmentVariables` accurate (currently `PIPEDRIVE_API_KEY`,
   `PIPEDRIVE_MODE`, `PIPEDRIVE_ENABLE_DESTRUCTIVE`, `PIPEDRIVE_IMAGE_BASE_DIR`).
+
+### Verifying a release
+
+The workflow going green means each job exited 0, not that what it published is correct. Two failure modes survive a green run: npm can accept a publish that carries no provenance attestation, and the registry accepts any `fileSha256` at all, because it never checks the hash itself - only MCP clients do, at install time. Since registry versions are immutable, a wrong hash there is unrecoverable and costs a whole new version to fix. So verify the artifacts, not the run.
+
+```bash
+V=X.Y.Z
+
+# 1. npm: right version, tagged latest, and carrying a real provenance attestation
+npm view @ckalima/pipedrive-mcp-server version dist-tags
+npm view @ckalima/pipedrive-mcp-server@"$V" --json | jq '.dist.attestations'
+
+# 2. GitHub Release: published (not draft) and carrying both bundle assets
+gh release view "v$V" --json isDraft,assets \
+  --jq '{draft: .isDraft, assets: [.assets[].name]}'
+
+# 3. MCP registry: active and flagged latest
+curl -sS "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.ckalima/pipedrive-mcp-server&version=latest" \
+  | jq '.servers[] | {version: .server.version,
+                      status: ._meta["io.modelcontextprotocol.registry/official"].status,
+                      isLatest: ._meta["io.modelcontextprotocol.registry/official"].isLatest,
+                      mcpb: (.server.packages[] | select(.registryType=="mcpb") | {identifier, fileSha256})}'
+
+# 4. The check that actually matters: do the bytes clients download match the
+#    hash the registry advertises? Re-download from the registry's own identifier
+#    URL - not a local rebuild, and not CI's .sha256 sidecar, which shares a
+#    source with the injected hash and so agrees even when the bundle would not.
+curl -sSL "https://github.com/ckalima/pipedrive-mcp-server/releases/download/v$V/pipedrive-mcp-server-$V.mcpb" -o /tmp/verify.mcpb
+shasum -a 256 /tmp/verify.mcpb
+```
+
+Step 3's `jq` path is fussier than it looks, and getting it wrong produces a confident-looking wrong answer rather than an error. The entry is nested at `.servers[].server`, so `.servers[].version` is `undefined` for every row - while `._meta["io.modelcontextprotocol.registry/official"].status` sits at the level you probably guessed and happily prints `active`. Read both fields from the paths above, or dump one entry's keys first.
 
 ### Manual fallback / back-publishing a missed version
 
