@@ -134,8 +134,9 @@ describe('products schemas', () => {
       expect(() => SearchProductsSchema.parse({ term: 'test', fields: 'name,' })).toThrow();
     });
 
-    it('should reject more fields tokens than there are allowed values', () => {
-      expect(() => SearchProductsSchema.parse({ term: 'test', fields: 'name,name,name,name' })).toThrow();
+    it('should collapse a repeated fields token rather than reject it', () => {
+      const result = SearchProductsSchema.parse({ term: 'test', fields: 'name,name,code' });
+      expect(result.fields).toBe('name,code');
     });
 
     it('should accept include_fields product.price', () => {

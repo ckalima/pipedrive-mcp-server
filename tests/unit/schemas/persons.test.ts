@@ -267,6 +267,29 @@ describe('persons schemas', () => {
       expect(result.exact_match).toBe(true);
     });
 
+    // #170: `fields` enforces the spec's per-token enum (name, email, phone, notes, custom_fields) rather
+    // than passing an arbitrary string through. Before this the schema accepted any
+    // string and forwarded it, so a wrong token reached Pipedrive to be rejected or,
+    // worse, silently ignored.
+    it('should normalize whitespace in a fields list', () => {
+      expect(SearchPersonsSchema.parse({ term: 'x', fields: 'name, email' }).fields).toBe('name,email');
+    });
+
+    it('should collapse a repeated fields token', () => {
+      expect(SearchPersonsSchema.parse({ term: 'x', fields: 'name,name' }).fields)
+        .toBe('name');
+    });
+
+    it('should reject a fields token outside the spec enum', () => {
+      expect(() => SearchPersonsSchema.parse({ term: 'x', fields: 'company' })).toThrow();
+      expect(() => SearchPersonsSchema.parse({ term: 'x', fields: 'name,company' })).toThrow();
+    });
+
+    it('should reject an empty or trailing-separator fields value', () => {
+      expect(() => SearchPersonsSchema.parse({ term: 'x', fields: '' })).toThrow();
+      expect(() => SearchPersonsSchema.parse({ term: 'x', fields: 'name,' })).toThrow();
+    });
+
     // REGRESSION GUARD (revert-proof): the old boolean params must no longer exist on the parsed output.
     it('should NOT carry search_by_email / search_by_phone (removed in v2 migration)', () => {
       const result = SearchPersonsSchema.parse({ term: 'x', search_by_email: true, search_by_phone: false } as Record<string, unknown>);

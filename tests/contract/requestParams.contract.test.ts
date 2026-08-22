@@ -199,11 +199,10 @@ describe("request-params contract (v2)", () => {
     // Driven through `handleCallTool`, not the handler, so the Zod schema is inside
     // the boundary under test: a schema that rejects the documented comma-separated
     // `fields` list never reaches the wire, and calling the handler directly would
-    // hide that (#170). Revert-proof twice over: FAILS if the schema narrows back to
-    // a single-value enum, and FAILS if `fields` carries a token outside [code,
-    // custom_fields, name] or `include_fields` outside [product.price], both of which
-    // the spec enum-constrains on searchProducts unlike the looser person/deal search
-    // field lists.
+    // hide that (#170). This case is the POSITIVE half only: it fails if the schema
+    // narrows back to a single-value enum, but a wide-open `z.string()` would also
+    // pass it, since "name,code" conforms either way. The negative half below is what
+    // pins the token set.
     it("searchProducts query conforms via the dispatcher (comma-separated fields)", async () => {
       const mockFn = mockApiSuccess({ items: [] });
       const { handleCallTool } = await import("../../src/index.js");
@@ -231,6 +230,27 @@ describe("request-params contract (v2)", () => {
       const url = capturedUrl(mockFn);
       expect(new URL(url).searchParams.get("fields")).toBe("name,code");
       expect(() => assertQueryConformsToSpec("searchProducts", url)).not.toThrow();
+    });
+
+    // The other half: an out-of-enum token must die at the dispatcher rather than
+    // reach the wire. Asserting zero fetch calls is the point - a contract checker
+    // can only judge a URL that was actually built, so without this case a
+    // `z.string()` regression would send `fields=name,bogus` to Pipedrive and no
+    // test in the suite would notice.
+    it("searchProducts rejects an out-of-enum fields token before any request", async () => {
+      const mockFn = mockApiSuccess({ items: [] });
+      const { handleCallTool } = await import("../../src/index.js");
+
+      const result = await handleCallTool({
+        params: {
+          name: "pipedrive_search_products",
+          arguments: { term: "widget", fields: "name,bogus" },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("code, custom_fields, name");
+      expect(mockFn).not.toHaveBeenCalled();
     });
   });
 

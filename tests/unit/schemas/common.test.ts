@@ -571,18 +571,42 @@ describe('common schemas', () => {
       expect(() => Schema.parse(',name')).toThrow();
     });
 
-    it('rejects more tokens than the cap, which defaults to the value count', () => {
-      expect(() => Schema.parse('name,name,name,name')).toThrow();
-    });
-
-    it('honours an explicit max below the value count', () => {
-      const OneOnly = commaSeparatedEnum(['code', 'name'] as const, 1);
-      expect(OneOnly.parse('code')).toBe('code');
-      expect(() => OneOnly.parse('code,name')).toThrow();
+    it('collapses duplicate tokens instead of rejecting them', () => {
+      // A field-selection list is set membership, so repeating a legal token is
+      // spec-valid and means what the single token means. Rejecting it would invent a
+      // rule the spec does not state; forwarding it would pad the query for nothing.
+      expect(Schema.parse('name,name')).toBe('name');
+      expect(Schema.parse('name,code,name')).toBe('name,code');
+      expect(Schema.parse('name,name,name,name')).toBe('name');
     });
 
     it('rejects a value past the query-param length cap', () => {
-      expect(() => Schema.parse('x'.repeat(MAX_QUERY_PARAM_LENGTH + 1))).toThrow();
+      // Deliberately made of VALID tokens: 'x'.repeat(2001) would fail membership too,
+      // so it would pass even with `.max()` deleted and prove nothing about the cap.
+      const overlong = ' '.repeat(MAX_QUERY_PARAM_LENGTH - 3) + 'name';
+      expect(overlong).toHaveLength(MAX_QUERY_PARAM_LENGTH + 1);
+      expect(() => Schema.parse(overlong)).toThrow();
+
+      // One character shorter is accepted and normalizes, so the boundary is the cap
+      // itself and not some other check tripping first.
+      expect(Schema.parse(' '.repeat(MAX_QUERY_PARAM_LENGTH - 4) + 'name')).toBe('name');
+    });
+
+    it('does not expand an oversize payload before rejecting it', () => {
+      // Zod 4 runs refinements even after `.max()` has already failed, so without a
+      // guard this 2MB payload is split into ~2M tokens before anything rejects it
+      // (measured: ~90ms and ~31MB of heap). The single-value `z.enum` this factory
+      // replaces could not be made to do that, so the guard is not optional.
+      //
+      // Asserted via the ISSUE SET rather than a stopwatch: the membership refine can
+      // only fail if the split actually ran and produced empty tokens. One issue means
+      // the guard short-circuited; two means it did the work. That is deterministic,
+      // where a timing or heap threshold would flake on a loaded CI box.
+      const result = Schema.safeParse(','.repeat(2_000_000));
+
+      expect(result.success).toBe(false);
+      const codes = result.error!.issues.map((issue) => issue.code);
+      expect(codes).toEqual(['too_big']);
     });
   });
 });
