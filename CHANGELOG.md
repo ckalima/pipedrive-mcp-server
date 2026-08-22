@@ -26,6 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   let the backstop restore the very penalty this removes. Only the boot probe cancels anything
   today, so no tool response changes.
 
+- **`search_products` now accepts the comma-separated `fields` list the v2 spec documents.**
+  The v2 spec models `fields` as a comma-separated string array whose `enum` constrains each
+  token, but the schema read that enum as a single-value field, so `fields: "name,code"` was
+  rejected before the handler ran while the four sibling search tools took the list form
+  happily. The parameter now validates every token against `code` / `custom_fields` / `name`,
+  caps the token count, and trims whitespace so `"name, code"` reaches the wire as
+  `"name,code"` rather than silently narrowing the search against a token Pipedrive matches
+  literally. A trailing separator is a rejection, not a no-op. The hand-written `inputSchema`
+  literal drops its `enum` in lockstep, since that is the only shape hosts see and a JSON
+  Schema `enum` means exact match.
+
 ## [2.6.0] - 2026-08-21
 
 ### Added

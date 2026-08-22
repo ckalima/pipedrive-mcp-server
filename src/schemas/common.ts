@@ -156,6 +156,44 @@ export const BoundedNameSchema = z.string().max(MAX_NAME_LENGTH);
 /** Opaque / comma-separated query passthrough string, length-bounded. */
 export const BoundedQueryParamSchema = z.string().max(MAX_QUERY_PARAM_LENGTH);
 
+/**
+ * A comma-separated list whose every token must be one of `values`.
+ *
+ * The v2 spec models several query params as "a comma-separated string array" with an
+ * `enum` that constrains each *token*, not the whole string. A bare `z.enum([...])`
+ * reads that as a single-value field and rejects the list form the API documents, which
+ * is what made `search_products` the outlier among the search tools (#170).
+ *
+ * Two properties worth keeping if this is edited:
+ *
+ * - **Tokens are trimmed and rejoined**, so `"name, code"` reaches the wire as
+ *   `"name,code"`. Normalizing rather than passing through is load-bearing: Pipedrive
+ *   matches these tokens literally, so a leading space would silently narrow the search
+ *   instead of failing, and a silently wrong result is the worst outcome available here.
+ * - **An empty token is a rejection, not a no-op.** `"name,"` splits to `["name", ""]`
+ *   and `""` is not an allowed value, so trailing separators fail loudly rather than
+ *   reaching the API as a malformed list.
+ *
+ * `max` defaults to the number of allowed values, which is the largest meaningful list;
+ * it exists to bound a repeated-token payload (`"name,name,name,..."`), not to express
+ * a product rule.
+ */
+export function commaSeparatedEnum(values: readonly string[], max: number = values.length) {
+  const allowed = new Set(values);
+  const tokensOf = (value: string) => value.split(",").map((token) => token.trim());
+
+  return z
+    .string()
+    .max(MAX_QUERY_PARAM_LENGTH)
+    .refine((value) => tokensOf(value).every((token) => allowed.has(token)), {
+      message: `must be a comma-separated list of: ${values.join(", ")}`,
+    })
+    .refine((value) => tokensOf(value).length <= max, {
+      message: `must not list more than ${max} value(s)`,
+    })
+    .transform((value) => tokensOf(value).join(","));
+}
+
 /** Wrap an element schema in a length-bounded array. */
 export function boundedArray<T extends z.ZodTypeAny>(
   element: T,

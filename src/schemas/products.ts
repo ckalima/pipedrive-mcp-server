@@ -15,6 +15,7 @@ import {
   BoundedQueryParamSchema,
   BoundedProductCustomFieldsSchema,
   boundedArray,
+  commaSeparatedEnum,
 } from "./common.js";
 
 // ─── U1: Read schemas ─────────────────────────────────────────────────────────
@@ -45,13 +46,20 @@ export const ListProductsSchema = PaginationParamsSchema.extend({
 export const GetProductSchema = IdParamSchema;
 
 /**
+ * The tokens `/products/search` accepts in `fields`. The v2 spec calls the parameter
+ * "a comma-separated string array" and uses its enum to constrain each token, so this
+ * is a list membership check, not a single-value enum (#170).
+ */
+export const PRODUCT_SEARCH_FIELDS = ["code", "custom_fields", "name"] as const;
+
+/**
  * Search products parameters
  */
 export const SearchProductsSchema = z.object({
   term: SearchTermSchema
     .describe("Search term for product name, code, or custom fields"),
-  fields: z.enum(["code", "custom_fields", "name"]).optional()
-    .describe("Field to search in (code, custom_fields, name). Defaults to all."),
+  fields: commaSeparatedEnum(PRODUCT_SEARCH_FIELDS).optional()
+    .describe("Comma-separated fields to search (allowed: code, custom_fields, name). Defaults to all."),
   exact_match: z.boolean().optional().default(false)
     .describe("Use exact match instead of fuzzy search"),
   include_fields: z.enum(["product.price"]).optional()

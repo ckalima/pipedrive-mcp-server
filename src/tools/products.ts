@@ -689,7 +689,7 @@ export const productTools = [
       type: "object" as const,
       properties: {
         term: { type: "string", description: "Search term" },
-        fields: { type: "string", enum: ["code", "custom_fields", "name"], description: "Field to search in. Defaults to all." },
+        fields: { type: "string", description: "Comma-separated fields to search: code, custom_fields, name. Defaults to all." },
         exact_match: { type: "boolean", description: "Use exact match" },
         include_fields: { type: "string", enum: ["product.price"], description: "Extra fields to include (product.price)" },
         limit: { type: "number", description: "Number of results (1-100)" },

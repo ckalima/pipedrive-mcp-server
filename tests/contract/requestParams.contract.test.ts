@@ -196,30 +196,41 @@ describe("request-params contract (v2)", () => {
       expect(() => assertQueryConformsToSpec("searchProjects", capturedUrl(mockFn))).not.toThrow();
     });
 
-    // Revert-proof: FAILS if `fields` carries a token outside [code, custom_fields,
-    // name] or `include_fields` outside [product.price]: both are enum-constrained
-    // on searchProducts, unlike the looser person/deal search field lists.
-    it("searchProducts query conforms (fields/include_fields in enum)", async () => {
+    // Driven through `handleCallTool`, not the handler, so the Zod schema is inside
+    // the boundary under test: a schema that rejects the documented comma-separated
+    // `fields` list never reaches the wire, and calling the handler directly would
+    // hide that (#170). Revert-proof twice over: FAILS if the schema narrows back to
+    // a single-value enum, and FAILS if `fields` carries a token outside [code,
+    // custom_fields, name] or `include_fields` outside [product.price], both of which
+    // the spec enum-constrains on searchProducts unlike the looser person/deal search
+    // field lists.
+    it("searchProducts query conforms via the dispatcher (comma-separated fields)", async () => {
       const mockFn = mockApiSuccess({ items: [] });
-      const { searchProducts } = await import("../../src/tools/products.js");
+      const { handleCallTool } = await import("../../src/index.js");
 
-      await searchProducts({
-        term: "widget",
-        // Single token, not "name,code": the Zod enum on searchProducts admits one
-        // value, so the dispatcher would reject a comma-separated list before any
-        // handler ran. That is a real schema-vs-spec gap (the v2 spec calls this a
-        // comma-separated array, and every sibling search schema accepts one) filed as
-        // #170, not something this test narrowing introduced, since the old value was
-        // handed straight to the handler and never crossed the dispatcher either. This
-        // test asserts the query shape; restore the list case with #170.
-        fields: "name",
-        exact_match: true,
-        include_fields: "product.price",
-        limit: 25,
-        cursor: "cur1",
+      const result = await handleCallTool({
+        params: {
+          name: "pipedrive_search_products",
+          arguments: {
+            term: "widget",
+            fields: "name,code",
+            exact_match: true,
+            include_fields: "product.price",
+            limit: 25,
+            cursor: "cur1",
+          },
+        },
       });
 
-      expect(() => assertQueryConformsToSpec("searchProducts", capturedUrl(mockFn))).not.toThrow();
+      // A validation failure returns isError without ever calling fetch, which would
+      // leave `capturedUrl` reading an empty mock. Assert the call happened first so
+      // the failure names the real cause.
+      expect(result.isError).toBeUndefined();
+      expect(mockFn).toHaveBeenCalledOnce();
+
+      const url = capturedUrl(mockFn);
+      expect(new URL(url).searchParams.get("fields")).toBe("name,code");
+      expect(() => assertQueryConformsToSpec("searchProducts", url)).not.toThrow();
     });
   });
 

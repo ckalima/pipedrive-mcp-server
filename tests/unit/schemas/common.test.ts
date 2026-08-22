@@ -23,6 +23,7 @@ import {
   BoundedNameSchema,
   BoundedQueryParamSchema,
   boundedArray,
+  commaSeparatedEnum,
   BoundedCustomFieldsSchema,
   BoundedProductCustomFieldsSchema,
   MAX_TEXT_LENGTH,
@@ -537,6 +538,51 @@ describe('common schemas', () => {
 
     it('rejects a nested object value (product values are flat)', () => {
       expect(() => BoundedProductCustomFieldsSchema.parse({ hash1: { nested: 1 } })).toThrow();
+    });
+  });
+
+  describe('commaSeparatedEnum (#170)', () => {
+    const Schema = commaSeparatedEnum(['code', 'custom_fields', 'name'] as const);
+
+    it('accepts a single allowed token', () => {
+      expect(Schema.parse('name')).toBe('name');
+    });
+
+    it('accepts a comma-separated list of allowed tokens', () => {
+      expect(Schema.parse('name,code')).toBe('name,code');
+    });
+
+    it('trims surrounding whitespace so the wire value stays literal', () => {
+      // Pipedrive matches these tokens literally, so a stray space would silently
+      // narrow the search rather than fail. Normalize instead of passing through.
+      expect(Schema.parse('name, code')).toBe('name,code');
+      expect(Schema.parse('  name  ,  custom_fields ')).toBe('name,custom_fields');
+    });
+
+    it('rejects a token outside the allowed set', () => {
+      expect(() => Schema.parse('description')).toThrow();
+      expect(() => Schema.parse('name,description')).toThrow();
+    });
+
+    it('rejects an empty string and a trailing separator', () => {
+      // '' and 'name,' both produce an empty token, which is not an allowed value.
+      expect(() => Schema.parse('')).toThrow();
+      expect(() => Schema.parse('name,')).toThrow();
+      expect(() => Schema.parse(',name')).toThrow();
+    });
+
+    it('rejects more tokens than the cap, which defaults to the value count', () => {
+      expect(() => Schema.parse('name,name,name,name')).toThrow();
+    });
+
+    it('honours an explicit max below the value count', () => {
+      const OneOnly = commaSeparatedEnum(['code', 'name'] as const, 1);
+      expect(OneOnly.parse('code')).toBe('code');
+      expect(() => OneOnly.parse('code,name')).toThrow();
+    });
+
+    it('rejects a value past the query-param length cap', () => {
+      expect(() => Schema.parse('x'.repeat(MAX_QUERY_PARAM_LENGTH + 1))).toThrow();
     });
   });
 });
