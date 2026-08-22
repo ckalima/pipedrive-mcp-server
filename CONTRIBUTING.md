@@ -55,25 +55,17 @@ export const myTools = [
 
 Two markers in the README table are driven by tool metadata, so keep them honest:
 
-- **Destructive tools** (deletes, irreversible conversions) are gated by the
-  `PIPEDRIVE_ENABLE_DESTRUCTIVE` env var. A destructive tool must do BOTH:
-  1. Call `destructiveOperationGuard()` as the first statement of its handler (the
-     runtime gate), and
+- **Destructive tools** (deletes, irreversible conversions) are gated by the `PIPEDRIVE_ENABLE_DESTRUCTIVE` env var. A destructive tool must do BOTH:
+  1. Call `destructiveOperationGuard()` as the first statement of its handler (the runtime gate), and
   2. Declare `destructive: true` on its tool def (the doc marker, rendered as 🔒).
 
-  A unit test (`tests/unit/gen-docs.test.ts`) statically scans handler source for the
-  guard and fails if the declared field disagrees. Never classify a handler by running
-  it: handlers can issue live Pipedrive writes.
+  A unit test (`tests/unit/gen-docs.test.ts`) statically scans handler source for the guard and fails if the declared field disagrees. Never classify a handler by running it: handlers can issue live Pipedrive writes.
 
-- **Growth+ tools** (require a Pipedrive Growth+ plan) are flagged ⭑ by including the
-  literal string `Growth+` in the tool description.
+- **Growth+ tools** (require a Pipedrive Growth+ plan) are flagged ⭑ by including the literal string `Growth+` in the tool description.
 
 ## Generated Documentation
 
-The README tool table and the MCPB `bundle/manifest.json` `tools` array are generated
-from the live tool registry by `npm run gen:docs` (`scripts/gen-docs.ts`). The
-generator never executes handler code. CI runs the generator and fails on any diff, so
-regenerate and commit after changing tools:
+The README tool table and the MCPB `bundle/manifest.json` `tools` array are generated from the live tool registry by `npm run gen:docs` (`scripts/gen-docs.ts`). The generator never executes handler code. CI runs the generator and fails on any diff, so regenerate and commit after changing tools:
 
 ```bash
 npm run gen:docs
@@ -82,9 +74,7 @@ npm run gen:docs
 Bundle tracking:
 
 - `bundle/manifest.json` is generated and committed.
-- `bundle/server/` (compiled output) and `*.mcpb` (the packed bundle) are gitignored.
-  Rebuild the distributable bundle with `npm run bundle:mcpb` (a release-time step, not
-  part of per-PR CI).
+- `bundle/server/` (compiled output) and `*.mcpb` (the packed bundle) are gitignored. Rebuild the distributable bundle with `npm run bundle:mcpb` (a release-time step, not part of per-PR CI).
 
 ## Testing
 
