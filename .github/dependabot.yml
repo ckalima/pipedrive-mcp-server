@@ -11,6 +11,20 @@ updates:
       - "dependencies"
       - "area: infra"
     groups:
+      # vitest and @vitest/coverage-v8 are version-locked: coverage-v8 declares an
+      # EXACT peer on its matching vitest ("vitest": "5.0.0", not a range). A PR that
+      # bumps one without the other therefore can never install -- `npm ci` dies with
+      # ERESOLVE before a single test runs, so CI is red on both halves and neither can
+      # merge to unblock the other. Ungrouped majors produced exactly that deadlock
+      # (#188/#189). Grouping the whole family keeps them in lockstep.
+      #
+      # Declared BEFORE npm-minor-patch because Dependabot assigns each dependency to
+      # the first group it matches, and omitting `update-types` here is deliberate: the
+      # default is every SemVer level, which is what makes the major bump land as one PR.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
       npm-minor-patch:
         update-types:
           - "minor"
