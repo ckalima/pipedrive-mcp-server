@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`pipedrive_list_archived_leads` returned active leads instead of archived ones.** `GET /leads` has no `archived_flag` query parameter; Pipedrive's API silently ignores it and always returns non-archived leads, so `listLeads` and `listArchivedLeads` hit the same endpoint with the same effective result regardless of which flag value was sent. Archived leads live under a separate endpoint entirely, `GET /leads/archived` - confirmed against Pipedrive's official API docs and, live, against a real account: same response envelope and pagination shape as `/leads`, but genuinely different data (`is_archived: true`, different lead ids). `listArchivedLeads` now calls that endpoint; the dead `archived_flag` param is dropped from both functions since neither ever needed it.
+
 - Release workflow: the `registry` job now verifies the `.mcpb` GitHub Release asset is live and byte-identical before publishing to the MCP registry. Creating the Release is deliberately `continue-on-error` (the npm publish above it is the irreversible step), and that same step uploads the bundle, so a soft-failed Release could previously let the job publish an **immutable** registry entry whose download URL 404s - recoverable only by cutting a new version. The job now fails closed instead, leaving the entry to be back-published once the Release exists.
 
 ## [2.7.0] - 2026-08-21
