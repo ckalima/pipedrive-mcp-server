@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-09-26
+
 ### Fixed
 
 - **`pipedrive_get_product_image` reported a product with no image as a generic `API_ERROR (409)`.** Live Pipedrive answers `GET /products/{id}/images` for an existing product that has no image with `409 "Product Image not found."` (the spec documents only `200`; a missing product is a normal `404`). The tool now returns `NOT_FOUND` with "Product {id} has no image" and a pointer to `pipedrive_upload_product_image`. This also clears the one standing failure in the read-only live smoke run.
@@ -149,6 +151,7 @@ First public release under the scoped name `@ckalima/pipedrive-mcp-server`, publ
 - **v2-first API coverage** (deals, persons, organizations, activities) with v1 fallback for notes, mail, fields, pipelines, and users.
 - **Destructive operations gated** behind the `PIPEDRIVE_ENABLE_DESTRUCTIVE=true` environment variable (disabled by default).
 
+[2.7.1]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.7.1
 [2.7.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.7.0
 [2.6.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.6.0
 [2.5.0]: https://github.com/ckalima/pipedrive-mcp-server/releases/tag/v2.5.0
