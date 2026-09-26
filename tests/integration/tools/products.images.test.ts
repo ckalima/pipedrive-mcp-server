@@ -112,6 +112,32 @@ describe('product image tools (U6)', () => {
 
       expect(result.isError).toBe(true);
     });
+
+    // Live Pipedrive answers an existing product with no image with a 409 (the
+    // spec documents only 200); a missing product is a normal 404.
+    it('should report a product with no image (409) as NOT_FOUND, not a generic API error', async () => {
+      mockApiError(409, 'Product Image not found.');
+      const { getProductImage } = await getProductsTools();
+
+      const result = await getProductImage({ id: 123 });
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0].text;
+      expect(text).toContain('NOT_FOUND');
+      expect(text).toContain('Product 123 has no image');
+      expect(text).not.toContain('API_ERROR');
+    });
+
+    it('should still report a missing product (404) as NOT_FOUND', async () => {
+      mockApiError(404, 'Product not found.');
+      const { getProductImage } = await getProductsTools();
+
+      const result = await getProductImage({ id: 123 });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('NOT_FOUND');
+      expect(result.content[0].text).not.toContain('has no image');
+    });
   });
 
   describe('deleteProductImage', () => {
