@@ -570,6 +570,17 @@ export async function getProductImage(params: GetProductImageParams) {
 
   const response = await client.get<unknown>(`/products/${params.id}/images`, undefined, "v2");
 
+  // Live API (not in the spec): a missing product 404s, but an existing product
+  // with no image 409s "Product Image not found.". Report that as NOT_FOUND
+  // rather than a generic 409 conflict.
+  if (response.httpStatus === 409) {
+    return mcpErrorFromCode(
+      "NOT_FOUND",
+      `Product ${params.id} has no image`,
+      "Upload one with pipedrive_upload_product_image",
+    );
+  }
+
   if (!response.success || !response.data) {
     return mcpErrorResult(response);
   }
