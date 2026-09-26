@@ -102,7 +102,9 @@ const CAPABILITIES: Record<CapabilityKey, CapabilityConfig> = {
     displayName: "Leads (CRUD)",
     atRisk: true,
     // CRUD only — never `/leads/search` or `/leads/{id}/convert/*`, which stay on v2.
-    endpoints: ["/leads", "/leads/{uuid}"],
+    endpoints: ["/leads", "/leads/archived", "/leads/{uuid}"],
+    // `/leads/archived` is deliberately NOT a 404 root: three unfiltered 404s would
+    // retire every lead tool, and that route has no live history of 404 behavior yet.
     collectionRoots: new Set(["/leads"]),
   },
 };
@@ -142,7 +144,6 @@ const NON_SCOPING_PARAMS: ReadonlySet<string> = new Set([
   "sort_by",
   "sort_direction",
   "include_fields",
-  "archived_flag",
 ]);
 
 /** Consecutive unfiltered collection-root 404s needed before inferring retirement. */

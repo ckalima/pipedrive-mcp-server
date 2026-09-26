@@ -50,6 +50,9 @@ describe('leads tools', () => {
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/leads');
       expect(url).not.toContain('/leads/archived');
+      // Pipedrive has no archived_flag filter on /leads; sending one is a no-op
+      // that once masked the listArchivedLeads bug (#193).
+      expect(url).not.toContain('archived_flag');
     });
 
     it('should pass owner_id filter', async () => {
@@ -133,6 +136,28 @@ describe('leads tools', () => {
 
       const [url] = mockFn.mock.calls[0];
       expect(url).toContain('/v1/leads/archived');
+      expect(url).not.toContain('archived_flag');
+    });
+
+    it('should forward every filter to /leads/archived', async () => {
+      const mockFn = mockApiSuccess([]);
+      const { listArchivedLeads } = await getLeadsTools();
+
+      await listArchivedLeads(ListArchivedLeadsSchema.parse({
+        owner_id: 42,
+        person_id: 10,
+        organization_id: 7,
+        filter_id: 3,
+        sort: 'add_time DESC',
+      }));
+
+      const url = new URL(mockFn.mock.calls[0][0]);
+      expect(url.pathname).toBe('/v1/leads/archived');
+      expect(url.searchParams.get('owner_id')).toBe('42');
+      expect(url.searchParams.get('person_id')).toBe('10');
+      expect(url.searchParams.get('organization_id')).toBe('7');
+      expect(url.searchParams.get('filter_id')).toBe('3');
+      expect(url.searchParams.get('sort')).toBe('add_time DESC');
     });
   });
 

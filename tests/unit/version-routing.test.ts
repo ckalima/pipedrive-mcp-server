@@ -80,9 +80,9 @@ describe('version-routing', () => {
       expect(isLatchable404(new URLSearchParams())).toBe(true);
     });
 
-    it('pagination/sort/archived params are latchable', () => {
+    it('pagination/sort params are latchable', () => {
       expect(isLatchable404(new URLSearchParams({ limit: '50', start: '0' }))).toBe(true);
-      expect(isLatchable404(new URLSearchParams({ archived_flag: 'false', sort: 'id' }))).toBe(true);
+      expect(isLatchable404(new URLSearchParams({ start: '100', sort: 'id' }))).toBe(true);
     });
 
     it.each(['filter_id', 'owner_id', 'person_id', 'organization_id', 'user_id', 'deal_id'])(
@@ -172,7 +172,7 @@ describe('version-routing', () => {
 
     it('pagination-only params still latch (they cannot cause a 404 on their own)', async () => {
       mockApiError(404, 'Not found');
-      const paging = new URLSearchParams({ limit: '50', start: '0', archived_flag: 'false' });
+      const paging = new URLSearchParams({ limit: '50', start: '0', sort: 'id' });
 
       for (let i = 0; i < RETIREMENT_404_THRESHOLD - 1; i++) {
         await leadsV1.get('/leads', paging);

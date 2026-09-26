@@ -257,6 +257,34 @@ async function probeGet(
 }
 
 /** List a collection, then `get` its first item to validate the get-by-id shape. */
+/**
+ * An archived-collection probe. A 200 with a list is not enough: #193 shipped because
+ * `list_archived_leads` returned ACTIVE leads and this probe only checked the shape.
+ * Every returned item must carry the entity's archived marker. An empty list cannot
+ * prove anything either way, so it WARNs rather than passing silently.
+ */
+async function probeArchivedList(
+  label: string,
+  tool: string,
+  isArchived: (item: Any) => boolean,
+): Promise<void> {
+  const r = await probeList(label, tool);
+  if (!r) return;
+  const items = listData(r);
+  if (items.length === 0) {
+    warn(`archived-ness: ${label}`, "0 items returned; cannot verify the endpoint returns archived records");
+    return;
+  }
+  const bad = items.filter((i) => !isArchived(i));
+  record(
+    `archived-ness: ${label}`,
+    bad.length === 0,
+    bad.length === 0
+      ? `all ${items.length} item(s) carry the archived marker`
+      : `${bad.length}/${items.length} item(s) are NOT archived (first id=${bad[0]?.id})`,
+  );
+}
+
 async function probeListThenGet(
   label: string,
   listTool: string,
@@ -309,9 +337,10 @@ async function sectionA(): Promise<void> {
   await probeListThenGet("stages", "pipedrive_list_stages", "pipedrive_get_stage");
 
   // Archived collections + templates.
-  await probeList("archived_deals", "pipedrive_list_archived_deals");
-  await probeList("archived_leads", "pipedrive_list_archived_leads");
-  await probeList("archived_projects", "pipedrive_list_archived_projects");
+  // Deals and leads carry `is_archived`; v2 projects expose only `archive_time`.
+  await probeArchivedList("archived_deals", "pipedrive_list_archived_deals", (d) => d.is_archived === true);
+  await probeArchivedList("archived_leads", "pipedrive_list_archived_leads", (l) => l.is_archived === true);
+  await probeArchivedList("archived_projects", "pipedrive_list_archived_projects", (p) => p.archive_time != null);
   await probeListThenGet("project_templates", "pipedrive_list_project_templates", "pipedrive_get_project_template");
 
   // v1 path: notes, mail, users (exercises the offset-pagination extractor + query auth).

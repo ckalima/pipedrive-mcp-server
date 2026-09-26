@@ -64,7 +64,7 @@ Two dates are in play. They have different scopes and different levels of author
 | Item | Detail |
 |---|---|
 | Tools | `pipedrive_list_leads`, `pipedrive_get_lead`, `pipedrive_create_lead`, `pipedrive_update_lead`, `pipedrive_delete_lead`, `pipedrive_list_archived_leads` (6 tools) |
-| v1 endpoint | `/leads` (`openapi-v1.yaml:12457`) |
+| v1 endpoint | `/leads` (`openapi-v1.yaml:12457`); archived list at `/leads/archived` (`openapi-v1.yaml:12905`) |
 | v2 equivalent | **None for CRUD.** v2 has only `/leads/search` (`openapi-v2.yaml:16341`) and `/leads/{id}/convert/*` (`openapi-v2.yaml:16556`, `openapi-v2.yaml:16630`). There is no `^  /leads:` and no `/leads/{id}` GET/PATCH/DELETE in v2. (Claim D) |
 | Note | Search and convert-status calls in `src/tools/leads.ts` already target v2 (`leads.ts:249`, `:294`, `:320`, `:383`). Only the CRUD paths (list/get/create/update/delete) remain on v1. |
 | Recommendation | Retain CRUD on v1. The v2 search and convert paths are already used. Watch the changelog for v2 CRUD paths. |
