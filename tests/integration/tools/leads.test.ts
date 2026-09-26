@@ -41,14 +41,15 @@ describe('leads tools', () => {
       expect(parsed.data).toHaveLength(5);
     });
 
-    it('should pass archived_flag=false in URL', async () => {
+    it('should call the plain /leads endpoint (non-archived by default)', async () => {
       const mockFn = mockApiSuccess([]);
       const { listLeads } = await getLeadsTools();
 
       await listLeads(ListLeadsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('archived_flag=false');
+      expect(url).toContain('/v1/leads');
+      expect(url).not.toContain('/leads/archived');
     });
 
     it('should pass owner_id filter', async () => {
@@ -112,16 +113,6 @@ describe('leads tools', () => {
   });
 
   describe('listArchivedLeads', () => {
-    it('should pass archived_flag=true in URL', async () => {
-      const mockFn = mockApiSuccess([]);
-      const { listArchivedLeads } = await getLeadsTools();
-
-      await listArchivedLeads(ListArchivedLeadsSchema.parse({}));
-
-      const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('archived_flag=true');
-    });
-
     it('should return list of archived leads with summary', async () => {
       const leads = createLeadsFixture(3).map(l => ({ ...l, is_archived: true }));
       mockFetch({ data: leads, additional_data: paginationFixtures.v1NoMore });
@@ -134,14 +125,14 @@ describe('leads tools', () => {
       expect(parsed.data).toHaveLength(3);
     });
 
-    it('should call v1 API endpoint', async () => {
+    it('should call the /leads/archived endpoint, not plain /leads', async () => {
       const mockFn = mockApiSuccess([]);
       const { listArchivedLeads } = await getLeadsTools();
 
       await listArchivedLeads(ListArchivedLeadsSchema.parse({}));
 
       const [url] = mockFn.mock.calls[0];
-      expect(url).toContain('/v1/leads');
+      expect(url).toContain('/v1/leads/archived');
     });
   });
 

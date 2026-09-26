@@ -45,7 +45,6 @@ const realSleep: SleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, 
  */
 export async function listLeads(params: ListLeadsParams) {
   const queryParams = buildPaginationParamsV1(params.start, params.limit);
-  queryParams.set("archived_flag", "false");
 
   if (params.owner_id) queryParams.set("owner_id", String(params.owner_id));
   if (params.person_id) queryParams.set("person_id", String(params.person_id));
@@ -74,7 +73,6 @@ export async function listLeads(params: ListLeadsParams) {
  */
 export async function listArchivedLeads(params: ListArchivedLeadsParams) {
   const queryParams = buildPaginationParamsV1(params.start, params.limit);
-  queryParams.set("archived_flag", "true");
 
   if (params.owner_id) queryParams.set("owner_id", String(params.owner_id));
   if (params.person_id) queryParams.set("person_id", String(params.person_id));
@@ -82,7 +80,10 @@ export async function listArchivedLeads(params: ListArchivedLeadsParams) {
   if (params.filter_id) queryParams.set("filter_id", String(params.filter_id));
   if (params.sort) queryParams.set("sort", params.sort);
 
-  const response = await leadsV1.get<unknown[]>("/leads", queryParams);
+  // GET /leads has no archived_flag filter (confirmed against Pipedrive's
+  // API docs) — it always returns non-archived leads. Archived leads live
+  // under a separate endpoint entirely.
+  const response = await leadsV1.get<unknown[]>("/leads/archived", queryParams);
 
   if (!response.success) {
     return mcpErrorResult(response);
