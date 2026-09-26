@@ -53,6 +53,7 @@ jobs:
     outputs:
       mcpb_file: ${{ steps.mcpb.outputs.file }}
       mcpb_sha256: ${{ steps.mcpb.outputs.sha256 }}
+      mcpb_artifact: ${{ steps.mcpb.outputs.artifact }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -118,6 +119,12 @@ jobs:
           {
             echo "file=$FILE"
             echo "sha256=$SHA"
+            # Attempt-scoped artifact name. A "re-run failed jobs" keeps every earlier
+            # attempt's artifacts attached to the run, so a fixed name let the registry job
+            # download attempt 1's bundle after publish rebuilt it in attempt 2 (v2.7.1).
+            # The registry job reads this name from the job output, which GitHub reuses
+            # along with the job itself when publish succeeded and is not re-run.
+            echo "artifact=mcpb-bundle-${GITHUB_RUN_ATTEMPT}"
           } >> "$GITHUB_OUTPUT"
           {
             echo "### MCPB bundle"
@@ -130,7 +137,7 @@ jobs:
         # fileSha256 is guaranteed to match the asset attached to the Release.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mcpb-bundle
+          name: ${{ steps.mcpb.outputs.artifact }}
           path: |
             pipedrive-mcp-server-*.mcpb
             pipedrive-mcp-server-*.mcpb.sha256
@@ -160,7 +167,9 @@ jobs:
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         run: |
           VER=${GITHUB_REF_NAME#v}
-          for i in 1 2 3 4 5; do
+          # ~5 min budget: v2.7.1 took ~4 min to become visible on the registry after a
+          # successful publish, which a 50s window reported as an unsigned publish.
+          for i in $(seq 1 30); do
             # Capture npm view separately: a not-yet-propagated version exits 1
             # (E404), which under `bash -eo pipefail` would otherwise abort this
             # whole step on attempt 1 and defeat the retry loop it lives in.
@@ -173,7 +182,7 @@ jobs:
             echo "attempt $i: attestation not visible yet, retrying in 10s..."
             sleep 10
           done
-          echo "::error::published $VER has no provenance/attestation metadata (unsigned publish)"
+          echo "::error::no provenance attestation visible for $VER after ~5 min: either an unsigned publish or npm is still propagating (check npm view, then re-run failed jobs)"
           exit 1
 
       - name: Extract release notes from CHANGELOG
@@ -252,7 +261,8 @@ jobs:
       - name: Download the .mcpb built by the publish job
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: mcpb-bundle
+          # From the publish job's output, never a literal: see the artifact name comment there.
+          name: ${{ needs.publish.outputs.mcpb_artifact }}
 
       - name: Verify bundle byte-identity
         # The hash we publish to the registry MUST match the asset clients download. Re-hash

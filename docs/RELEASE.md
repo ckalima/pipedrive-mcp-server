@@ -91,6 +91,15 @@ shasum -a 256 /tmp/verify.mcpb
 
 Step 3's `jq` path is fussier than it looks, and getting it wrong produces a confident-looking wrong answer rather than an error. The entry is nested at `.servers[].server`, so `.servers[].version` is `undefined` for every row - while `._meta["io.modelcontextprotocol.registry/official"].status` sits at the level you probably guessed and happily prints `active`. Read both fields from the paths above, or dump one entry's keys first.
 
+### Re-running a failed release run
+
+"Re-run failed jobs" is safe and is the first thing to try when the failure was transient. The npm step treats an already-published version as success and falls through, and the registry job's checks fail closed. Two things to know:
+
+- **Only failed and skipped jobs re-run.** A job that succeeded keeps its original result, and its outputs (the bundle hash, the artifact name) are reused as-is by the jobs that do re-run.
+- **Every earlier attempt's artifacts stay attached to the run.** That is why the bundle artifact is named per attempt (`mcpb-bundle-<run_attempt>`) and the registry job downloads it by the name the publish job reported, never by a fixed name. Before 2.7.2 the name was fixed: on v2.7.1, a publish re-run rebuilt the bundle as attempt 2, the registry job then downloaded attempt 1's bundle under the shared name, and its byte-identity check (correctly) refused to publish. The entry was back-published by hand from the Release asset.
+
+The provenance assertion waits about 5 minutes for the new version to appear on npm. v2.7.1 took about 4 minutes to show up after a successful publish, and the old 50-second window reported that as an unsigned publish and skipped the Release and registry jobs. If it still times out, check `npm view @ckalima/pipedrive-mcp-server@X.Y.Z --json | jq .dist.attestations` yourself: if the attestation is there, npm was just slow, so re-run failed jobs.
+
 ### Manual fallback / back-publishing a missed version
 
 If the `registry` job did not run (e.g. it predates a release), failed its Release-asset precondition, or you need to publish a version whose entry was never created, run the local fallback. The registry version is immutable, so the published `fileSha256` MUST match the bytes clients download — fetch the target release's `.mcpb` asset and pass its path so the hash comes from that exact file (never a rebuild, never hand-typed):
@@ -103,7 +112,7 @@ git checkout server.json                           # restore the committed senti
 
 If the job failed specifically on **Verify the Release asset is live**, the sequence matters: npm already published (immutable, fine), but the GitHub Release or its `.mcpb` upload did not land. Repair that first - create the Release from `CHANGELOG.md`, then `gh release upload vX.Y.Z pipedrive-mcp-server-X.Y.Z.mcpb pipedrive-mcp-server-X.Y.Z.mcpb.sha256` - and only then back-publish the registry entry. Do not reach for a workaround that publishes anyway; an immutable entry pointing at a missing asset is exactly the outcome the check exists to prevent.
 
-`registry:publish` authenticates with `gh auth token` and runs `mcp-publisher validate && publish`. A version published with the WRONG hash is unrecoverable (immutable) — you would have to cut a new version.
+`registry:publish` authenticates with `gh auth token` (masked in its command echo; before 2.7.2 the token was printed in full, so revoke and re-issue a token that went through an older copy of the script) and runs `mcp-publisher validate && publish`. A version published with the WRONG hash is unrecoverable (immutable) — you would have to cut a new version.
 
 ## Known improvements / TODO
 

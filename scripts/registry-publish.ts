@@ -22,7 +22,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { injectMcpb, sha256File } from "./registry-inject.js";
 
@@ -30,8 +30,22 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SERVER_JSON = join(ROOT, "server.json");
 const PACKAGE_JSON = join(ROOT, "package.json");
 
+/** Flags whose following argument is a credential and must never reach the log. */
+const SECRET_FLAGS = new Set(["--token", "-token"]);
+
+/**
+ * The echoed form of a command, with the value after any secret flag masked. mcp-publisher only
+ * accepts its token as an argument (no env var or stdin), so the argument cannot be avoided;
+ * echoing it verbatim printed a live GitHub token into terminal scrollback during the v2.7.1
+ * back-publish.
+ */
+export function displayCommand(cmd: string, args: string[]): string {
+  const shown = args.map((a, i) => (i > 0 && SECRET_FLAGS.has(args[i - 1]) ? "***" : a));
+  return `$ ${cmd} ${shown.join(" ")}`;
+}
+
 function run(cmd: string, args: string[], opts: { capture?: boolean } = {}): string {
-  console.log(`$ ${cmd} ${args.join(" ")}`);
+  console.log(displayCommand(cmd, args));
   return execFileSync(cmd, args, {
     cwd: ROOT,
     stdio: opts.capture ? ["ignore", "pipe", "inherit"] : "inherit",
@@ -94,4 +108,6 @@ function main(): void {
   );
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

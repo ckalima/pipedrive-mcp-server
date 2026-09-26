@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Release workflow: re-running a failed release run no longer hands the registry job a stale bundle. The `.mcpb` artifact is now named per run attempt and the registry job downloads it by the name the publish job reported. On v2.7.1 a re-run rebuilt the bundle, the registry job downloaded the previous attempt's bundle under the shared name, and its byte-identity check refused to publish (the entry was back-published by hand).
+- Release workflow: the provenance assertion now waits about 5 minutes instead of 50 seconds. npm took about 4 minutes to list v2.7.1, which the old window reported as an unsigned publish.
+- `npm run registry:publish` no longer prints the GitHub token it passes to `mcp-publisher login`. It echoed every command verbatim, token included.
+
 ## [2.7.1] - 2026-09-26
 
 ### Fixed

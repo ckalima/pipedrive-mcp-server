@@ -21,8 +21,16 @@ import { join } from 'node:path';
 import { load } from 'js-yaml';
 import { describe, it, expect } from 'vitest';
 
-type Step = { name?: string; run?: string; uses?: string; 'continue-on-error'?: boolean };
-type Workflow = { jobs: Record<string, { needs?: string | string[]; steps: Step[] }> };
+type Step = {
+  name?: string;
+  run?: string;
+  uses?: string;
+  with?: Record<string, unknown>;
+  'continue-on-error'?: boolean;
+};
+type Workflow = {
+  jobs: Record<string, { needs?: string | string[]; outputs?: Record<string, string>; steps: Step[] }>;
+};
 
 const workflow = load(
   readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8'),
@@ -149,5 +157,43 @@ describe.skipIf(!hasSha256sum)('release.yml registry job - precondition behaviou
       code = (err as { status: number }).status;
     }
     expect(code).not.toBe(0);
+  });
+});
+
+describe('release.yml - re-run safety of the bundle hand-off', () => {
+  // v2.7.1: "re-run failed jobs" rebuilt the bundle in attempt 2, but attempt 1's artifact was
+  // still attached to the run under the same fixed name, so the registry job downloaded the
+  // stale bytes and (correctly) refused to publish. The name must be attempt-scoped and must
+  // travel with the hash through the publish job's outputs, so both always describe one build.
+  const publish = workflow.jobs.publish;
+  const upload = publish.steps.find((s) => (s.uses ?? '').startsWith('actions/upload-artifact'));
+  const download = registrySteps.find((s) => (s.uses ?? '').startsWith('actions/download-artifact'));
+  const mcpbStep = publish.steps.find((s) => (s.run ?? '').includes('sha256sum'));
+
+  it('names the artifact per run attempt', () => {
+    expect(mcpbStep?.run).toMatch(/artifact=mcpb-bundle-\$\{GITHUB_RUN_ATTEMPT\}/);
+    expect(upload?.with?.name).toBe('${{ steps.mcpb.outputs.artifact }}');
+  });
+
+  it('exposes the name as a publish-job output alongside the hash', () => {
+    expect(publish.outputs?.mcpb_artifact).toBe('${{ steps.mcpb.outputs.artifact }}');
+    expect(publish.outputs?.mcpb_sha256).toBe('${{ steps.mcpb.outputs.sha256 }}');
+  });
+
+  it('downloads by the output, never by a literal name', () => {
+    expect(download?.with?.name).toBe('${{ needs.publish.outputs.mcpb_artifact }}');
+  });
+});
+
+describe('release.yml publish job - provenance wait', () => {
+  // v2.7.1 took ~4 min to become visible on npm; the old 5 x 10s loop reported that as an
+  // unsigned publish and skipped the GitHub Release and registry jobs.
+  const step = workflow.jobs.publish.steps.find((s) => s.name === 'Assert publish carries provenance');
+
+  it('waits at least ~5 minutes before declaring the publish unsigned', () => {
+    const run = step?.run ?? '';
+    const attempts = Number(/for i in \$\(seq 1 (\d+)\)/.exec(run)?.[1]);
+    const delay = Number(/^\s*sleep (\d+)\s*$/m.exec(run)?.[1]);
+    expect(attempts * delay).toBeGreaterThanOrEqual(300);
   });
 });
